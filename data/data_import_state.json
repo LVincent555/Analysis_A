@@ -1,53 +1,56 @@
 {
   "version": "1.0",
-  "created_at": "2025-11-06T18:04:26.422900",
-  "last_updated": "2025-11-06T21:10:32.503814",
+  "created_at": "2025-11-06T21:17:35.860844",
+  "last_updated": "2025-11-06T21:19:03.341928",
   "database": "unknown",
   "imports": {
     "20251103": {
       "filename": "20251103_data_sma_feature_color.xlsx",
       "status": "success",
       "file_hash": "16c89f6408ec1d6382636557ecd9fad9",
-      "start_time": "2025-11-06T18:04:26.434976",
+      "start_time": "2025-11-06T21:17:35.872452",
       "imported_count": 5428,
       "skipped_count": 0,
       "attempt_count": 1,
-      "end_time": "2025-11-06T18:04:47.251344",
-      "duration_seconds": 20.81,
+      "end_time": "2025-11-06T21:17:58.464939",
+      "duration_seconds": 22.59,
       "error": null
     },
     "20251104": {
       "filename": "20251104_data_sma_feature_color.xlsx",
-      "status": "rolled_back",
+      "status": "success",
       "file_hash": "2acb0f393a0a0ba2ea82c86f0b8f597f",
-      "start_time": "2025-11-06T21:09:38.589028",
-      "imported_count": 0,
+      "start_time": "2025-11-06T21:17:58.484588",
+      "imported_count": 5430,
       "skipped_count": 0,
-      "attempt_count": 5,
-      "rollback_reason": "文件导入失败: (psycopg2.errors.UniqueViolation) duplicate key value violates unique constraint \"idx_daily_stock_date_unique\"\nDETAIL:  Key (stock_code, date)=(300990, 2025-11-04) already exists.\n\n[SQL: INSERT INTO daily_stock_data (stock_code, date, rank, total_score, open_price, high_price, low_price, close_price, jump, price_change, turnover_rate_percent, volume_days, avg_volume_ratio_50, volume, volume_days_volume, avg_volume_ratio_50_volume, vo ... 685892 characters truncated ... , p83, sen_counter) ORDER BY sen_counter RETURNING daily_stock_data.id, daily_stock_data.id AS id__1]\n[parameters: {'open_price__0': 70.26, 'total_score__0': 17.1, 'volume_days_volume__0': 1.760724631693639, 'volatility__0': 0.54665, 'macd_consec__0': -23, 'lon_0__0': -131.4264575655686, 'adx__0': 31.96829679804825, 'bands_lower_consec__0': 11, 'bands_upper__0': 80.80326, 'lon_consec__0': -21, 'cci_upper_consec__0': -27, 'beta_consec__0': 0, 'dma__0': -4.417799999999971, 'pdi_adx__0': 31.96829679804825, 'dem__0': -1.579168478563334, 'code2__0': 300990, 'volatile_consec__0': 1, 'bands_middle_consec__0': -18, 'volume_consec2__0': 1.760724631693639, 'avg_volume_ratio_50__0': 1, 'stock_code__0': '300990', 'macd_signal__0': 0.478158, 'overbought__0': 0, 'dif_dem__0': -0.26867, 'dmiadx_consec__0': -28, 'long_term__0': 10.4, 'dif__0': -1.847838689767244, 'loncons_consec__0': -3, 'lonmacons_consec__0': 260, 'demcons_consec__0': 109, 'slowk__0': 41.86904183313979, 'low_price__0': 69.6, 'rank__0': 1, 'avg_volume_ratio_50_volume__0': 1, 'lonma_0__0': -80.3339, 'rsi_2__0': 63.33039370132501, 'dem_0__0': -1.579168478563334, 'lonma__0': -80.3339, 'dif_0__0': -1.847838689767244, 'histgram__0': -0.26867, 'cci_neg_90_2__0': 60.46235, 'bands_lower__0': 65.49473609025779, 'cci_pos_90_2__0': 60.46235, 'plus_di__0': 36.79685569600662, 'upper_band__0': 80.80326, 'lower_band__0': 65.49473609025779, 'price_change__0': 9.71, 'high_price__0': 74.87, 'bands_upper_consec__0': -29, 'lst_close__0': 67.68 ... 32576 parameters truncated ... 'lonma_0__388': -229.5888155291223, 'rsi_2__388': 55.44327859800031, 'dem_0__388': -0.19543, 'lonma__388': -229.5888155291223, 'dif_0__388': -0.10943, 'histgram__388': 0.086005, 'cci_neg_90_2__388': 49.69678516150314, 'bands_lower__388': 12.32314607832787, 'cci_pos_90_2__388': 49.69678516150314, 'plus_di__388': 24.61086437996743, 'upper_band__388': 14.53585392167214, 'lower_band__388': 12.32314607832787, 'price_change__388': 2.01, 'high_price__388': 13.97, 'bands_upper_consec__388': -5, 'lst_close__388': 13.45, 'name2__388': '*ST赛隆', 'rsi__388': 55.44327859800031, 'rsi_consec__388': -4, 'oversold__388': 0, 'cci_pos_90__388': 49.69678516150314, 'dmi_consec__388': 1, 'market_cap_billions__388': None, 'volume_days__388': 0.893516, 'volume__388': 26306, 'lon__388': -171.6723820340139, 'jump__388': 0, 'correlation__388': -0.03166, 'middle_band__388': 13.4295, 'dma_consec__388': 7, 'obv_consec__388': 8, 'cci_neg_90__388': 49.69678516150314, 'macdcons_consec__388': -35, 'cci_lower_consec__388': 9, 'date__388': datetime.date(2025, 11, 4), 'short_term__388': 4.0, 'close_price__388': 13.72, 'lon_lonma_diff__388': 57.91643349510838, 'pdi_ndi__388': 24.61086437996743, 'k_kdj__388': 42.36889263759362, 'zhangdiefu2__388': 2.01, 'beta__388': -9.225715540288833, 'obv_2__388': -14161, 'bands_middle__388': 13.4295, 'lon_lonma__388': 57.91643349510838, 'slowkdj_signal__388': -0.5, 'slowkdj_consec__388': -3, 'obv__388': -14161, 'volume_50_consec2__388': -1, 'turnover_rate_percent__388': 2.6}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)",
-      "rollback_time": "2025-11-06T21:09:57.361263"
+      "attempt_count": 1,
+      "end_time": "2025-11-06T21:18:20.228967",
+      "duration_seconds": 21.74,
+      "error": null
     },
     "20251105": {
       "filename": "20251105_data_sma_feature_color.xlsx",
-      "status": "rolled_back",
+      "status": "success",
       "file_hash": "dead01c24e51e8ce39b223aaee8e7356",
-      "start_time": "2025-11-06T21:09:57.374135",
-      "imported_count": 0,
+      "start_time": "2025-11-06T21:18:20.248539",
+      "imported_count": 5429,
       "skipped_count": 0,
-      "attempt_count": 5,
-      "rollback_reason": "文件导入失败: (psycopg2.errors.UniqueViolation) duplicate key value violates unique constraint \"idx_daily_stock_date_unique\"\nDETAIL:  Key (stock_code, date)=(600714, 2025-11-05) already exists.\n\n[SQL: INSERT INTO daily_stock_data (stock_code, date, rank, total_score, open_price, high_price, low_price, close_price, jump, price_change, turnover_rate_percent, volume_days, avg_volume_ratio_50, volume, volume_days_volume, avg_volume_ratio_50_volume, vo ... 685892 characters truncated ... , p83, sen_counter) ORDER BY sen_counter RETURNING daily_stock_data.id, daily_stock_data.id AS id__1]\n[parameters: {'open_price__0': 11.8, 'total_score__0': 15.7, 'volume_days_volume__0': -13.85657239590435, 'volatility__0': 0.24467, 'macd_consec__0': -4, 'lon_0__0': 38.97951301353237, 'adx__0': 22.32973288744413, 'bands_lower_consec__0': 24, 'bands_upper__0': 12.48217651624146, 'lon_consec__0': -5, 'cci_upper_consec__0': -14, 'beta_consec__0': -1, 'dma__0': -0.0352, 'pdi_adx__0': 22.32973288744413, 'dem__0': 0.010323, 'code2__0': 600714, 'volatile_consec__0': 0, 'bands_middle_consec__0': -4, 'volume_consec2__0': -13.85657239590435, 'avg_volume_ratio_50__0': -16, 'stock_code__0': '600714', 'macd_signal__0': 1.252724821461315, 'overbought__0': 0, 'dif_dem__0': -0.018, 'dmiadx_consec__0': -5, 'long_term__0': 8.7, 'dif__0': -0.00768, 'loncons_consec__0': 56, 'lonmacons_consec__0': 32, 'demcons_consec__0': 9, 'slowk__0': 44.85563544445588, 'low_price__0': 11.71, 'rank__0': 1, 'avg_volume_ratio_50_volume__0': -16, 'lonma_0__0': 106.0522535745431, 'rsi_2__0': 55.46044856735025, 'dem_0__0': 0.010323, 'lonma__0': 106.0522535745431, 'dif_0__0': -0.00768, 'histgram__0': -0.018, 'cci_neg_90_2__0': -46.80851063829734, 'bands_lower__0': 11.87582348375854, 'cci_pos_90_2__0': -46.80851063829734, 'plus_di__0': 21.37568637179268, 'upper_band__0': 12.48217651624146, 'lower_band__0': 11.87582348375854, 'price_change__0': 2.79, 'high_price__0': 12.28, 'bands_upper_consec__0': -45, 'lst_close__0': 11.84 ... 32576 parameters truncated ... 'lonma_0__388': 40.15122, 'rsi_2__388': 71.35880788269205, 'dem_0__388': 0.125975, 'lonma__388': 40.15122, 'dif_0__388': 0.248233, 'histgram__388': 0.122258, 'cci_neg_90_2__388': 89.46118721461187, 'bands_lower__388': 11.41692864557571, 'cci_pos_90_2__388': 89.46118721461187, 'plus_di__388': 28.60457554953638, 'upper_band__388': 13.89407135442428, 'lower_band__388': 11.41692864557571, 'price_change__388': 2.26, 'high_price__388': 13.73, 'bands_upper_consec__388': -2, 'lst_close__388': 13.27, 'name2__388': '瑞星股份', 'rsi__388': 71.35880788269205, 'rsi_consec__388': 11, 'oversold__388': 0, 'cci_pos_90__388': 89.46118721461187, 'dmi_consec__388': 11, 'market_cap_billions__388': 0.15562076, 'volume_days__388': -1.886595405991694, 'volume__388': 14553, 'lon__388': 103.8086108838066, 'jump__388': 0, 'correlation__388': -0.31492, 'middle_band__388': 12.65549999999999, 'dma_consec__388': 12, 'obv_consec__388': 8, 'cci_neg_90__388': 89.46118721461187, 'macdcons_consec__388': 6, 'cci_lower_consec__388': 16, 'date__388': datetime.date(2025, 11, 5), 'short_term__388': 5.0, 'close_price__388': 13.57, 'lon_lonma_diff__388': 63.65739088380659, 'pdi_ndi__388': 28.60457554953638, 'k_kdj__388': 72.09077146361174, 'zhangdiefu2__388': 2.26, 'beta__388': 10.83581, 'obv_2__388': 19881, 'bands_middle__388': 12.65549999999999, 'lon_lonma__388': 63.65739088380659, 'slowkdj_signal__388': 0.977265, 'slowkdj_consec__388': -2, 'obv__388': 19881, 'volume_50_consec2__388': -4, 'turnover_rate_percent__388': 3.29}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)",
-      "rollback_time": "2025-11-06T21:10:14.601091"
+      "attempt_count": 1,
+      "end_time": "2025-11-06T21:18:42.472997",
+      "duration_seconds": 22.22,
+      "error": null
     },
     "20251106": {
       "filename": "20251106_data_sma_feature_color.xlsx",
-      "status": "rolled_back",
+      "status": "success",
       "file_hash": "f01d8bf485d8584b0051dcdbcfc8abf7",
-      "start_time": "2025-11-06T21:10:14.613634",
-      "imported_count": 0,
+      "start_time": "2025-11-06T21:18:42.498330",
+      "imported_count": 5429,
       "skipped_count": 0,
-      "attempt_count": 5,
-      "rollback_reason": "文件导入失败: (psycopg2.errors.UniqueViolation) duplicate key value violates unique constraint \"idx_daily_stock_date_unique\"\nDETAIL:  Key (stock_code, date)=(688662, 2025-11-06) already exists.\n\n[SQL: INSERT INTO daily_stock_data (stock_code, date, rank, total_score, open_price, high_price, low_price, close_price, jump, price_change, turnover_rate_percent, volume_days, avg_volume_ratio_50, volume, volume_days_volume, avg_volume_ratio_50_volume, vo ... 685892 characters truncated ... , p83, sen_counter) ORDER BY sen_counter RETURNING daily_stock_data.id, daily_stock_data.id AS id__1]\n[parameters: {'open_price__0': 41.98, 'total_score__0': 18.4, 'volume_days_volume__0': -21.9341945945545, 'volatility__0': 0.42699, 'macd_consec__0': -20, 'lon_0__0': -468.6944711341516, 'adx__0': 34.31750195911018, 'bands_lower_consec__0': 35, 'bands_upper__0': 46.62682229327389, 'lon_consec__0': -6, 'cci_upper_consec__0': -25, 'beta_consec__0': 1, 'dma__0': -2.574999999999974, 'pdi_adx__0': 34.31750195911018, 'dem__0': -1.154207589655592, 'code2__0': 688662, 'volatile_consec__0': 0, 'bands_middle_consec__0': -19, 'volume_consec2__0': -21.9341945945545, 'avg_volume_ratio_50__0': -24, 'stock_code__0': '688662', 'macd_signal__0': 2.274024212782435, 'overbought__0': 0, 'dif_dem__0': -0.12058, 'dmiadx_consec__0': -27, 'long_term__0': 10.0, 'dif__0': -1.274792361392613, 'loncons_consec__0': -23, 'lonmacons_consec__0': -31, 'demcons_consec__0': 52, 'slowk__0': 24.58339230167629, 'low_price__0': 41.82, 'rank__0': 1, 'avg_volume_ratio_50_volume__0': -24, 'lonma_0__0': -446.8676128819922, 'rsi_2__0': 40.31807, 'dem_0__0': -1.154207589655592, 'lonma__0': -446.8676128819922, 'dif_0__0': -1.274792361392613, 'histgram__0': -0.12058, 'cci_neg_90_2__0': -87.20958669601389, 'bands_lower__0': 41.12917770672611, 'cci_pos_90_2__0': -87.20958669601389, 'plus_di__0': 17.43114496280041, 'upper_band__0': 46.62682229327389, 'lower_band__0': 41.12917770672611, 'price_change__0': 1.82, 'high_price__0': 42.82, 'bands_upper_consec__0': -26, 'lst_close__0': 41.85 ... 32576 parameters truncated ... 'lonma_0__388': 34.84002973926655, 'rsi_2__388': 51.89872724011329, 'dem_0__388': -0.01667, 'lonma__388': 34.84002973926655, 'dif_0__388': -0.07854, 'histgram__388': -0.06186, 'cci_neg_90_2__388': -46.94630099101109, 'bands_lower__388': 24.74612779984803, 'cci_pos_90_2__388': -46.94630099101109, 'plus_di__388': 19.95381822073901, 'upper_band__388': 26.49287220015199, 'lower_band__388': 24.74612779984803, 'price_change__388': 1.75, 'high_price__388': 25.75, 'bands_upper_consec__388': -30, 'lst_close__388': 25.13, 'name2__388': '邦基科技', 'rsi__388': 51.89872724011329, 'rsi_consec__388': -3, 'oversold__388': 0, 'cci_pos_90__388': -46.94630099101109, 'dmi_consec__388': -2, 'market_cap_billions__388': None, 'volume_days__388': -14.91115741355076, 'volume__388': 16172, 'lon__388': 12.95940984387495, 'jump__388': 0, 'correlation__388': 0.256621, 'middle_band__388': 25.61950000000001, 'dma_consec__388': -6, 'obv_consec__388': -3, 'cci_neg_90__388': -46.94630099101109, 'macdcons_consec__388': -5, 'cci_lower_consec__388': -2, 'date__388': datetime.date(2025, 11, 6), 'short_term__388': 6.4, 'close_price__388': 25.57, 'lon_lonma_diff__388': -21.8806198953916, 'pdi_ndi__388': 19.95381822073901, 'k_kdj__388': 28.1755961722811, 'zhangdiefu2__388': 1.75, 'beta__388': 12.09858776849866, 'obv_2__388': 230274, 'bands_middle__388': 25.61950000000001, 'lon_lonma__388': -21.8806198953916, 'slowkdj_signal__388': 0.086046, 'slowkdj_consec__388': -6, 'obv__388': 230274, 'volume_50_consec2__388': -17, 'turnover_rate_percent__388': 0.95}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)",
-      "rollback_time": "2025-11-06T21:10:32.503799"
+      "attempt_count": 1,
+      "end_time": "2025-11-06T21:19:03.341904",
+      "duration_seconds": 20.84,
+      "error": null
     }
   }
 }
