@@ -24,7 +24,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 from app.database import SessionLocal, test_connection
 from app.db_models import Stock, DailyStockData
-from app.config import DATA_DIR, FILE_PATTERN
+from app.config import DATA_DIR, FILE_PATTERNS
 from import_state_manager import get_state_manager
 
 # 配置日志
@@ -280,15 +280,23 @@ def import_excel_file(file_path: Path, state_manager) -> tuple:
 
 
 def get_data_files():
-    """获取所有待导入的Excel文件"""
+    """获取所有待导入的Excel文件（支持多种模式）"""
     data_dir = Path(DATA_DIR)
     if not data_dir.exists():
         logger.error(f"数据目录不存在: {data_dir}")
         return []
     
-    files = sorted(data_dir.glob(FILE_PATTERN))
-    logger.info(f"找到 {len(files)} 个数据文件")
-    return files
+    # 扫描所有模式的文件
+    all_files = []
+    for pattern in FILE_PATTERNS:
+        files = list(data_dir.glob(pattern))
+        all_files.extend(files)
+        logger.info(f"模式 '{pattern}': 找到 {len(files)} 个文件")
+    
+    # 去重并排序
+    unique_files = sorted(set(all_files))
+    logger.info(f"总计: {len(unique_files)} 个数据文件")
+    return unique_files
 
 
 def main():

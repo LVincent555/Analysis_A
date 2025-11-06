@@ -13,7 +13,7 @@ DATA_DIR = BASE_DIR.parent / "data"
 # API配置
 API_V1_PREFIX = "/api"
 PROJECT_NAME = "股票分析系统"
-VERSION = "0.2.0"  # 数据库版本
+VERSION = "0.2.1"  # 数据库版本（支持北交所）
 
 # 数据源配置
 USE_DATABASE = os.getenv("USE_DATABASE", "true").lower() == "true"  # 是否使用数据库
@@ -32,5 +32,9 @@ CACHE_ENABLED = True
 DEFAULT_MAX_STOCKS = 100  # 默认加载的股票数量
 TOP_N_STOCKS = 1000  # 行业分析的股票数量
 
-# 文件名模式
-FILE_PATTERN = "*_data_sma_feature_color.xlsx"
+# 文件名模式（支持多种模式）
+FILE_PATTERNS = [
+    "*_data_sma_feature_color.xlsx",      # 主板+双创板
+    "*_data_sma_feature_color_bjs.xlsx"   # 北交所
+]
+FILE_PATTERN = "*_data_sma_feature_color.xlsx"  # 向后兼容
