@@ -31,12 +31,12 @@ async def get_industry_stats(period: int = 3, top_n: int = 20):
 
 
 @router.get("/industry/trend")
-async def get_industry_trend(period: int = 3, top_n: int = 100):
+async def get_industry_trend(period: int = 14, top_n: int = 100):
     """
     获取行业趋势数据（多日期动态变化）
     
     Args:
-        period: 分析周期（天数），默认3
+        period: 分析周期（天数），默认14
         top_n: 每天TOP N股票，默认100
     
     Returns:
