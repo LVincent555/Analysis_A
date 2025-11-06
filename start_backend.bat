@@ -15,12 +15,12 @@ if errorlevel 1 (
 
 echo.
 echo 启动后端服务器...
+cd /d "%~dp0backend"
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 echo API地址: http://localhost:8000
 echo API文档: http://localhost:8000/docs
 echo.
 echo 按 Ctrl+C 停止服务器
 echo.
-
-python main.py
 
 pause

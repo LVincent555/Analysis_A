@@ -1,0 +1,44 @@
+{
+  "version": "1.0",
+  "created_at": "2025-11-06T18:04:26.422900",
+  "last_updated": "2025-11-06T18:05:27.056839",
+  "database": "unknown",
+  "imports": {
+    "20251103": {
+      "filename": "20251103_data_sma_feature_color.xlsx",
+      "status": "success",
+      "file_hash": "16c89f6408ec1d6382636557ecd9fad9",
+      "start_time": "2025-11-06T18:04:26.434976",
+      "imported_count": 5428,
+      "skipped_count": 0,
+      "attempt_count": 1,
+      "end_time": "2025-11-06T18:04:47.251344",
+      "duration_seconds": 20.81,
+      "error": null
+    },
+    "20251104": {
+      "filename": "20251104_data_sma_feature_color.xlsx",
+      "status": "success",
+      "file_hash": "2acb0f393a0a0ba2ea82c86f0b8f597f",
+      "start_time": "2025-11-06T18:04:47.268941",
+      "imported_count": 5430,
+      "skipped_count": 0,
+      "attempt_count": 1,
+      "end_time": "2025-11-06T18:05:06.851750",
+      "duration_seconds": 19.58,
+      "error": null
+    },
+    "20251105": {
+      "filename": "20251105_data_sma_feature_color.xlsx",
+      "status": "success",
+      "file_hash": "dead01c24e51e8ce39b223aaee8e7356",
+      "start_time": "2025-11-06T18:05:06.870138",
+      "imported_count": 5429,
+      "skipped_count": 0,
+      "attempt_count": 1,
+      "end_time": "2025-11-06T18:05:27.056810",
+      "duration_seconds": 20.18,
+      "error": null
+    }
+  }
+}

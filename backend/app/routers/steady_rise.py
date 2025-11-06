@@ -2,10 +2,13 @@
 稳步上升分析路由
 """
 from fastapi import APIRouter, HTTPException, Query
-from app.models.stock import SteadyRiseResult
-from app.services.steady_rise_service import steady_rise_service
+from ..services.steady_rise_service_db import steady_rise_service_db
+from ..models import SteadyRiseResult
 
 router = APIRouter(prefix="/api", tags=["steady-rise"])
+
+# 使用数据库服务
+steady_rise_service = steady_rise_service_db
 
 
 @router.get("/steady-rise", response_model=SteadyRiseResult)

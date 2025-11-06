@@ -151,8 +151,8 @@ function App() {
       // 前端需要：[{ date, rank, code, name, industry, ... }]
       const transformedData = {
         ...data,
-        // 保持原数据，方便访问
-        latestRank: data.date_rank_info[data.date_rank_info.length - 1]?.rank || 0
+        // 保持原数据，方便访问（最新数据在第一个）
+        latestRank: data.date_rank_info[0]?.rank || 0
       };
       
       setStockHistory(transformedData);
@@ -776,13 +776,14 @@ function App() {
                           </span>
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-600">
-                          {stock.date_rank_info && Array.isArray(stock.date_rank_info) 
+                          {stock.date_rank_info && Array.isArray(stock.date_rank_info) && stock.date_rank_info.length > 0
                             ? stock.date_rank_info.map((info, idx) => (
-                                <span key={idx} className="inline-block mr-2">
-                                  {formatDate(info.date)}(第{info.rank}名){idx < stock.date_rank_info.length - 1 ? ',' : ''}
-                                </span>
+                                <div key={idx} className="text-xs">
+                                  {formatDate(info.date)}(第{info.rank}名)
+                                </div>
                               ))
-                            : stock.date_rank_info}
+                            : '-'
+                          }
                         </td>
                       </tr>
                     ))}
@@ -849,25 +850,32 @@ function App() {
         )}
 
         {/* Industry Bar Chart */}
-        {analysisData && !loading && industryStats.length > 0 && (
+        {analysisData && analysisData.stocks && analysisData.stocks.length > 0 && !loading && (
           <div className="bg-white rounded-lg shadow-md p-6 mb-6">
             <div className="flex items-center space-x-2 mb-4">
               <BarChart3 className="h-5 w-5 text-indigo-600" />
-              <h3 className="text-lg font-bold text-gray-900">当前行业分布统计</h3>
+              <h3 className="text-lg font-bold text-gray-900">当前行业分布统计 (共{analysisData.stocks.length}只股票)</h3>
             </div>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={industryStats}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" angle={-45} textAnchor="end" height={100} />
-                <YAxis />
-                <Tooltip formatter={(value) => [`${value}个`, '股票数量']} />
-                <Bar dataKey="value" fill="#8884d8">
-                  {industryStats.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+            {industryStats && industryStats.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={industryStats}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="name" angle={-45} textAnchor="end" height={100} />
+                  <YAxis />
+                  <Tooltip formatter={(value) => [`${value}个`, '股票数量']} />
+                  <Bar dataKey="value" fill="#8884d8">
+                    {industryStats.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                <p>暂无行业数据</p>
+                <p className="text-sm mt-2">调试信息: analysisData.stocks={analysisData.stocks?.length}, industryStats={industryStats?.length}</p>
+              </div>
+            )}
           </div>
         )}
 
@@ -880,7 +888,7 @@ function App() {
         )}
 
         {/* 今日全部行业分布统计 (前20名) */}
-        {!loading && top1000Industry && (
+        {!loading && top1000Industry && top1000Industry.stats && (
           <div className="bg-white rounded-lg shadow-md p-6 mb-6">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center space-x-2">
@@ -930,7 +938,7 @@ function App() {
                   
                   {/* 最新一天的数据（高亮显示） */}
                   {(() => {
-                    const latest = stockHistory.date_rank_info[stockHistory.date_rank_info.length - 1];
+                    const latest = stockHistory.date_rank_info[0];  // 最新数据在第一个
                     return (
                       <div className="mt-4 bg-gradient-to-r from-indigo-50 to-purple-50 border-2 border-indigo-200 rounded-lg p-4">
                         <div className="flex items-center justify-between mb-3">
@@ -986,7 +994,7 @@ function App() {
                           </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
-                          {[...stockHistory.date_rank_info].reverse().map((item, index) => (
+                          {stockHistory.date_rank_info.map((item, index) => (
                             <tr key={index} className="hover:bg-gray-50">
                               <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                                 {formatDate(item.date)}
@@ -1204,7 +1212,7 @@ function App() {
                   </div>
                 )}
 
-                {!trendLoading && top1000Industry && (
+                {!trendLoading && top1000Industry && top1000Industry.stats && (
                   <div className="bg-white rounded-lg shadow-md p-6 mb-6">
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center space-x-2">
@@ -1239,7 +1247,7 @@ function App() {
                   </div>
                 )}
 
-                {!trendLoading && industryTrend && (() => {
+                {!trendLoading && industryTrend && industryTrend.data && (() => {
                   // 动态计算每个行业的总数量，按总数量排序，取前N个
                   const industryTotals = {};
                   industryTrend.data.forEach(dateData => {
@@ -1541,41 +1549,39 @@ function App() {
                         )}
                       </button>
                       
-                      {/* σ范围筛选控制 */}
-                      {rankJumpData.sigma_stocks && rankJumpData.sigma_stocks.length > 0 && (
-                        <div className="flex items-center space-x-2">
-                          <button
-                            onClick={() => setJumpShowSigma(!jumpShowSigma)}
-                            className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
-                              jumpShowSigma
-                                ? 'bg-orange-600 text-white'
-                                : 'bg-white border border-orange-300 text-orange-700 hover:bg-orange-50'
-                            }`}
-                          >
-                            <Filter className="h-4 w-4" />
-                            <span className="text-sm font-medium">
-                              {jumpShowSigma ? `±${jumpSigmaMultiplier}σ筛选 (${rankJumpData.sigma_stocks.length}只)` : '显示±σ范围'}
-                            </span>
-                          </button>
-                          
-                          {/* σ倍数选择 */}
-                          <div className="flex items-center space-x-1 bg-gray-100 rounded-lg p-1">
-                            {sigmaMultipliers.map((multiplier) => (
-                              <button
-                                key={multiplier}
-                                onClick={() => setJumpSigmaMultiplier(multiplier)}
-                                className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
-                                  jumpSigmaMultiplier === multiplier
-                                    ? 'bg-orange-600 text-white'
-                                    : 'text-gray-600 hover:bg-white'
-                                }`}
-                              >
-                                ±{multiplier}σ
-                              </button>
-                            ))}
-                          </div>
+                      {/* σ范围筛选控制 - 始终显示 */}
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={() => setJumpShowSigma(!jumpShowSigma)}
+                          className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
+                            jumpShowSigma
+                              ? 'bg-orange-600 text-white'
+                              : 'bg-white border border-orange-300 text-orange-700 hover:bg-orange-50'
+                          }`}
+                        >
+                          <Filter className="h-4 w-4" />
+                          <span className="text-sm font-medium">
+                            {jumpShowSigma ? `±${jumpSigmaMultiplier}σ筛选 (${rankJumpData.sigma_stocks?.length || 0}只)` : '显示±σ范围'}
+                          </span>
+                        </button>
+                        
+                        {/* σ倍数选择按钮组 */}
+                        <div className="flex items-center space-x-1 bg-gray-100 rounded-lg p-1">
+                          {sigmaMultipliers.map((multiplier) => (
+                            <button
+                              key={multiplier}
+                              onClick={() => setJumpSigmaMultiplier(multiplier)}
+                              className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
+                                jumpSigmaMultiplier === multiplier
+                                  ? 'bg-orange-600 text-white'
+                                  : 'text-gray-600 hover:bg-white'
+                              }`}
+                            >
+                              ±{multiplier}σ
+                            </button>
+                          ))}
                         </div>
-                      )}
+                      </div>
                     </div>
 
                     {/* 股票列表 */}

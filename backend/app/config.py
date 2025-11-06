@@ -1,6 +1,7 @@
 """
 应用配置文件
 """
+import os
 from pathlib import Path
 
 # 项目根目录
@@ -12,7 +13,10 @@ DATA_DIR = BASE_DIR.parent / "data"
 # API配置
 API_V1_PREFIX = "/api"
 PROJECT_NAME = "股票分析系统"
-VERSION = "0.1.1"
+VERSION = "0.2.0"  # 数据库版本
+
+# 数据源配置
+USE_DATABASE = os.getenv("USE_DATABASE", "true").lower() == "true"  # 是否使用数据库
 
 # CORS配置
 ALLOWED_ORIGINS = [
