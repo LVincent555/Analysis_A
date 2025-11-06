@@ -12,6 +12,7 @@ from ..database import SessionLocal
 from ..db_models import Stock, DailyStockData
 from ..models.analysis import AnalysisResult
 from ..models.stock import StockInfo
+from ..utils.board_filter import should_filter_stock
 from sqlalchemy import desc
 
 logger = logging.getLogger(__name__)
@@ -46,7 +47,7 @@ class AnalysisServiceDB:
         self,
         period: int = 3,
         max_count: int = 100,
-        filter_stocks: bool = False
+        board_type: str = 'main'
     ) -> AnalysisResult:
         """
         周期热点分析
@@ -59,12 +60,12 @@ class AnalysisServiceDB:
         Args:
             period: 分析周期（天数）
             max_count: 最大返回数量
-            filter_stocks: 是否过滤双创板
+            board_type: 板块类型 ('all': 全部, 'main': 主板, 'bjs': 北交所)
         
         Returns:
             分析结果
         """
-        cache_key = f"analysis_{period}_{max_count}_{filter_stocks}"
+        cache_key = f"analysis_{period}_{max_count}_{board_type}"
         if cache_key in self.cache:
             logger.info(f"使用缓存: {cache_key}")
             return self.cache[cache_key]
@@ -105,8 +106,8 @@ class AnalysisServiceDB:
             anchor_stocks = set()
             for daily_data, stock in latest_results:
                 code = stock.stock_code
-                # 后端过滤逻辑
-                if filter_stocks and (code.startswith('3') or code.startswith('68')):
+                # 后端板块筛选逻辑
+                if should_filter_stock(code, board_type):
                     continue
                 anchor_stocks.add(code)
             

@@ -14,7 +14,7 @@ steady_rise_service = steady_rise_service_db
 @router.get("/steady-rise", response_model=SteadyRiseResult)
 async def analyze_steady_rise(
     period: int = Query(default=3, ge=2, le=14, description="分析周期（天数）"),
-    filter_stocks: bool = Query(default=True, description="是否过滤双创板股票"),
+    board_type: str = Query(default='main', description="板块类型: all/main/bjs"),
     min_rank_improvement: int = Query(default=100, ge=50, le=5000, description="最小排名提升幅度"),
     sigma_multiplier: float = Query(default=1.0, ge=0.1, le=3.0, description="σ倍数")
 ):
@@ -23,7 +23,7 @@ async def analyze_steady_rise(
     
     Args:
         period: 分析周期（天数）
-        filter_stocks: 是否过滤双创板股票，默认True
+        board_type: 板块类型 ('all': 全部, 'main': 主板, 'bjs': 北交所)
         min_rank_improvement: 最小排名提升幅度，默认100
         sigma_multiplier: σ倍数，默认1.0
     
@@ -33,7 +33,7 @@ async def analyze_steady_rise(
     try:
         return steady_rise_service.analyze_steady_rise(
             period=period,
-            filter_stocks=filter_stocks,
+            board_type=board_type,
             min_rank_improvement=min_rank_improvement,
             sigma_multiplier=sigma_multiplier
         )

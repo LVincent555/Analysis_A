@@ -14,7 +14,7 @@ rank_jump_service = rank_jump_service_db
 @router.get("/rank-jump", response_model=RankJumpResult)  # 兼容前端的连字符格式
 async def analyze_rank_jump(
     jump_threshold: int = Query(default=2500, ge=100, le=10000, description="排名跳变阈值"),
-    filter_stocks: bool = Query(default=True, description="是否过滤双创板股票"),
+    board_type: str = Query(default='main', description="板块类型: all/main/bjs"),
     sigma_multiplier: float = Query(default=1.0, ge=0.1, le=3.0, description="σ倍数")
 ):
     """
@@ -22,7 +22,7 @@ async def analyze_rank_jump(
     
     Args:
         jump_threshold: 排名跳变阈值，默认2500
-        filter_stocks: 是否过滤双创板股票，默认True
+        board_type: 板块类型 ('all': 全部, 'main': 主板, 'bjs': 北交所)
         sigma_multiplier: σ倍数，默认1.0
     
     Returns:
@@ -31,7 +31,7 @@ async def analyze_rank_jump(
     try:
         return rank_jump_service.analyze_rank_jump(
             jump_threshold=jump_threshold,
-            filter_stocks=filter_stocks,
+            board_type=board_type,
             sigma_multiplier=sigma_multiplier
         )
     except Exception as e:

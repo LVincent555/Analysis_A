@@ -1,7 +1,7 @@
 {
   "version": "1.0",
   "created_at": "2025-11-06T18:04:26.422900",
-  "last_updated": "2025-11-06T18:05:27.056839",
+  "last_updated": "2025-11-06T20:44:48.530076",
   "database": "unknown",
   "imports": {
     "20251103": {
@@ -38,6 +38,18 @@
       "attempt_count": 1,
       "end_time": "2025-11-06T18:05:27.056810",
       "duration_seconds": 20.18,
+      "error": null
+    },
+    "20251106": {
+      "filename": "20251106_data_sma_feature_color.xlsx",
+      "status": "success",
+      "file_hash": "f01d8bf485d8584b0051dcdbcfc8abf7",
+      "start_time": "2025-11-06T20:44:27.741705",
+      "imported_count": 5429,
+      "skipped_count": 0,
+      "attempt_count": 1,
+      "end_time": "2025-11-06T20:44:48.530052",
+      "duration_seconds": 20.79,
       "error": null
     }
   }

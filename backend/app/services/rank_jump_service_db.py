@@ -9,6 +9,7 @@ import logging
 from ..database import SessionLocal
 from ..db_models import Stock, DailyStockData
 from ..models.stock import RankJumpResult, RankJumpStock
+from ..utils.board_filter import should_filter_stock
 from sqlalchemy import desc
 
 logger = logging.getLogger(__name__)
@@ -28,7 +29,7 @@ class RankJumpServiceDB:
     def analyze_rank_jump(
         self,
         jump_threshold: int = 2500,
-        filter_stocks: bool = True,
+        board_type: str = 'main',
         sigma_multiplier: float = 1.0
     ) -> RankJumpResult:
         """
@@ -42,13 +43,13 @@ class RankJumpServiceDB:
         
         Args:
             jump_threshold: 跳变阈值
-            filter_stocks: 是否过滤双创板
+            board_type: 板块类型 ('all': 全部, 'main': 主板, 'bjs': 北交所)
             sigma_multiplier: σ倍数
         
         Returns:
             排名跳变结果
         """
-        cache_key = f"rank_jump_{jump_threshold}_{filter_stocks}_{sigma_multiplier}"
+        cache_key = f"rank_jump_{jump_threshold}_{board_type}_{sigma_multiplier}"
         if cache_key in self.cache:
             return self.cache[cache_key]
         
@@ -102,8 +103,8 @@ class RankJumpServiceDB:
                 if code in day2_data:
                     rank_change = day2_data[code] - info['rank']  # 正数=向前跳
                     
-                    # 后端过滤逻辑
-                    if filter_stocks and (code.startswith('3') or code.startswith('68')):
+                    # 后端板块筛选逻辑
+                    if should_filter_stock(code, board_type):
                         continue
                     
                     # 只保留向前跳的股票（rank_change > 0）

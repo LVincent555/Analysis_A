@@ -25,15 +25,15 @@ async def get_available_dates():
 
 
 @router.get("/analyze/{period}", response_model=AnalysisResult)
-async def analyze_period(period: int, filter_stocks: bool = True):
+async def analyze_period(period: int, board_type: str = 'main'):
     """
     分析指定周期的股票重复情况
     
     Args:
         period: 分析周期（天数）
-        filter_stocks: 是否过滤双创板股票（默认True=主板，False=全部）
+        board_type: 板块类型 ('all': 全部, 'main': 主板, 'bjs': 北交所)
     """
     try:
-        return analysis_service.analyze_period(period, filter_stocks=filter_stocks)
+        return analysis_service.analyze_period(period, board_type=board_type)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

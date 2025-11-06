@@ -9,6 +9,7 @@ import logging
 from ..database import SessionLocal
 from ..db_models import Stock, DailyStockData
 from ..models.stock import SteadyRiseResult, SteadyRiseStock
+from ..utils.board_filter import should_filter_stock
 from sqlalchemy import desc
 
 logger = logging.getLogger(__name__)
@@ -28,7 +29,7 @@ class SteadyRiseServiceDB:
     def analyze_steady_rise(
         self,
         period: int = 3,
-        filter_stocks: bool = True,
+        board_type: str = 'main',
         min_rank_improvement: int = 100,
         sigma_multiplier: float = 1.0
     ) -> SteadyRiseResult:
@@ -43,14 +44,14 @@ class SteadyRiseServiceDB:
         
         Args:
             period: 分析周期
-            filter_stocks: 是否过滤双创板
+            board_type: 板块类型 ('all': 全部, 'main': 主板, 'bjs': 北交所)
             min_rank_improvement: 最小排名提升
             sigma_multiplier: σ倍数
         
         Returns:
             稳步上升结果
         """
-        cache_key = f"steady_rise_{period}_{filter_stocks}_{min_rank_improvement}_{sigma_multiplier}"
+        cache_key = f"steady_rise_{period}_{board_type}_{min_rank_improvement}_{sigma_multiplier}"
         if cache_key in self.cache:
             return self.cache[cache_key]
         
@@ -101,8 +102,8 @@ class SteadyRiseServiceDB:
                 if len(ranks) != period:
                     continue
                 
-                # 后端过滤逻辑
-                if filter_stocks and (code.startswith('3') or code.startswith('68')):
+                # 后端板块筛选逻辑
+                if should_filter_stock(code, board_type):
                     continue
                 
                 # 按日期排序
