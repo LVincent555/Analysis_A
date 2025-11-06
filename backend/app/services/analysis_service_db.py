@@ -171,8 +171,14 @@ class AnalysisServiceDB:
                 if appears_count < 2:
                     continue
                 
-                # 最新排名（第一条记录）
-                latest_rank = stock_data['date_rank_info'][0]['rank']
+                # 对date_rank_info按日期排序（从旧到新）
+                sorted_date_rank_info = sorted(
+                    stock_data['date_rank_info'], 
+                    key=lambda x: x['date']
+                )
+                
+                # 最新排名（排序后的最后一条记录）
+                latest_rank = sorted_date_rank_info[-1]['rank']
                 
                 stocks_list.append(StockInfo(
                     code=stock_data['code'],
@@ -180,7 +186,7 @@ class AnalysisServiceDB:
                     industry=stock_data['industry'],
                     rank=latest_rank,
                     count=appears_count,
-                    date_rank_info=stock_data['date_rank_info']
+                    date_rank_info=sorted_date_rank_info
                 ))
             
             # 按出现次数排序（从多到少）
