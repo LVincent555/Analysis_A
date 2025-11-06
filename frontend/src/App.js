@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { TrendingUp, RefreshCw, Calendar, BarChart3, ChevronLeft, ChevronRight, Search, TrendingDown, ChevronDown, ChevronUp, BarChart2, Activity, TrendingUp as TrendingUpIcon } from 'lucide-react';
+import { TrendingUp, RefreshCw, Calendar, BarChart3, ChevronLeft, ChevronRight, Search, TrendingDown, ChevronDown, ChevronUp, BarChart2, Activity, TrendingUp as TrendingUpIcon, Filter } from 'lucide-react';
 import axios from 'axios';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LineChart, Line, Legend as RechartsLegend, AreaChart, Area } from 'recharts';
 
@@ -25,6 +25,14 @@ function App() {
   const [stockHistory, setStockHistory] = useState(null);
   const [stockLoading, setStockLoading] = useState(false);
   const [stockError, setStockError] = useState(null);
+  // 技术指标显示控制
+  const [visibleIndicators, setVisibleIndicators] = useState({
+    price_change: true,
+    turnover_rate: true,
+    volume_days: true,
+    avg_volume_ratio_50: true,
+    volatility: true
+  });
   
   // 行业趋势模块状态
   const [top1000Industry, setTop1000Industry] = useState(null);
@@ -36,7 +44,29 @@ function App() {
   const [hiddenIndustries, setHiddenIndustries] = useState([]); // 隐藏的行业列表
   const [highlightedIndustry, setHighlightedIndustry] = useState(null); // 高亮的行业
 
+  // 排名跳变模块状态
+  const [rankJumpData, setRankJumpData] = useState(null);
+  const [rankJumpLoading, setRankJumpLoading] = useState(false);
+  const [rankJumpError, setRankJumpError] = useState(null);
+  const [jumpThreshold, setJumpThreshold] = useState(2500);
+  const [jumpBoardType, setJumpBoardType] = useState('main');
+  const [jumpSortReverse, setJumpSortReverse] = useState(false); // 是否倒序排列
+  const [jumpShowSigma, setJumpShowSigma] = useState(false); // 是否显示±σ范围
+  const [jumpSigmaMultiplier, setJumpSigmaMultiplier] = useState(1.0); // σ倍数
+
+  // 稳步上升模块状态
+  const [steadyRiseData, setSteadyRiseData] = useState(null);
+  const [steadyRiseLoading, setSteadyRiseLoading] = useState(false);
+  const [steadyRiseError, setSteadyRiseError] = useState(null);
+  const [risePeriod, setRisePeriod] = useState(3);
+  const [riseBoardType, setRiseBoardType] = useState('main');
+  const [minRankImprovement, setMinRankImprovement] = useState(100);
+  const [riseSortReverse, setRiseSortReverse] = useState(false); // 是否倒序排列
+  const [riseShowSigma, setRiseShowSigma] = useState(false); // 是否显示±σ范围
+  const [riseSigmaMultiplier, setRiseSigmaMultiplier] = useState(1.0); // σ倍数
+
   const periods = [2, 3, 5, 7, 14];
+  const sigmaMultipliers = [1.0, 0.75, 0.5, 0.3, 0.15]; // σ倍数选项（从宽到窄）
 
   // 获取可用日期
   useEffect(() => {
@@ -60,8 +90,9 @@ function App() {
       setError(null);
       setAnalysisData(null); // 清空旧数据避免渲染错误
       try {
+        const filterStocks = boardType === 'main'; // main=true(过滤), all=false(不过滤)
         const response = await axios.get(
-          `${API_BASE_URL}/api/analyze/${selectedPeriod}?board_type=${boardType}`
+          `${API_BASE_URL}/api/analyze/${selectedPeriod}?filter_stocks=${filterStocks}`
         );
         setAnalysisData(response.data);
       } catch (err) {
@@ -84,8 +115,9 @@ function App() {
     setLoading(true);
     setError(null);
     try {
+      const filterStocks = boardType === 'main'; // main=true(过滤), all=false(不过滤)
       const response = await axios.get(
-        `${API_BASE_URL}/api/analyze/${selectedPeriod}?board_type=${boardType}`
+        `${API_BASE_URL}/api/analyze/${selectedPeriod}?filter_stocks=${filterStocks}`
       );
       setAnalysisData(response.data);
     } catch (err) {
@@ -112,7 +144,18 @@ function App() {
     setStockError(null);
     try {
       const response = await axios.get(`${API_BASE_URL}/api/stock/${stockCode.trim()}`);
-      setStockHistory(response.data);
+      const data = response.data;
+      
+      // 转换数据格式：将date_rank_info扁平化为数组
+      // 新格式：{ code, name, industry, date_rank_info: [{date, rank}] }
+      // 前端需要：[{ date, rank, code, name, industry, ... }]
+      const transformedData = {
+        ...data,
+        // 保持原数据，方便访问
+        latestRank: data.date_rank_info[data.date_rank_info.length - 1]?.rank || 0
+      };
+      
+      setStockHistory(transformedData);
     } catch (err) {
       setStockError(err.response?.data?.detail || '查询失败，请检查股票代码');
       setStockHistory(null);
@@ -158,6 +201,52 @@ function App() {
       fetchIndustryTrend();
     }
   }, [activeModule]);
+
+  // 获取排名跳变数据
+  useEffect(() => {
+    if (activeModule === 'rank-jump') {
+      const fetchRankJumpData = async () => {
+        setRankJumpLoading(true);
+        setRankJumpError(null);
+        try {
+          const filterStocks = jumpBoardType === 'main';
+          const response = await axios.get(
+            `${API_BASE_URL}/api/rank-jump?jump_threshold=${jumpThreshold}&filter_stocks=${filterStocks}&sigma_multiplier=${jumpSigmaMultiplier}`
+          );
+          setRankJumpData(response.data);
+        } catch (err) {
+          console.error('获取排名跳变数据失败:', err);
+          setRankJumpError(err.response?.data?.detail || '获取排名跳变数据失败');
+        } finally {
+          setRankJumpLoading(false);
+        }
+      };
+      fetchRankJumpData();
+    }
+  }, [activeModule, jumpThreshold, jumpBoardType, jumpSigmaMultiplier]);
+
+  // 获取稳步上升数据
+  useEffect(() => {
+    if (activeModule === 'steady-rise') {
+      const fetchSteadyRiseData = async () => {
+        setSteadyRiseLoading(true);
+        setSteadyRiseError(null);
+        try {
+          const filterStocks = riseBoardType === 'main';
+          const response = await axios.get(
+            `${API_BASE_URL}/api/steady-rise?period=${risePeriod}&filter_stocks=${filterStocks}&min_rank_improvement=${minRankImprovement}&sigma_multiplier=${riseSigmaMultiplier}`
+          );
+          setSteadyRiseData(response.data);
+        } catch (err) {
+          console.error('获取稳步上升数据失败:', err);
+          setSteadyRiseError(err.response?.data?.detail || '获取稳步上升数据失败');
+        } finally {
+          setSteadyRiseLoading(false);
+        }
+      };
+      fetchSteadyRiseData();
+    }
+  }, [activeModule, risePeriod, riseBoardType, minRankImprovement, riseSigmaMultiplier]);
 
   // 当切换图表类型或显示数量时，重置隐藏状态
   useEffect(() => {
@@ -214,7 +303,7 @@ function App() {
               <TrendingUp className="h-8 w-8 text-indigo-600" />
               <div>
                 <h1 className="text-3xl font-bold text-gray-900">
-                  股票重复出现分析系统
+                  潘哥的底裤
                 </h1>
                 {window.location.port !== '3002' && (
                   <p className="text-xs text-orange-600 mt-1">
@@ -419,6 +508,169 @@ function App() {
                   )}
                 </div>
 
+                {/* 排名跳变模块 */}
+                <div className="mb-2">
+                  <button
+                    onClick={() => {
+                      setExpandedMenu(expandedMenu === 'rank-jump' ? null : 'rank-jump');
+                      setActiveModule('rank-jump');
+                    }}
+                    className={`w-full flex items-center justify-between p-3 rounded-lg font-medium transition-all ${
+                      activeModule === 'rank-jump'
+                        ? 'bg-orange-50 text-orange-700'
+                        : 'text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    <div className="flex items-center space-x-2">
+                      <TrendingUp className="h-5 w-5" />
+                      <span>排名跳变</span>
+                    </div>
+                    {expandedMenu === 'rank-jump' ? (
+                      <ChevronUp className="h-4 w-4" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4" />
+                    )}
+                  </button>
+
+                  {/* 排名跳变子菜单 */}
+                  {expandedMenu === 'rank-jump' && (
+                    <div className="mt-2 ml-4 space-y-2 border-l-2 border-orange-200 pl-3">
+                      <div className="text-xs text-gray-600 mb-2">
+                        筛选排名突然大幅向前跳变的股票
+                      </div>
+                      
+                      <div className="text-xs font-semibold text-gray-500 uppercase mb-2">板块类型</div>
+                      <button
+                        onClick={() => setJumpBoardType('main')}
+                        className={`w-full text-left py-2 px-3 rounded text-sm font-medium transition-colors ${
+                          jumpBoardType === 'main'
+                            ? 'bg-orange-100 text-orange-700'
+                            : 'text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        主板
+                      </button>
+                      <button
+                        onClick={() => setJumpBoardType('all')}
+                        className={`w-full text-left py-2 px-3 rounded text-sm font-medium transition-colors ${
+                          jumpBoardType === 'all'
+                            ? 'bg-orange-100 text-orange-700'
+                            : 'text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        全部
+                      </button>
+
+                      <div className="text-xs font-semibold text-gray-500 uppercase mb-2 mt-4">跳变阈值</div>
+                      <div className="space-y-2">
+                        {[2000, 2500, 3000, 3500].map((threshold) => (
+                          <button
+                            key={threshold}
+                            onClick={() => setJumpThreshold(threshold)}
+                            className={`w-full text-left py-2 px-3 rounded text-sm font-medium transition-colors ${
+                              jumpThreshold === threshold
+                                ? 'bg-orange-100 text-orange-700'
+                                : 'text-gray-600 hover:bg-gray-50'
+                            }`}
+                          >
+                            向前跳变 ≥{threshold}名
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* 稳步上升模块 */}
+                <div className="mb-2">
+                  <button
+                    onClick={() => {
+                      setExpandedMenu(expandedMenu === 'steady-rise' ? null : 'steady-rise');
+                      setActiveModule('steady-rise');
+                    }}
+                    className={`w-full flex items-center justify-between p-3 rounded-lg font-medium transition-all ${
+                      activeModule === 'steady-rise'
+                        ? 'bg-blue-50 text-blue-700'
+                        : 'text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    <div className="flex items-center space-x-2">
+                      <TrendingDown className="h-5 w-5 rotate-180" />
+                      <span>稳步上升</span>
+                    </div>
+                    {expandedMenu === 'steady-rise' ? (
+                      <ChevronUp className="h-4 w-4" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4" />
+                    )}
+                  </button>
+
+                  {/* 稳步上升子菜单 */}
+                  {expandedMenu === 'steady-rise' && (
+                    <div className="mt-2 ml-4 space-y-2 border-l-2 border-blue-200 pl-3">
+                      <div className="text-xs text-gray-600 mb-2">
+                        筛选连续多天排名持续上升的股票
+                      </div>
+                      
+                      <div className="text-xs font-semibold text-gray-500 uppercase mb-2">板块类型</div>
+                      <button
+                        onClick={() => setRiseBoardType('main')}
+                        className={`w-full text-left py-2 px-3 rounded text-sm font-medium transition-colors ${
+                          riseBoardType === 'main'
+                            ? 'bg-blue-100 text-blue-700'
+                            : 'text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        主板
+                      </button>
+                      <button
+                        onClick={() => setRiseBoardType('all')}
+                        className={`w-full text-left py-2 px-3 rounded text-sm font-medium transition-colors ${
+                          riseBoardType === 'all'
+                            ? 'bg-blue-100 text-blue-700'
+                            : 'text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        全部
+                      </button>
+
+                      <div className="text-xs font-semibold text-gray-500 uppercase mb-2 mt-4">分析周期</div>
+                      <div className="grid grid-cols-2 gap-2">
+                        {periods.map((period) => (
+                          <button
+                            key={period}
+                            onClick={() => setRisePeriod(period)}
+                            className={`py-2 px-2 rounded text-sm font-medium transition-colors ${
+                              risePeriod === period
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            }`}
+                          >
+                            {period}天
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="text-xs font-semibold text-gray-500 uppercase mb-2 mt-4">最小提升幅度</div>
+                      <div className="space-y-2">
+                        {[100, 500, 1000, 2000].map((improvement) => (
+                          <button
+                            key={improvement}
+                            onClick={() => setMinRankImprovement(improvement)}
+                            className={`w-full text-left py-2 px-3 rounded text-sm font-medium transition-colors ${
+                              minRankImprovement === improvement
+                                ? 'bg-blue-100 text-blue-700'
+                                : 'text-gray-600 hover:bg-gray-50'
+                            }`}
+                          >
+                            提升≥{improvement}名
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 {/* 未来扩展预留 */}
                 <div className="mt-4 p-3 bg-gray-50 rounded-lg text-center text-xs text-gray-500">
                   更多功能即将推出...
@@ -505,7 +757,7 @@ function App() {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className="text-sm font-medium text-gray-900">
-                            {stock.stock_name}
+                            {stock?.stock_name || stock?.name || '-'}
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -666,39 +918,105 @@ function App() {
                   <div className="flex items-center justify-between mb-4">
                     <div>
                       <h3 className="text-2xl font-bold text-gray-900">
-                        {stockHistory[0].stock_name} ({stockHistory[0].stock_code})
+                        {stockHistory.name} ({stockHistory.code})
                       </h3>
-                      <p className="text-sm text-gray-600 mt-1">行业: {stockHistory[0].industry}</p>
+                      <p className="text-sm text-gray-600 mt-1">行业: {stockHistory.industry}</p>
                     </div>
                     <div className="text-right">
                       <p className="text-sm text-gray-600">最新排名</p>
-                      <p className="text-3xl font-bold text-indigo-600">#{stockHistory[0].rank}</p>
+                      <p className="text-3xl font-bold text-indigo-600">#{stockHistory.latestRank}</p>
                     </div>
                   </div>
                   
-                  {/* Latest Data */}
-                  <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-4">
-                    <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-lg">
-                      <p className="text-xs text-gray-600 mb-1">涨跌幅</p>
-                      <p className={`text-lg font-bold ${stockHistory[0].price_change >= 0 ? 'text-red-600' : 'text-green-600'}`}>
-                        {stockHistory[0].price_change >= 0 ? '+' : ''}{stockHistory[0].price_change.toFixed(2)}%
-                      </p>
-                    </div>
-                    <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-4 rounded-lg">
-                      <p className="text-xs text-gray-600 mb-1">换手率</p>
-                      <p className="text-lg font-bold text-purple-600">{stockHistory[0].turnover_rate.toFixed(2)}%</p>
-                    </div>
-                    <div className="bg-gradient-to-br from-green-50 to-green-100 p-4 rounded-lg">
-                      <p className="text-xs text-gray-600 mb-1">放量天数</p>
-                      <p className="text-lg font-bold text-green-600">{stockHistory[0].volume_days.toFixed(1)}</p>
-                    </div>
-                    <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 p-4 rounded-lg">
-                      <p className="text-xs text-gray-600 mb-1">平均量比_50天</p>
-                      <p className="text-lg font-bold text-yellow-600">{stockHistory[0].avg_volume_ratio_50.toFixed(2)}</p>
-                    </div>
-                    <div className="bg-gradient-to-br from-pink-50 to-pink-100 p-4 rounded-lg">
-                      <p className="text-xs text-gray-600 mb-1">波动率</p>
-                      <p className="text-lg font-bold text-pink-600">{stockHistory[0].volatility.toFixed(2)}%</p>
+                  {/* 最新一天的数据（高亮显示） */}
+                  {(() => {
+                    const latest = stockHistory.date_rank_info[stockHistory.date_rank_info.length - 1];
+                    return (
+                      <div className="mt-4 bg-gradient-to-r from-indigo-50 to-purple-50 border-2 border-indigo-200 rounded-lg p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <h4 className="text-lg font-bold text-gray-900">
+                            {formatDate(latest.date)}
+                          </h4>
+                          <span className="text-xl font-bold text-indigo-600">
+                            第 {latest.rank} 名
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                          <div className="bg-white rounded-lg p-3 shadow-sm">
+                            <p className="text-xs text-gray-500 mb-1">涨跌幅</p>
+                            <p className={`text-lg font-bold ${latest.price_change >= 0 ? 'text-red-600' : 'text-green-600'}`}>
+                              {latest.price_change >= 0 ? '+' : ''}{latest.price_change?.toFixed(2)}%
+                            </p>
+                          </div>
+                          <div className="bg-white rounded-lg p-3 shadow-sm">
+                            <p className="text-xs text-gray-500 mb-1">换手率</p>
+                            <p className="text-lg font-bold text-gray-900">{latest.turnover_rate?.toFixed(2)}%</p>
+                          </div>
+                          <div className="bg-white rounded-lg p-3 shadow-sm">
+                            <p className="text-xs text-gray-500 mb-1">放量天数</p>
+                            <p className="text-lg font-bold text-gray-900">{latest.volume_days?.toFixed(1)}</p>
+                          </div>
+                          <div className="bg-white rounded-lg p-3 shadow-sm">
+                            <p className="text-xs text-gray-500 mb-1">平均量比_50天</p>
+                            <p className="text-lg font-bold text-gray-900">{latest.avg_volume_ratio_50?.toFixed(2)}</p>
+                          </div>
+                          <div className="bg-white rounded-lg p-3 shadow-sm">
+                            <p className="text-xs text-gray-500 mb-1">波动率</p>
+                            <p className="text-lg font-bold text-gray-900">{latest.volatility?.toFixed(2)}%</p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                  
+                  {/* 历史数据表格 */}
+                  <div className="mt-6">
+                    <h4 className="text-sm font-semibold text-gray-700 mb-3">历史数据</h4>
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">日期</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">排名</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">涨跌幅</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">换手率</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">放量天数</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">平均量比_50天</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">波动率</th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {[...stockHistory.date_rank_info].reverse().map((item, index) => (
+                            <tr key={index} className="hover:bg-gray-50">
+                              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                                {formatDate(item.date)}
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap">
+                                <span className="text-sm font-bold text-indigo-600">
+                                  第 {item.rank} 名
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap">
+                                <span className={`text-sm font-medium ${item.price_change >= 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                  {item.price_change >= 0 ? '+' : ''}{item.price_change?.toFixed(2) || '0.00'}%
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                                {item.turnover_rate?.toFixed(2) || '0.00'}%
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                                {item.volume_days?.toFixed(1) || '0.0'}
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                                {item.avg_volume_ratio_50?.toFixed(2) || '0.00'}
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                                {item.volatility?.toFixed(2) || '0.00'}%
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
                 </div>
@@ -711,7 +1029,7 @@ function App() {
                     <span className="text-sm text-gray-500">（排名越小越靠前）</span>
                   </div>
                   <ResponsiveContainer width="100%" height={300}>
-                    <LineChart data={[...stockHistory].reverse()}>
+                    <LineChart data={stockHistory.date_rank_info}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis 
                         dataKey="date" 
@@ -731,6 +1049,139 @@ function App() {
                         dot={{ fill: '#6366f1', r: 4 }}
                         name="排名"
                       />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+
+                {/* 技术指标趋势图 */}
+                <div className="bg-white rounded-lg shadow-md p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center space-x-2">
+                      <TrendingDown className="h-5 w-5 text-green-600" />
+                      <h3 className="text-lg font-bold text-gray-900">技术指标趋势</h3>
+                    </div>
+                    {/* 指标控制按钮 */}
+                    <div className="flex items-center flex-wrap gap-2">
+                      <button
+                        onClick={() => setVisibleIndicators(prev => ({ ...prev, price_change: !prev.price_change }))}
+                        className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
+                          visibleIndicators.price_change
+                            ? 'bg-red-100 text-red-700 border-2 border-red-400'
+                            : 'bg-gray-100 text-gray-400 border-2 border-gray-300'
+                        }`}
+                      >
+                        涨跌幅
+                      </button>
+                      <button
+                        onClick={() => setVisibleIndicators(prev => ({ ...prev, turnover_rate: !prev.turnover_rate }))}
+                        className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
+                          visibleIndicators.turnover_rate
+                            ? 'bg-purple-100 text-purple-700 border-2 border-purple-400'
+                            : 'bg-gray-100 text-gray-400 border-2 border-gray-300'
+                        }`}
+                      >
+                        换手率
+                      </button>
+                      <button
+                        onClick={() => setVisibleIndicators(prev => ({ ...prev, volume_days: !prev.volume_days }))}
+                        className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
+                          visibleIndicators.volume_days
+                            ? 'bg-green-100 text-green-700 border-2 border-green-400'
+                            : 'bg-gray-100 text-gray-400 border-2 border-gray-300'
+                        }`}
+                      >
+                        放量天数
+                      </button>
+                      <button
+                        onClick={() => setVisibleIndicators(prev => ({ ...prev, avg_volume_ratio_50: !prev.avg_volume_ratio_50 }))}
+                        className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
+                          visibleIndicators.avg_volume_ratio_50
+                            ? 'bg-orange-100 text-orange-700 border-2 border-orange-400'
+                            : 'bg-gray-100 text-gray-400 border-2 border-gray-300'
+                        }`}
+                      >
+                        平均量比_50天
+                      </button>
+                      <button
+                        onClick={() => setVisibleIndicators(prev => ({ ...prev, volatility: !prev.volatility }))}
+                        className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
+                          visibleIndicators.volatility
+                            ? 'bg-blue-100 text-blue-700 border-2 border-blue-400'
+                            : 'bg-gray-100 text-gray-400 border-2 border-gray-300'
+                        }`}
+                      >
+                        波动率
+                      </button>
+                    </div>
+                  </div>
+                  <ResponsiveContainer width="100%" height={350}>
+                    <LineChart data={stockHistory.date_rank_info}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis 
+                        dataKey="date" 
+                        tickFormatter={(value) => `${value.slice(4,6)}/${value.slice(6,8)}`}
+                      />
+                      <YAxis />
+                      <Tooltip 
+                        labelFormatter={(value) => formatDate(value)}
+                        formatter={(value, name) => {
+                          if (name === '涨跌幅' || name === '换手率' || name === '波动率') {
+                            return [`${value.toFixed(2)}%`, name];
+                          }
+                          return [value.toFixed(2), name];
+                        }}
+                      />
+                      <RechartsLegend />
+                      {visibleIndicators.price_change && (
+                        <Line 
+                          type="monotone" 
+                          dataKey="price_change" 
+                          stroke="#ef4444" 
+                          strokeWidth={2}
+                          dot={{ fill: '#ef4444', r: 3 }}
+                          name="涨跌幅"
+                        />
+                      )}
+                      {visibleIndicators.turnover_rate && (
+                        <Line 
+                          type="monotone" 
+                          dataKey="turnover_rate" 
+                          stroke="#8b5cf6" 
+                          strokeWidth={2}
+                          dot={{ fill: '#8b5cf6', r: 3 }}
+                          name="换手率"
+                        />
+                      )}
+                      {visibleIndicators.volume_days && (
+                        <Line 
+                          type="monotone" 
+                          dataKey="volume_days" 
+                          stroke="#10b981" 
+                          strokeWidth={2}
+                          dot={{ fill: '#10b981', r: 3 }}
+                          name="放量天数"
+                        />
+                      )}
+                      {visibleIndicators.avg_volume_ratio_50 && (
+                        <Line 
+                          type="monotone" 
+                          dataKey="avg_volume_ratio_50" 
+                          stroke="#f59e0b" 
+                          strokeWidth={2}
+                          dot={{ fill: '#f59e0b', r: 3 }}
+                          name="平均量比_50天"
+                        />
+                      )}
+                      {visibleIndicators.volatility && (
+                        <Line 
+                          type="monotone" 
+                          dataKey="volatility" 
+                          stroke="#3b82f6" 
+                          strokeWidth={2}
+                          dot={{ fill: '#3b82f6', r: 3 }}
+                          name="波动率"
+                        />
+                      )}
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
@@ -1026,6 +1477,358 @@ function App() {
                   );
                 })()}
               </>
+            )}
+
+            {/* 排名跳变模块 */}
+            {activeModule === 'rank-jump' && (
+              <div className="space-y-6 mb-6">
+                {rankJumpError && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <p className="text-red-800 font-medium">错误: {rankJumpError}</p>
+                  </div>
+                )}
+
+                {rankJumpLoading && (
+                  <div className="flex items-center justify-center py-12">
+                    <RefreshCw className="h-8 w-8 text-indigo-600 animate-spin" />
+                    <span className="ml-3 text-lg text-gray-600">分析中...</span>
+                  </div>
+                )}
+
+                {!rankJumpLoading && rankJumpData && (
+                  <>
+                    {/* 统计信息 */}
+                    <div className="bg-gradient-to-r from-orange-500 to-red-500 rounded-lg shadow-lg p-6 text-white">
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <h2 className="text-2xl font-bold">排名跳变筛选</h2>
+                          <p className="mt-1 text-orange-100">
+                            {formatDate(rankJumpData.previous_date)} → {formatDate(rankJumpData.latest_date)}
+                          </p>
+                          {rankJumpData.mean_rank_change && (
+                            <div className="mt-3 text-sm opacity-90">
+                              <p>平均跳变: {rankJumpData.mean_rank_change.toFixed(1)}名 | 标准差: {rankJumpData.std_rank_change.toFixed(1)}</p>
+                              {rankJumpData.sigma_range && (
+                                <p>±1σ范围: [{rankJumpData.sigma_range[0].toFixed(0)}, {rankJumpData.sigma_range[1].toFixed(0)}]名 ({rankJumpData.sigma_stocks?.length || 0}只)</p>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm opacity-90">跳变股票数量</p>
+                          <p className="text-4xl font-bold">{rankJumpData.total_count}</p>
+                          <p className="text-sm opacity-90 mt-1">向前跳变 ≥{rankJumpData.jump_threshold}名</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 控制按钮 */}
+                    <div className="flex justify-between items-center">
+                      <button
+                        onClick={() => setJumpSortReverse(!jumpSortReverse)}
+                        className="flex items-center space-x-2 px-4 py-2 bg-white border border-orange-300 rounded-lg hover:bg-orange-50 transition-colors"
+                      >
+                        {jumpSortReverse ? (
+                          <>
+                            <ChevronDown className="h-4 w-4 text-orange-600" />
+                            <span className="text-sm font-medium text-orange-700">倒序显示</span>
+                          </>
+                        ) : (
+                          <>
+                            <ChevronUp className="h-4 w-4 text-orange-600" />
+                            <span className="text-sm font-medium text-orange-700">正序显示</span>
+                          </>
+                        )}
+                      </button>
+                      
+                      {/* σ范围筛选控制 */}
+                      {rankJumpData.sigma_stocks && rankJumpData.sigma_stocks.length > 0 && (
+                        <div className="flex items-center space-x-2">
+                          <button
+                            onClick={() => setJumpShowSigma(!jumpShowSigma)}
+                            className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
+                              jumpShowSigma
+                                ? 'bg-orange-600 text-white'
+                                : 'bg-white border border-orange-300 text-orange-700 hover:bg-orange-50'
+                            }`}
+                          >
+                            <Filter className="h-4 w-4" />
+                            <span className="text-sm font-medium">
+                              {jumpShowSigma ? `±${jumpSigmaMultiplier}σ筛选 (${rankJumpData.sigma_stocks.length}只)` : '显示±σ范围'}
+                            </span>
+                          </button>
+                          
+                          {/* σ倍数选择 */}
+                          <div className="flex items-center space-x-1 bg-gray-100 rounded-lg p-1">
+                            {sigmaMultipliers.map((multiplier) => (
+                              <button
+                                key={multiplier}
+                                onClick={() => setJumpSigmaMultiplier(multiplier)}
+                                className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
+                                  jumpSigmaMultiplier === multiplier
+                                    ? 'bg-orange-600 text-white'
+                                    : 'text-gray-600 hover:bg-white'
+                                }`}
+                              >
+                                ±{multiplier}σ
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 股票列表 */}
+                    {((jumpShowSigma ? rankJumpData.sigma_stocks : rankJumpData.stocks) || []).length > 0 ? (
+                      <div className="bg-white rounded-lg shadow-md overflow-hidden">
+                        <div className="overflow-x-auto">
+                          <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gradient-to-r from-orange-50 to-red-50">
+                              <tr>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">序号</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">股票代码</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">股票名称</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">行业</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">前一天排名</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">最新排名</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">排名跳变</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">涨跌幅</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">换手率</th>
+                              </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                              {(() => {
+                                const displayStocks = jumpShowSigma ? rankJumpData.sigma_stocks : rankJumpData.stocks;
+                                const sortedStocks = jumpSortReverse ? [...displayStocks].reverse() : displayStocks;
+                                return sortedStocks.map((stock, index) => (
+                                <tr key={index} className="hover:bg-orange-50 transition-colors">
+                                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 font-medium">
+                                    {index + 1}
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap text-sm font-mono text-indigo-600">
+                                    {stock.code}
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap">
+                                    <span className="text-sm font-medium text-gray-900">{stock.name}</span>
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
+                                    {stock.industry}
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                                    第 {stock.previous_rank} 名
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap">
+                                    <span className="text-sm font-bold text-orange-600">
+                                      第 {stock.latest_rank} 名
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap">
+                                    <div className="flex items-center">
+                                      <TrendingUp className="h-4 w-4 text-green-500 mr-1" />
+                                      <span className="text-sm font-bold text-green-600">
+                                        +{stock.rank_change}
+                                      </span>
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap">
+                                    <span className={`text-sm font-medium ${stock.price_change >= 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                      {stock.price_change >= 0 ? '+' : ''}{stock.price_change?.toFixed(2)}%
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                                    {stock.turnover_rate?.toFixed(2)}%
+                                  </td>
+                                </tr>
+                              ));
+                              })()}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-8 text-center">
+                        <p className="text-yellow-800 font-medium">暂无符合条件的股票</p>
+                        <p className="text-yellow-600 text-sm mt-2">尝试降低跳变阈值或选择不同的板块类型</p>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* 稳步上升模块 */}
+            {activeModule === 'steady-rise' && (
+              <div className="space-y-6 mb-6">
+                {steadyRiseError && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <p className="text-red-800 font-medium">错误: {steadyRiseError}</p>
+                  </div>
+                )}
+
+                {steadyRiseLoading && (
+                  <div className="flex items-center justify-center py-12">
+                    <RefreshCw className="h-8 w-8 text-indigo-600 animate-spin" />
+                    <span className="ml-3 text-lg text-gray-600">分析中...</span>
+                  </div>
+                )}
+
+                {!steadyRiseLoading && steadyRiseData && (
+                  <>
+                    {/* 统计信息 */}
+                    <div className="bg-gradient-to-r from-blue-500 to-indigo-500 rounded-lg shadow-lg p-6 text-white">
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <h2 className="text-2xl font-bold">稳步上升筛选</h2>
+                          <p className="mt-1 text-blue-100">
+                            {steadyRiseData.dates.map((d, i) => formatDate(d) + (i < steadyRiseData.dates.length - 1 ? ' → ' : ''))}
+                          </p>
+                          {steadyRiseData.mean_improvement && (
+                            <div className="mt-3 text-sm opacity-90">
+                              <p>平均提升: {steadyRiseData.mean_improvement.toFixed(1)}名 | 标准差: {steadyRiseData.std_improvement.toFixed(1)}</p>
+                              {steadyRiseData.sigma_range && (
+                                <p>±1σ范围: [{steadyRiseData.sigma_range[0].toFixed(0)}, {steadyRiseData.sigma_range[1].toFixed(0)}]名 ({steadyRiseData.sigma_stocks?.length || 0}只)</p>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm opacity-90">稳步上升股票</p>
+                          <p className="text-4xl font-bold">{steadyRiseData.total_count}</p>
+                          <p className="text-sm opacity-90 mt-1">连续{steadyRiseData.period}天上升</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 控制按钮 */}
+                    <div className="flex justify-between items-center">
+                      <button
+                        onClick={() => setRiseSortReverse(!riseSortReverse)}
+                        className="flex items-center space-x-2 px-4 py-2 bg-white border border-blue-300 rounded-lg hover:bg-blue-50 transition-colors"
+                      >
+                        {riseSortReverse ? (
+                          <>
+                            <ChevronDown className="h-4 w-4 text-blue-600" />
+                            <span className="text-sm font-medium text-blue-700">倒序显示</span>
+                          </>
+                        ) : (
+                          <>
+                            <ChevronUp className="h-4 w-4 text-blue-600" />
+                            <span className="text-sm font-medium text-blue-700">正序显示</span>
+                          </>
+                        )}
+                      </button>
+                      
+                      {/* σ范围筛选控制 */}
+                      {steadyRiseData.sigma_stocks && steadyRiseData.sigma_stocks.length > 0 && (
+                        <div className="flex items-center space-x-2">
+                          <button
+                            onClick={() => setRiseShowSigma(!riseShowSigma)}
+                            className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
+                              riseShowSigma
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-white border border-blue-300 text-blue-700 hover:bg-blue-50'
+                            }`}
+                          >
+                            <Filter className="h-4 w-4" />
+                            <span className="text-sm font-medium">
+                              {riseShowSigma ? `±${riseSigmaMultiplier}σ筛选 (${steadyRiseData.sigma_stocks.length}只)` : '显示±σ范围'}
+                            </span>
+                          </button>
+                          
+                          {/* σ倍数选择 */}
+                          <div className="flex items-center space-x-1 bg-gray-100 rounded-lg p-1">
+                            {sigmaMultipliers.map((multiplier) => (
+                              <button
+                                key={multiplier}
+                                onClick={() => setRiseSigmaMultiplier(multiplier)}
+                                className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
+                                  riseSigmaMultiplier === multiplier
+                                    ? 'bg-blue-600 text-white'
+                                    : 'text-gray-600 hover:bg-white'
+                                }`}
+                              >
+                                ±{multiplier}σ
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 股票列表 */}
+                    {((riseShowSigma ? steadyRiseData.sigma_stocks : steadyRiseData.stocks) || []).length > 0 ? (
+                      <div className="bg-white rounded-lg shadow-md overflow-hidden">
+                        <div className="overflow-x-auto">
+                          <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gradient-to-r from-blue-50 to-indigo-50">
+                              <tr>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">序号</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">股票代码</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">股票名称</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">行业</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">起始排名</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">最新排名</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">总提升</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">日均提升</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">排名历史</th>
+                              </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                              {(() => {
+                                const displayStocks = riseShowSigma ? steadyRiseData.sigma_stocks : steadyRiseData.stocks;
+                                const sortedStocks = riseSortReverse ? [...displayStocks].reverse() : displayStocks;
+                                return sortedStocks.map((stock, index) => (
+                                <tr key={index} className="hover:bg-blue-50 transition-colors">
+                                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 font-medium">
+                                    {index + 1}
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap text-sm font-mono text-indigo-600">
+                                    {stock.code}
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap">
+                                    <span className="text-sm font-medium text-gray-900">{stock.name}</span>
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
+                                    {stock.industry}
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                                    第 {stock.start_rank} 名
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap">
+                                    <span className="text-sm font-bold text-blue-600">
+                                      第 {stock.end_rank} 名
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap">
+                                    <div className="flex items-center">
+                                      <TrendingUp className="h-4 w-4 text-green-500 mr-1" />
+                                      <span className="text-sm font-bold text-green-600">
+                                        +{stock.total_improvement}
+                                      </span>
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                                    +{stock.avg_daily_improvement.toFixed(1)}
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-600">
+                                    {stock.rank_history.join(' → ')}
+                                  </td>
+                                </tr>
+                              ));
+                              })()}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-8 text-center">
+                        <p className="text-yellow-800 font-medium">暂无符合条件的股票</p>
+                        <p className="text-yellow-600 text-sm mt-2">尝试降低提升幅度阈值、减少分析天数或选择不同的板块类型</p>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
             )}
           </div>
           {/* End of Right Content Area */}
