@@ -1,0 +1,90 @@
+version: '3.8'
+
+services:
+  # PostgreSQL 数据库
+  postgres:
+    image: postgres:15-alpine
+    container_name: stock_db
+    restart: always
+    environment:
+      POSTGRES_DB: ${DATABASE_NAME:-stock_analysis}
+      POSTGRES_USER: ${DATABASE_USER:-stock_user}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+      # PostgreSQL 性能优化（针对2G内存）
+      POSTGRES_SHARED_BUFFERS: "256MB"
+      POSTGRES_EFFECTIVE_CACHE_SIZE: "1GB"
+      POSTGRES_WORK_MEM: "8MB"
+      POSTGRES_MAINTENANCE_WORK_MEM: "64MB"
+      POSTGRES_MAX_CONNECTIONS: "50"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    mem_limit: 600m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USER:-stock_user}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - stock_network
+
+  # FastAPI 后端服务
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: stock_api
+    restart: always
+    environment:
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_NAME: ${DATABASE_NAME:-stock_analysis}
+      DATABASE_USER: ${DATABASE_USER:-stock_user}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - ./data:/app/data
+      - ./backend/cache:/app/cache
+    depends_on:
+      postgres:
+        condition: service_healthy
+    mem_limit: 500m
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/dates"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - stock_network
+
+  # Nginx (前端 + 反向代理)
+  nginx:
+    build:
+      context: .
+      dockerfile: ./docker/nginx/Dockerfile
+    container_name: stock_web
+    restart: always
+    ports:
+      - "${WEB_PORT:-80}:80"
+    depends_on:
+      - backend
+    mem_limit: 100m
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks:
+      - stock_network
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  stock_network:
+    driver: bridge
