@@ -47,11 +47,14 @@ mkdir -p data
 ### 4️⃣ 执行部署
 
 ```bash
-# 赋予执行权限
-chmod +x deploy.sh backup.sh
+# 赋予所有脚本执行权限
+chmod +x *.sh
 
 # 一键部署
 ./deploy.sh
+
+# 或使用管理面板（推荐）
+./manage.sh
 ```
 
 选择 **1** (全新部署)，等待几分钟。
@@ -80,25 +83,37 @@ docker-compose ps
 
 ---
 
-## 🔧 常用命令
+## 🔧 管理脚本
 
-### 查看日志
-```bash
-docker-compose logs -f
-```
+### 📋 可用脚本
 
-### 重启服务
-```bash
-docker-compose restart
-```
+| 脚本 | 说明 | 用法 |
+|------|------|------|
+| `manage.sh` | 🎛️ 管理面板（推荐） | `./manage.sh` |
+| `deploy.sh` | 🚀 部署/启动服务 | `./deploy.sh` |
+| `stop.sh` | 🛑 停止服务 | `./stop.sh` |
+| `status.sh` | 📊 查看状态 | `./status.sh` |
+| `logs.sh` | 📋 查看日志 | `./logs.sh` |
+| `update_data.sh` | 🔄 更新数据 | `./update_data.sh` |
+| `backup.sh` | 💾 备份数据库 | `./backup.sh` |
+| `install_docker.sh` | 🐳 安装Docker | `sudo ./install_docker.sh` |
 
-### 停止服务
-```bash
-docker-compose down
-```
+### 快捷命令
 
-### 备份数据
 ```bash
+# 使用管理面板（最简单）
+./manage.sh
+
+# 查看服务状态
+./status.sh
+
+# 查看日志
+./logs.sh
+
+# 更新数据
+./update_data.sh
+
+# 备份数据库
 ./backup.sh
 ```
 
@@ -114,12 +129,22 @@ docker-compose down
 
 ## 🆘 遇到问题？
 
+### Docker未安装
+```bash
+# 使用自动安装脚本
+sudo ./install_docker.sh
+```
+
 ### 端口被占用
-编辑 `.env`，修改 `WEB_PORT=8080`
+```bash
+# 编辑.env文件
+nano .env
+# 修改: WEB_PORT=8080
+```
 
 ### 内存不足
-添加Swap分区:
 ```bash
+# 添加Swap分区
 sudo fallocate -l 2G /swapfile
 sudo chmod 600 /swapfile
 sudo mkswap /swapfile
@@ -127,14 +152,20 @@ sudo swapon /swapfile
 ```
 
 ### 数据未导入
-进入容器手动导入:
 ```bash
-docker-compose exec backend bash
-python scripts/import_data_robust.py
+# 使用更新脚本
+./update_data.sh
+
+# 或手动导入
+docker-compose exec backend python scripts/import_data_robust.py
 ```
 
 ### 查看详细错误
 ```bash
+# 使用日志脚本
+./logs.sh
+
+# 或直接查看
 docker-compose logs backend
 ```
 
