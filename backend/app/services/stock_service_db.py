@@ -53,10 +53,10 @@ class StockServiceDB:
             if not stock:
                 return None
             
-            # 2. 简单SQL：查询该股票的所有历史数据
+            # 2. 简单SQL：查询该股票的所有历史数据（从旧到新排序）
             history_data = db.query(DailyStockData)\
                 .filter(DailyStockData.stock_code == stock.stock_code)\
-                .order_by(desc(DailyStockData.date))\
+                .order_by(DailyStockData.date)\
                 .limit(30)\
                 .all()
             

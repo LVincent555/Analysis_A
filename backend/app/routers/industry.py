@@ -67,7 +67,7 @@ async def get_industry_trend(period: int = 14, top_n: int = 100):
                 .join(Stock, DailyStockData.stock_code == Stock.stock_code)\
                 .filter(DailyStockData.date.in_(target_dates))\
                 .filter(DailyStockData.rank <= top_n)\
-                .order_by(DailyStockData.date.desc())\
+                .order_by(DailyStockData.date)\
                 .all()
             
             # 3. 按日期统计行业分布
