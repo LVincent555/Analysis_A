@@ -98,9 +98,9 @@ async def get_industry_trend(period: int = 3, top_n: int = 100):
                 
                 date_industry_map[date_str][industry] += 1
             
-            # 4. 构建返回数据
+            # 4. 构建返回数据（从旧到新排序）
             data = []
-            for date_str in sorted(date_industry_map.keys(), reverse=True):
+            for date_str in sorted(date_industry_map.keys()):
                 data.append({
                     "date": date_str,
                     "industry_counts": dict(date_industry_map[date_str])

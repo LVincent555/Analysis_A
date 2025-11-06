@@ -33,8 +33,9 @@ DEFAULT_MAX_STOCKS = 100  # 默认加载的股票数量
 TOP_N_STOCKS = 1000  # 行业分析的股票数量
 
 # 文件名模式（支持多种模式）
+# 注意：主文件已包含北交所数据，_bjs文件是重复的，不导入
 FILE_PATTERNS = [
-    "*_data_sma_feature_color.xlsx",      # 主板+双创板
-    "*_data_sma_feature_color_bjs.xlsx"   # 北交所
+    "*_data_sma_feature_color.xlsx",      # 主板+双创板+北交所（全部数据）
+    # "*_data_sma_feature_color_bjs.xlsx"   # 北交所单独文件（已注释，避免重复）
 ]
 FILE_PATTERN = "*_data_sma_feature_color.xlsx"  # 向后兼容
