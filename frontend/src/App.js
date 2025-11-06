@@ -90,9 +90,8 @@ function App() {
       setError(null);
       setAnalysisData(null); // 清空旧数据避免渲染错误
       try {
-        const filterStocks = boardType === 'main'; // main=true(过滤), all=false(不过滤)
         const response = await axios.get(
-          `${API_BASE_URL}/api/analyze/${selectedPeriod}?filter_stocks=${filterStocks}`
+          `${API_BASE_URL}/api/analyze/${selectedPeriod}?board_type=${boardType}`
         );
         setAnalysisData(response.data);
       } catch (err) {
@@ -115,9 +114,8 @@ function App() {
     setLoading(true);
     setError(null);
     try {
-      const filterStocks = boardType === 'main'; // main=true(过滤), all=false(不过滤)
       const response = await axios.get(
-        `${API_BASE_URL}/api/analyze/${selectedPeriod}?filter_stocks=${filterStocks}`
+        `${API_BASE_URL}/api/analyze/${selectedPeriod}?board_type=${boardType}`
       );
       setAnalysisData(response.data);
     } catch (err) {
@@ -209,9 +207,8 @@ function App() {
         setRankJumpLoading(true);
         setRankJumpError(null);
         try {
-          const filterStocks = jumpBoardType === 'main';
           const response = await axios.get(
-            `${API_BASE_URL}/api/rank-jump?jump_threshold=${jumpThreshold}&filter_stocks=${filterStocks}&sigma_multiplier=${jumpSigmaMultiplier}`
+            `${API_BASE_URL}/api/rank-jump?jump_threshold=${jumpThreshold}&board_type=${jumpBoardType}&sigma_multiplier=${jumpSigmaMultiplier}`
           );
           setRankJumpData(response.data);
         } catch (err) {
@@ -232,9 +229,8 @@ function App() {
         setSteadyRiseLoading(true);
         setSteadyRiseError(null);
         try {
-          const filterStocks = riseBoardType === 'main';
           const response = await axios.get(
-            `${API_BASE_URL}/api/steady-rise?period=${risePeriod}&filter_stocks=${filterStocks}&min_rank_improvement=${minRankImprovement}&sigma_multiplier=${riseSigmaMultiplier}`
+            `${API_BASE_URL}/api/steady-rise?period=${risePeriod}&board_type=${riseBoardType}&min_rank_improvement=${minRankImprovement}&sigma_multiplier=${riseSigmaMultiplier}`
           );
           setSteadyRiseData(response.data);
         } catch (err) {
@@ -383,6 +379,16 @@ function App() {
                         }`}
                       >
                         全部 <span className="text-xs opacity-75">(含双创)</span>
+                      </button>
+                      <button
+                        onClick={() => setBoardType('bjs')}
+                        className={`w-full text-left py-2 px-3 rounded text-sm font-medium transition-colors ${
+                          boardType === 'bjs'
+                            ? 'bg-indigo-100 text-indigo-700'
+                            : 'text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        北交所 <span className="text-xs opacity-75">(920开头)</span>
                       </button>
 
                       <div className="text-xs font-semibold text-gray-500 uppercase mb-2 mt-4">分析周期</div>
@@ -560,6 +566,16 @@ function App() {
                       >
                         全部
                       </button>
+                      <button
+                        onClick={() => setJumpBoardType('bjs')}
+                        className={`w-full text-left py-2 px-3 rounded text-sm font-medium transition-colors ${
+                          jumpBoardType === 'bjs'
+                            ? 'bg-orange-100 text-orange-700'
+                            : 'text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        北交所
+                      </button>
 
                       <div className="text-xs font-semibold text-gray-500 uppercase mb-2 mt-4">跳变阈值</div>
                       <div className="space-y-2">
@@ -632,6 +648,16 @@ function App() {
                         }`}
                       >
                         全部
+                      </button>
+                      <button
+                        onClick={() => setRiseBoardType('bjs')}
+                        className={`w-full text-left py-2 px-3 rounded text-sm font-medium transition-colors ${
+                          riseBoardType === 'bjs'
+                            ? 'bg-blue-100 text-blue-700'
+                            : 'text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        北交所
                       </button>
 
                       <div className="text-xs font-semibold text-gray-500 uppercase mb-2 mt-4">分析周期</div>
