@@ -64,7 +64,7 @@ backend/cache/
 cache/
 
 # Build outputs
-frontend/build/
+# frontend/build/ - 注释掉，需要提交编译后的文件到服务器
 dist/
 
 # Deployment specific
@@ -72,6 +72,10 @@ deploy/*.service.bak
 deploy/*.conf.bak
 *.sh.backup
 
+# Server specific - 服务器特定配置，不要提交
+deploy/server_config.local.py
+backend/app/config.local.py
+.env.production
 
 # Service management
 logs/

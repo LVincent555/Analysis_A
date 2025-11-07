@@ -3,7 +3,7 @@
 # 用法: ./start_all.sh [dev|prod]
 
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
-MODE=${1:-dev}  # 默认dev模式
+MODE=${1:-prod}  # 默认生产模式
 
 echo "============================================================"
 echo "🚀 一键启动股票分析系统 - ${MODE^^} 模式"
@@ -30,7 +30,15 @@ mkdir -p "$PROJECT_DIR/logs"
 echo ""
 echo "▶ 启动后端服务..."
 cd "$PROJECT_DIR/backend"
-nohup bash -c "source venv/bin/activate && python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload" > "$PROJECT_DIR/logs/backend.log" 2>&1 &
+
+if [ "$MODE" = "prod" ]; then
+    # 生产模式：不使用--reload
+    nohup python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 > "$PROJECT_DIR/logs/backend.log" 2>&1 &
+else
+    # 开发模式：使用--reload自动重载
+    nohup python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload > "$PROJECT_DIR/logs/backend.log" 2>&1 &
+fi
+
 BACKEND_PID=$!
 echo "✓ 后端已启动 (PID: $BACKEND_PID)"
 echo "  日志: $PROJECT_DIR/logs/backend.log"
@@ -39,24 +47,20 @@ echo "  日志: $PROJECT_DIR/logs/backend.log"
 sleep 3
 
 if [ "$MODE" = "prod" ]; then
-    # 生产模式：构建前端
+    # 生产模式：检查前端build目录
     echo ""
-    echo "▶ 构建前端（生产模式）..."
+    echo "▶ 检查前端构建..."
     cd "$PROJECT_DIR/frontend"
     
     if [ ! -d "build" ]; then
-        echo "  开始构建（可能需要3-5分钟）..."
-        npm run build > "$PROJECT_DIR/logs/frontend-build.log" 2>&1
-        if [ $? -eq 0 ]; then
-            echo "✓ 前端构建完成"
-            echo "  构建目录: $PROJECT_DIR/frontend/build"
-            echo "  ⚠️  需要配置Nginx指向此目录"
-        else
-            echo "✗ 前端构建失败，查看日志: $PROJECT_DIR/logs/frontend-build.log"
-        fi
+        echo "  ✗ 前端build目录不存在！"
+        echo "  📝 请在本地执行: npm run build"
+        echo "  📝 然后 git push，在服务器上git pull"
+        exit 1
     else
-        echo "✓ 前端已构建 (使用现有build目录)"
+        echo "✓ 前端build目录已存在"
         echo "  构建目录: $PROJECT_DIR/frontend/build"
+        echo "  📄 文件数: $(find build -type f | wc -l)"
     fi
     
     FRONTEND_PID="N/A"
