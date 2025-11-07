@@ -13,7 +13,7 @@ DATA_DIR = BASE_DIR.parent / "data"
 # API配置
 API_V1_PREFIX = "/api"
 PROJECT_NAME = "股票分析系统"
-VERSION = "0.2.3"  # 修复配置文件泄露和部署问题
+VERSION = "0.2.4"  # 板块数据全量缓存、智能去重系统
 
 # 数据源配置
 USE_DATABASE = os.getenv("USE_DATABASE", "true").lower() == "true"  # 是否使用数据库

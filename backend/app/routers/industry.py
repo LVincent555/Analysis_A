@@ -31,13 +31,14 @@ async def get_industry_stats(period: int = 3, top_n: int = 20):
 
 
 @router.get("/industry/trend")
-async def get_industry_trend(period: int = 14, top_n: int = 100):
+async def get_industry_trend(period: int = 14, top_n: int = 100, date: str = None):
     """
     获取行业趋势数据（多日期动态变化）
     
     Args:
         period: 分析周期（天数），默认14
         top_n: 每天TOP N股票，默认100
+        date: 指定日期 (YYYYMMDD格式)，不传则使用最新日期
     
     Returns:
         行业趋势数据，包含每日的行业分布
@@ -51,11 +52,23 @@ async def get_industry_trend(period: int = 14, top_n: int = 100):
         db = SessionLocal()
         try:
             # 1. 获取最近N天的日期
-            dates = db.query(DailyStockData.date)\
-                .distinct()\
-                .order_by(desc(DailyStockData.date))\
-                .limit(period)\
-                .all()
+            from datetime import datetime
+            
+            # 如果指定date，从该日期往前推period天
+            if date:
+                target_date = datetime.strptime(date, '%Y%m%d').date()
+                dates = db.query(DailyStockData.date)\
+                    .distinct()\
+                    .filter(DailyStockData.date <= target_date)\
+                    .order_by(desc(DailyStockData.date))\
+                    .limit(period)\
+                    .all()
+            else:
+                dates = db.query(DailyStockData.date)\
+                    .distinct()\
+                    .order_by(desc(DailyStockData.date))\
+                    .limit(period)\
+                    .all()
             
             if not dates:
                 return {"data": [], "industries": []}
@@ -117,12 +130,13 @@ async def get_industry_trend(period: int = 14, top_n: int = 100):
 
 
 @router.get("/industry/top1000", response_model=IndustryStats)
-async def get_top1000_industry(limit: int = 1000):
+async def get_top1000_industry(limit: int = 1000, date: str = None):
     """
     获取前N名行业统计
     
     Args:
         limit: 前N名数量，默认1000，可选1000/2000/3000/5000
+        date: 指定日期 (YYYYMMDD格式)，不传则使用最新日期
     
     Returns:
         行业统计数据（包含日期和stats列表）
@@ -136,13 +150,22 @@ async def get_top1000_industry(limit: int = 1000):
         if limit not in [1000, 2000, 3000, 5000]:
             limit = 1000  # 默认值
         
-        # 获取最新日期
+        # 获取日期
         db = SessionLocal()
         try:
-            latest_date = db.query(DailyStockData.date)\
-                .distinct()\
-                .order_by(desc(DailyStockData.date))\
-                .first()
+            from datetime import datetime
+            
+            if date:
+                target_date = datetime.strptime(date, '%Y%m%d').date()
+                latest_date = db.query(DailyStockData.date)\
+                    .distinct()\
+                    .filter(DailyStockData.date == target_date)\
+                    .first()
+            else:
+                latest_date = db.query(DailyStockData.date)\
+                    .distinct()\
+                    .order_by(desc(DailyStockData.date))\
+                    .first()
             
             if not latest_date:
                 raise HTTPException(status_code=404, detail="没有可用数据")

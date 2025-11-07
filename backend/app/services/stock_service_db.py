@@ -3,6 +3,7 @@
 简单SQL查询 + 后端计算
 """
 from typing import Optional
+from datetime import datetime, timedelta
 import logging
 
 from ..database import SessionLocal
@@ -24,7 +25,7 @@ class StockServiceDB:
         """获取数据库会话"""
         return SessionLocal()
     
-    def search_stock(self, keyword: str) -> Optional[StockHistory]:
+    def search_stock(self, keyword: str, target_date: Optional[str] = None) -> Optional[StockHistory]:
         """
         搜索股票
         
@@ -35,6 +36,7 @@ class StockServiceDB:
         
         Args:
             keyword: 股票代码或名称
+            target_date: 指定日期 (YYYYMMDD格式)，不传则使用最新日期
         
         Returns:
             股票历史数据
@@ -54,11 +56,23 @@ class StockServiceDB:
                 return None
             
             # 2. 简单SQL：查询该股票的所有历史数据（从旧到新排序）
-            history_data = db.query(DailyStockData)\
-                .filter(DailyStockData.stock_code == stock.stock_code)\
-                .order_by(DailyStockData.date)\
-                .limit(30)\
-                .all()
+            # 如果指定target_date，查询从该日期往前30天
+            if target_date:
+                target_date_obj = datetime.strptime(target_date, '%Y%m%d').date()
+                history_data = db.query(DailyStockData)\
+                    .filter(DailyStockData.stock_code == stock.stock_code)\
+                    .filter(DailyStockData.date <= target_date_obj)\
+                    .order_by(desc(DailyStockData.date))\
+                    .limit(30)\
+                    .all()
+                # 反转以保持从旧到新的顺序
+                history_data = list(reversed(history_data))
+            else:
+                history_data = db.query(DailyStockData)\
+                    .filter(DailyStockData.stock_code == stock.stock_code)\
+                    .order_by(DailyStockData.date)\
+                    .limit(30)\
+                    .all()
             
             if not history_data:
                 return None

@@ -20,8 +20,10 @@ def preload_cache():
         logger.info("=" * 60)
         logger.info("✅ 全量内存缓存已就绪")
         logger.info(f"   📊 股票数量: {stats['stocks_count']:,}")
-        logger.info(f"   📊 数据记录: {stats['daily_data_count']:,}")
-        logger.info(f"   📊 交易日数: {stats['dates_count']:,}")
+        logger.info(f"   📊 股票数据记录: {stats['daily_data_count']:,}")
+        logger.info(f"   📊 股票交易日数: {stats['dates_count']:,}")
+        logger.info(f"   📊 板块数据记录: {stats['sector_daily_data_count']:,}")
+        logger.info(f"   📊 板块交易日数: {stats['sector_dates_count']:,}")
         logger.info(f"   ⚡ 查询性能: < 1ms")
         logger.info("=" * 60)
         

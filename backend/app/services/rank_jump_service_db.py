@@ -2,7 +2,7 @@
 排名跳变服务 - 数据库版
 简单SQL查询 + 后端计算
 """
-from typing import List
+from typing import List, Optional
 import statistics
 import logging
 
@@ -30,7 +30,8 @@ class RankJumpServiceDB:
         self,
         jump_threshold: int = 2500,
         board_type: str = 'main',
-        sigma_multiplier: float = 1.0
+        sigma_multiplier: float = 1.0,
+        target_date: Optional[str] = None
     ) -> RankJumpResult:
         """
         排名跳变分析
@@ -45,22 +46,35 @@ class RankJumpServiceDB:
             jump_threshold: 跳变阈值
             board_type: 板块类型 ('all': 全部, 'main': 主板, 'bjs': 北交所)
             sigma_multiplier: σ倍数
+            target_date: 指定日期 (YYYYMMDD格式)，不传则使用最新日期
         
         Returns:
             排名跳变结果
         """
-        cache_key = f"rank_jump_{jump_threshold}_{board_type}_{sigma_multiplier}"
+        # 缓存键包含target_date，避免不同日期返回相同数据
+        cache_key = f"rank_jump_{jump_threshold}_{board_type}_{sigma_multiplier}_{target_date}"
         if cache_key in self.cache:
             return self.cache[cache_key]
         
         db = self.get_db()
         try:
             # 1. 简单SQL：获取最近2天的日期
-            recent_dates = db.query(DailyStockData.date)\
-                .distinct()\
-                .order_by(desc(DailyStockData.date))\
-                .limit(2)\
-                .all()
+            # 如果指定target_date，获取该日期和前一天
+            from datetime import datetime
+            if target_date:
+                target_date_obj = datetime.strptime(target_date, '%Y%m%d').date()
+                recent_dates = db.query(DailyStockData.date)\
+                    .distinct()\
+                    .filter(DailyStockData.date <= target_date_obj)\
+                    .order_by(desc(DailyStockData.date))\
+                    .limit(2)\
+                    .all()
+            else:
+                recent_dates = db.query(DailyStockData.date)\
+                    .distinct()\
+                    .order_by(desc(DailyStockData.date))\
+                    .limit(2)\
+                    .all()
             
             if len(recent_dates) < 2:
                 return self._empty_result()

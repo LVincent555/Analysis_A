@@ -15,7 +15,8 @@ import {
   StockQueryModule,
   IndustryTrendModule,
   RankJumpModule,
-  SteadyRiseModule
+  SteadyRiseModule,
+  SectorModule
 } from './components/modules';
 
 function App() {
@@ -23,6 +24,7 @@ function App() {
   const [activeModule, setActiveModule] = useState('hot-spots');
   const [expandedMenu, setExpandedMenu] = useState('hot-spots');
   const [availableDates, setAvailableDates] = useState(null);
+  const [selectedDate, setSelectedDate] = useState(null); // 用户选择的日期
 
   // 最新热点模块状态
   const [boardType, setBoardType] = useState('main');
@@ -56,6 +58,10 @@ function App() {
       try {
         const response = await axios.get(`${API_BASE_URL}/api/dates`);
         setAvailableDates(response.data);
+        // 默认选择最新日期
+        if (response.data && response.data.latest_date) {
+          setSelectedDate(response.data.latest_date);
+        }
       } catch (err) {
         console.error('获取日期失败:', err);
       }
@@ -99,10 +105,24 @@ function App() {
                 )}
               </div>
             </div>
-            {availableDates && (
-              <div className="flex items-center space-x-2 text-gray-600">
-                <Calendar className="h-5 w-5" />
-                <span>最新数据: {formatDate(availableDates.latest_date)}</span>
+            {availableDates && selectedDate && (
+              <div className="flex items-center space-x-3">
+                <Calendar className="h-5 w-5 text-gray-600" />
+                <div className="flex items-center space-x-2">
+                  <label className="text-sm font-medium text-gray-700">数据日期:</label>
+                  <select
+                    value={selectedDate}
+                    onChange={(e) => setSelectedDate(e.target.value)}
+                    className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-colors cursor-pointer"
+                  >
+                    {availableDates.dates.map((date) => (
+                      <option key={date} value={date}>
+                        {formatDate(date)}
+                        {date === availableDates.latest_date && ' (最新)'}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
             )}
           </div>
@@ -405,7 +425,7 @@ function App() {
 
                       <div className="text-xs font-semibold text-gray-500 uppercase mb-2 mt-4">跳变阈值</div>
                       <div className="space-y-2">
-                        {[2000, 2500, 3000, 3500].map((threshold) => (
+                        {[1000, 1500, 2000, 2500, 3000, 3500].map((threshold) => (
                           <button
                             key={threshold}
                             onClick={() => setJumpThreshold(threshold)}
@@ -523,6 +543,50 @@ function App() {
                   )}
                 </div>
 
+                {/* 板块分析模块 */}
+                <div className="mb-2">
+                  <button
+                    onClick={() => {
+                      setExpandedMenu(expandedMenu === 'sector-analysis' ? null : 'sector-analysis');
+                      setActiveModule('sector-analysis');
+                    }}
+                    className={`w-full flex items-center justify-between p-3 rounded-lg font-medium transition-all ${
+                      activeModule === 'sector-analysis'
+                        ? 'bg-teal-50 text-teal-700'
+                        : 'text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    <div className="flex items-center space-x-2">
+                      <BarChart2 className="h-5 w-5" />
+                      <span>板块分析</span>
+                    </div>
+                    {expandedMenu === 'sector-analysis' ? (
+                      <ChevronUp className="h-4 w-4" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4" />
+                    )}
+                  </button>
+
+                  {/* 板块分析子菜单 */}
+                  {expandedMenu === 'sector-analysis' && (
+                    <div className="mt-2 ml-4 space-y-2 border-l-2 border-teal-200 pl-3">
+                      <div className="text-xs text-gray-600 mb-2">
+                        分析板块排名、趋势及历史表现
+                      </div>
+                      
+                      <div className="text-xs text-teal-600 font-medium">
+                        • 板块排名对比
+                      </div>
+                      <div className="text-xs text-teal-600 font-medium">
+                        • 板块历史趋势
+                      </div>
+                      <div className="text-xs text-teal-600 font-medium">
+                        • 涨跌幅分析
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 {/* 未来扩展预留 */}
                 <div className="mt-4 p-3 bg-gray-50 rounded-lg text-center text-xs text-gray-500">
                   更多功能即将推出...
@@ -538,21 +602,27 @@ function App() {
                 boardType={boardType} 
                 selectedPeriod={selectedPeriod}
                 topN={topN}
+                selectedDate={selectedDate}
               />
             )}
             {activeModule === 'stock-query' && (
               <StockQueryModule 
                 stockCode={stockCode}
                 queryTrigger={queryTrigger}
+                selectedDate={selectedDate}
               />
             )}
             {activeModule === 'industry-trend' && (
-              <IndustryTrendModule topNLimit={topNLimit} />
+              <IndustryTrendModule 
+                topNLimit={topNLimit}
+                selectedDate={selectedDate}
+              />
             )}
             {activeModule === 'rank-jump' && (
               <RankJumpModule 
                 jumpBoardType={jumpBoardType}
                 jumpThreshold={jumpThreshold}
+                selectedDate={selectedDate}
               />
             )}
             {activeModule === 'steady-rise' && (
@@ -560,6 +630,13 @@ function App() {
                 risePeriod={risePeriod}
                 riseBoardType={riseBoardType}
                 minRankImprovement={minRankImprovement}
+                selectedDate={selectedDate}
+              />
+            )}
+            {activeModule === 'sector-analysis' && (
+              <SectorModule 
+                selectedDate={selectedDate}
+                onDateChange={setSelectedDate}
               />
             )}
           </div>

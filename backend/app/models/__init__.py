@@ -8,6 +8,7 @@ from .stock import (
 )
 from .industry import IndustryStats, IndustryTrend, IndustryStat, IndustryDateData
 from .analysis import AnalysisResult, AvailableDates
+from .sector import SectorInfo, SectorRankingResult, SectorDetail
 
 __all__ = [
     "StockInfo",
@@ -23,4 +24,7 @@ __all__ = [
     "IndustryDateData",
     "AnalysisResult",
     "AvailableDates",
+    "SectorInfo",
+    "SectorRankingResult",
+    "SectorDetail",
 ]

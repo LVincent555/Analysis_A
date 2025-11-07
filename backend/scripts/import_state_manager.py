@@ -29,11 +29,34 @@ class ImportStateManager:
         self.state = self._load_state()
     
     def _load_state(self) -> Dict:
-        """加载状态文件"""
+        """加载状态文件（兼容老版本）"""
         if self.state_file.exists():
             try:
                 with open(self.state_file, 'r', encoding='utf-8') as f:
-                    return json.load(f)
+                    state = json.load(f)
+                
+                # === 兼容性处理 ===
+                # 确保version字段存在
+                if "version" not in state:
+                    state["version"] = "1.0"
+                    logger.info("检测到老版本JSON，已自动升级")
+                
+                # 为每个导入记录添加默认字段（如果不存在）
+                for date_str, import_info in state.get("imports", {}).items():
+                    # warning_info字段
+                    if "warning_info" not in import_info:
+                        import_info["warning_info"] = None
+                    
+                    # deletion_info字段
+                    if "deletion_info" not in import_info:
+                        import_info["deletion_info"] = None
+                    
+                    # dedup_info字段
+                    if "dedup_info" not in import_info:
+                        import_info["dedup_info"] = None
+                
+                return state
+                
             except Exception as e:
                 logger.warning(f"状态文件读取失败，创建新文件: {str(e)}")
                 return self._create_empty_state()
@@ -144,10 +167,30 @@ class ImportStateManager:
             "start_time": datetime.now().isoformat(),
             "imported_count": 0,
             "skipped_count": 0,
-            "attempt_count": self.state["imports"].get(date_str, {}).get("attempt_count", 0) + 1
+            "attempt_count": self.state["imports"].get(date_str, {}).get("attempt_count", 0) + 1,
+            "dedup_info": None  # 去重信息
         }
         self._save_state()
         logger.info(f"开始导入: {date_str} - {filename}")
+    
+    def record_dedup_info(self, date_str: str, dedup_stats: dict):
+        """
+        记录去重信息
+        
+        Args:
+            date_str: 日期字符串
+            dedup_stats: 去重统计信息
+        """
+        if date_str in self.state["imports"]:
+            if dedup_stats.get('has_duplicates'):
+                self.state["imports"][date_str]["dedup_info"] = {
+                    "detected_duplicates": dedup_stats.get('duplicate_codes', []),
+                    "removed_count": dedup_stats.get('removed_count', 0),
+                    "removed_details": dedup_stats.get('removed_details', []),
+                    "dedup_time": datetime.now().isoformat()
+                }
+                self._save_state()
+                logger.info(f"📝 已记录去重信息: {date_str}")
     
     def mark_success(
         self,
@@ -258,6 +301,134 @@ class ImportStateManager:
         print(f"总导入记录: {stats['total_records_imported']}")
         print(f"成功率: {stats['success_rate']}")
         print("=" * 60)
+    
+    def mark_warning(self, date_str: str, warning_type: str, current_hash: Optional[str] = None):
+        """
+        标记为警告状态
+        
+        Args:
+            date_str: 日期字符串
+            warning_type: 警告类型 (file_missing/file_changed)
+            current_hash: 当前文件hash（如果文件还存在）
+        """
+        if date_str in self.state["imports"]:
+            import_info = self.state["imports"][date_str]
+            original_status = import_info.get("status")
+            
+            # 只有成功状态才能标记为warning
+            if original_status == "success":
+                import_info["status"] = "warning"
+                import_info["warning_info"] = {
+                    "detected_at": datetime.now().isoformat(),
+                    "warning_type": warning_type,
+                    "original_hash": import_info.get("file_hash"),
+                    "current_hash": current_hash,
+                    "suggest_action": "delete_db_data" if warning_type == "file_missing" else "reimport_or_delete"
+                }
+                self._save_state()
+                logger.warning(f"⚠️  标记为警告: {date_str}, 类型: {warning_type}")
+    
+    def clear_warning(self, date_str: str):
+        """清除警告状态（恢复为success）"""
+        if date_str in self.state["imports"]:
+            import_info = self.state["imports"][date_str]
+            if import_info.get("status") == "warning":
+                import_info["status"] = "success"
+                import_info.pop("warning_info", None)
+                self._save_state()
+                logger.info(f"✅ 清除警告: {date_str}")
+    
+    def mark_deleted(self, date_str: str, delete_reason: str, deleted_by: str = "manual"):
+        """
+        标记为已删除状态
+        
+        Args:
+            date_str: 日期字符串
+            delete_reason: 删除原因
+            deleted_by: 删除方式 (manual/clean_script/auto)
+        """
+        if date_str in self.state["imports"]:
+            import_info = self.state["imports"][date_str]
+            
+            # 记录删除信息
+            import_info["status"] = "deleted"
+            import_info["deletion_info"] = {
+                "deleted_at": datetime.now().isoformat(),
+                "deleted_by": deleted_by,
+                "delete_reason": delete_reason,
+                "original_imported_count": import_info.get("imported_count", 0),
+                "original_status": import_info.get("status", "unknown")
+            }
+            
+            # 清除警告信息（如果有）
+            import_info.pop("warning_info", None)
+            
+            self._save_state()
+            logger.info(f"🗑️  标记为已删除: {date_str}, 原因: {delete_reason}")
+    
+    def get_warnings(self) -> Dict:
+        """
+        获取所有警告状态的记录
+        
+        Returns:
+            警告记录字典 {date: import_info}
+        """
+        warnings = {}
+        for date_str, import_info in self.state["imports"].items():
+            if import_info.get("status") == "warning":
+                warnings[date_str] = import_info
+        return warnings
+    
+    def scan_file_changes(self, data_dir: Path, file_pattern: str = "*_data_sma_feature_color.xlsx") -> Dict:
+        """
+        扫描文件变化，标记缺失或变更的文件
+        
+        Args:
+            data_dir: 数据目录
+            file_pattern: 文件匹配模式
+        
+        Returns:
+            扫描结果统计
+        """
+        file_missing_count = 0
+        file_changed_count = 0
+        file_ok_count = 0
+        
+        for date_str, import_info in self.state["imports"].items():
+            # 只检查成功导入的记录
+            if import_info.get("status") != "success":
+                continue
+            
+            filename = import_info.get("filename")
+            if not filename:
+                continue
+            
+            file_path = data_dir / filename
+            original_hash = import_info.get("file_hash")
+            
+            # 检查文件是否存在
+            if not file_path.exists():
+                self.mark_warning(date_str, "file_missing", None)
+                file_missing_count += 1
+                logger.warning(f"⚠️  文件缺失: {filename}")
+                continue
+            
+            # 检查文件是否变化
+            current_hash = self.calculate_file_hash(file_path)
+            if current_hash and original_hash and current_hash != original_hash:
+                self.mark_warning(date_str, "file_changed", current_hash)
+                file_changed_count += 1
+                logger.warning(f"⚠️  文件已变化: {filename}")
+                continue
+            
+            file_ok_count += 1
+        
+        return {
+            "file_missing": file_missing_count,
+            "file_changed": file_changed_count,
+            "file_ok": file_ok_count,
+            "total_checked": file_missing_count + file_changed_count + file_ok_count
+        }
     
     def reset(self):
         """重置所有状态（慎用）"""

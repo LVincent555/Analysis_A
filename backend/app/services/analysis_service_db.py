@@ -43,7 +43,8 @@ class AnalysisServiceDB:
         self,
         period: int = 3,
         max_count: int = 100,
-        board_type: str = 'main'
+        board_type: str = 'main',
+        target_date: Optional[str] = None
     ) -> AnalysisResult:
         """
         周期热点分析
@@ -57,6 +58,7 @@ class AnalysisServiceDB:
             period: 分析周期（天数）
             max_count: 最大返回数量
             board_type: 板块类型 ('all': 全部, 'main': 主板, 'bjs': 北交所)
+            target_date: 指定日期 (YYYYMMDD格式)，不传则使用最新日期
         
         Returns:
             分析结果
@@ -66,16 +68,27 @@ class AnalysisServiceDB:
         print(f"   period={period}")
         print(f"   max_count={max_count}")
         print(f"   board_type={board_type}")
+        print(f"   target_date={target_date}")
         print()
         
         db = self.get_db()
         try:
             # 1. 获取最近N天的日期
-            dates = db.query(DailyStockData.date)\
-                .distinct()\
-                .order_by(desc(DailyStockData.date))\
-                .limit(period)\
-                .all()
+            # 如果指定target_date，从该日期往前推period天
+            if target_date:
+                target_date_obj = datetime.strptime(target_date, '%Y%m%d').date()
+                dates = db.query(DailyStockData.date)\
+                    .distinct()\
+                    .filter(DailyStockData.date <= target_date_obj)\
+                    .order_by(desc(DailyStockData.date))\
+                    .limit(period)\
+                    .all()
+            else:
+                dates = db.query(DailyStockData.date)\
+                    .distinct()\
+                    .order_by(desc(DailyStockData.date))\
+                    .limit(period)\
+                    .all()
             
             if not dates:
                 return AnalysisResult(

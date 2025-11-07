@@ -9,7 +9,7 @@ import { formatDate } from '../../utils';
 
 const sigmaMultipliers = [1.0, 0.75, 0.5, 0.3, 0.15];
 
-export default function SteadyRiseModule({ risePeriod, riseBoardType, minRankImprovement }) {
+export default function SteadyRiseModule({ risePeriod, riseBoardType, minRankImprovement, selectedDate }) {
   const [steadyRiseData, setSteadyRiseData] = useState(null);
   const [steadyRiseLoading, setSteadyRiseLoading] = useState(false);
   const [steadyRiseError, setSteadyRiseError] = useState(null);
@@ -24,9 +24,11 @@ export default function SteadyRiseModule({ risePeriod, riseBoardType, minRankImp
       setSteadyRiseLoading(true);
       setSteadyRiseError(null);
       try {
-        const response = await axios.get(
-          `${API_BASE_URL}/api/steady-rise?period=${risePeriod}&board_type=${riseBoardType}&min_rank_improvement=${minRankImprovement}&sigma_multiplier=${riseSigmaMultiplier}`
-        );
+        let url = `${API_BASE_URL}/api/steady-rise?period=${risePeriod}&board_type=${riseBoardType}&min_rank_improvement=${minRankImprovement}&sigma_multiplier=${riseSigmaMultiplier}`;
+        if (selectedDate) {
+          url += `&date=${selectedDate}`;
+        }
+        const response = await axios.get(url);
         setSteadyRiseData(response.data);
       } catch (err) {
         console.error('获取稳步上升数据失败:', err);
@@ -37,7 +39,7 @@ export default function SteadyRiseModule({ risePeriod, riseBoardType, minRankImp
     };
 
     fetchSteadyRiseData();
-  }, [risePeriod, riseBoardType, minRankImprovement, riseSigmaMultiplier]);
+  }, [risePeriod, riseBoardType, minRankImprovement, riseSigmaMultiplier, selectedDate]);
 
   // 搜索过滤逻辑
   const filteredStocks = useMemo(() => {

@@ -24,14 +24,28 @@ class MemoryCacheManager:
         return cls._instance
     
     def __init__(self):
+        """初始化缓存管理器"""
         if self._initialized:
             return
         
-        # 内存数据结构
-        self.stocks: Dict[str, Stock] = {}  # stock_code -> Stock对象
-        self.daily_data_by_date: Dict[date, List[DailyStockData]] = defaultdict(list)  # date -> [数据列表]
-        self.daily_data_by_stock: Dict[str, Dict[date, DailyStockData]] = defaultdict(dict)  # stock_code -> {date -> 数据}
-        self.dates: List[date] = []  # 所有可用日期（降序）
+        # === 股票数据缓存 ===
+        # 股票基础信息缓存 {stock_code: Stock对象}
+        self.stocks: Dict[str, Stock] = {}
+        
+        # 每日数据缓存
+        self.daily_data_by_date: Dict[date, List[DailyStockData]] = defaultdict(list)  # {date: [DailyStockData对象列表]}
+        self.daily_data_by_stock: Dict[str, Dict[date, DailyStockData]] = defaultdict(dict)  # {stock_code: {date: DailyStockData对象}}
+        
+        # 可用日期列表（降序，最新日期在前）
+        self.dates: List[date] = []
+        
+        # === 板块数据缓存 ===
+        # 板块每日数据缓存
+        self.sector_daily_data_by_date: Dict[date, List[DailyStockData]] = defaultdict(list)  # {date: [SectorDailyData对象列表]}
+        self.sector_daily_data_by_name: Dict[str, Dict[date, DailyStockData]] = defaultdict(dict)  # {sector_name: {date: SectorDailyData对象}}
+        
+        # 板块可用日期列表（降序）
+        self.sector_dates: List[date] = []
         
         self._initialized = True
         logger.info("✅ MemoryCacheManager 初始化完成（尚未加载数据）")
@@ -74,12 +88,44 @@ class MemoryCacheManager:
             for date_key in self.daily_data_by_date:
                 self.daily_data_by_date[date_key].sort(key=lambda x: x.rank)
             
+            # 4. 加载板块数据
+            logger.info("  4/5 加载板块数据...")
+            from ..db_models import SectorDailyData
+            sector_data_list = db.query(SectorDailyData).all()
+            
+            # 构建板块索引
+            sector_date_set = set()
+            for data in sector_data_list:
+                # 按日期索引
+                self.sector_daily_data_by_date[data.date].append(data)
+                # 按板块ID+日期索引（使用sector_id而不是sector_name）
+                self.sector_daily_data_by_name[data.sector_id][data.date] = data
+                # 收集日期
+                sector_date_set.add(data.date)
+            
+            logger.info(f"  ✅ 加载了 {len(sector_data_list)} 条板块数据")
+            
+            # 5. 排序板块日期（降序）
+            logger.info("  5/5 构建板块日期索引...")
+            self.sector_dates = sorted(list(sector_date_set), reverse=True)
+            logger.info(f"  ✅ 板块共 {len(self.sector_dates)} 个交易日")
+            
+            # 6. 对每个日期的板块数据按rank排序
+            for date_key in self.sector_daily_data_by_date:
+                self.sector_daily_data_by_date[date_key].sort(key=lambda x: x.rank)
+            
             logger.info("🎉 全量数据加载完成！")
+            logger.info(f"   【股票】")
             logger.info(f"   - 股票数量: {len(self.stocks)}")
             logger.info(f"   - 数据记录: {len(daily_data_list)}")
             logger.info(f"   - 交易日数: {len(self.dates)}")
             logger.info(f"   - 最新日期: {self.dates[0] if self.dates else 'N/A'}")
             logger.info(f"   - 最早日期: {self.dates[-1] if self.dates else 'N/A'}")
+            logger.info(f"   【板块】")
+            logger.info(f"   - 板块数据: {len(sector_data_list)} 条")
+            logger.info(f"   - 交易日数: {len(self.sector_dates)}")
+            logger.info(f"   - 最新日期: {self.sector_dates[0] if self.sector_dates else 'N/A'}")
+            logger.info(f"   - 最早日期: {self.sector_dates[-1] if self.sector_dates else 'N/A'}")
             
         except Exception as e:
             logger.error(f"❌ 加载数据失败: {e}")
@@ -129,6 +175,38 @@ class MemoryCacheManager:
         """检查数据是否已加载"""
         return len(self.stocks) > 0 and len(self.dates) > 0
     
+    # === 板块数据查询方法 ===
+    
+    def get_sector_available_dates(self) -> List[str]:
+        """获取所有板块可用日期"""
+        return [d.strftime('%Y%m%d') for d in self.sector_dates]
+    
+    def get_sector_latest_date(self) -> Optional[date]:
+        """获取板块最新日期"""
+        return self.sector_dates[0] if self.sector_dates else None
+    
+    def get_sector_dates_range(self, period: int) -> List[date]:
+        """获取最近N天的板块日期"""
+        return self.sector_dates[:period]
+    
+    def get_sector_daily_data_by_date(self, target_date: date):
+        """获取指定日期的所有板块数据"""
+        return self.sector_daily_data_by_date.get(target_date, [])
+    
+    def get_sector_daily_data_by_id(self, sector_id: int, target_date: date):
+        """获取指定板块在指定日期的数据"""
+        return self.sector_daily_data_by_name.get(sector_id, {}).get(target_date)
+    
+    def get_sector_history(self, sector_id: int, dates: List[date]):
+        """获取指定板块在多个日期的历史数据"""
+        sector_data = self.sector_daily_data_by_name.get(sector_id, {})
+        return [sector_data[d] for d in dates if d in sector_data]
+    
+    def get_top_n_sectors(self, target_date: date, max_count: int):
+        """获取指定日期的TOP N板块"""
+        all_data = self.sector_daily_data_by_date.get(target_date, [])
+        return [d for d in all_data if d.rank <= max_count]
+    
     def get_memory_stats(self) -> dict:
         """获取内存使用统计"""
         return {
@@ -136,7 +214,12 @@ class MemoryCacheManager:
             "dates_count": len(self.dates),
             "daily_data_count": sum(len(data_list) for data_list in self.daily_data_by_date.values()),
             "date_index_keys": len(self.daily_data_by_date),
-            "stock_index_keys": len(self.daily_data_by_stock)
+            "stock_index_keys": len(self.daily_data_by_stock),
+            # 板块统计
+            "sector_dates_count": len(self.sector_dates),
+            "sector_daily_data_count": sum(len(data_list) for data_list in self.sector_daily_data_by_date.values()),
+            "sector_date_index_keys": len(self.sector_daily_data_by_date),
+            "sector_name_index_keys": len(self.sector_daily_data_by_name)
         }
 
 

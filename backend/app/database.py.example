@@ -6,13 +6,29 @@
 2. 修改数据库连接配置
 3. database.py 不会被提交到Git
 
-或者使用环境变量配置（推荐）：
+📝 配置说明：
+
+【生产环境】（服务器部署）
+- DB_HOST = "localhost"  # 服务器上数据库使用localhost
+- DB_NAME = "db_20251106_analysis_a"  # 生产数据库名
+- DB_PASSWORD = "your_production_password"  # 生产密码
+
+【本地开发】
+- DB_HOST = "localhost"  # 本地数据库地址
+- DB_NAME = "stock_analysis"  # 本地测试数据库
+- DB_PASSWORD = "your_local_password"  # 本地密码
+
+💡 使用环境变量配置（推荐）：
 创建 backend/.env 文件：
 DB_HOST=your_host
 DB_PORT=5432
 DB_NAME=your_database
 DB_USER=your_user
 DB_PASSWORD=your_password
+
+🔍 历史日期查看功能：
+系统支持查看历史日期的数据，所有API都支持date参数(YYYYMMDD格式)
+前端有全局日期选择器，可以选择任意历史日期进行分析
 """
 import os
 from sqlalchemy import create_engine

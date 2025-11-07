@@ -25,7 +25,7 @@ async def get_available_dates():
 
 
 @router.get("/analyze/{period}", response_model=AnalysisResult)
-async def analyze_period(period: int, board_type: str = 'main', top_n: int = 100):
+async def analyze_period(period: int, board_type: str = 'main', top_n: int = 100, date: str = None):
     """
     分析指定周期的股票重复情况
     
@@ -33,6 +33,7 @@ async def analyze_period(period: int, board_type: str = 'main', top_n: int = 100
         period: 分析周期（天数）
         board_type: 板块类型 ('all': 全部, 'main': 主板, 'bjs': 北交所)
         top_n: 每天分析前N个股票，默认100，可选100/200/400/600/800/1000
+        date: 指定日期 (YYYYMMDD格式)，不传则使用最新日期
     """
     try:
         import logging
@@ -55,8 +56,8 @@ async def analyze_period(period: int, board_type: str = 'main', top_n: int = 100
             sys.stderr.flush()
             top_n = 100  # 默认值
         
-        logger.info(f"🎯 API调用参数: period={period}, top_n={top_n}, board_type={board_type}")
+        logger.info(f"🎯 API调用参数: period={period}, top_n={top_n}, board_type={board_type}, date={date}")
         
-        return analysis_service.analyze_period(period, max_count=top_n, board_type=board_type)
+        return analysis_service.analyze_period(period, max_count=top_n, board_type=board_type, target_date=date)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

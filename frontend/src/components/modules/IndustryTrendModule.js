@@ -12,7 +12,7 @@ import {
 import { API_BASE_URL, COLORS } from '../../constants';
 import { formatDate } from '../../utils';
 
-export default function IndustryTrendModule({ topNLimit }) {
+export default function IndustryTrendModule({ topNLimit, selectedDate }) {
   const [industryTrend, setIndustryTrend] = useState(null);
   const [topNIndustry, setTopNIndustry] = useState(null);
   const [trendLoading, setTrendLoading] = useState(false);
@@ -27,13 +27,21 @@ export default function IndustryTrendModule({ topNLimit }) {
     const fetchTopNIndustry = async () => {
       try {
         // 尝试使用带limit参数的API，如果不支持则使用默认的top1000
-        const response = await axios.get(`${API_BASE_URL}/api/industry/top1000?limit=${topNLimit}`);
+        let url = `${API_BASE_URL}/api/industry/top1000?limit=${topNLimit}`;
+        if (selectedDate) {
+          url += `&date=${selectedDate}`;
+        }
+        const response = await axios.get(url);
         setTopNIndustry(response.data);
       } catch (err) {
         console.error('获取前N名行业数据失败:', err);
         // 如果API不支持limit参数，尝试使用默认API
         try {
-          const fallbackResponse = await axios.get(`${API_BASE_URL}/api/industry/top1000`);
+          let fallbackUrl = `${API_BASE_URL}/api/industry/top1000?limit=1000`;
+          if (selectedDate) {
+            fallbackUrl += `&date=${selectedDate}`;
+          }
+          const fallbackResponse = await axios.get(fallbackUrl);
           setTopNIndustry(fallbackResponse.data);
         } catch (fallbackErr) {
           console.error('获取行业数据失败:', fallbackErr);
@@ -41,7 +49,7 @@ export default function IndustryTrendModule({ topNLimit }) {
       }
     };
     fetchTopNIndustry();
-  }, [topNLimit]);
+  }, [topNLimit, selectedDate]);
 
   // 获取行业趋势数据
   useEffect(() => {
@@ -49,7 +57,11 @@ export default function IndustryTrendModule({ topNLimit }) {
       setTrendLoading(true);
       setTrendError(null);
       try {
-        const response = await axios.get(`${API_BASE_URL}/api/industry/trend`);
+        let url = `${API_BASE_URL}/api/industry/trend`;
+        if (selectedDate) {
+          url += `?date=${selectedDate}`;
+        }
+        const response = await axios.get(url);
         setIndustryTrend(response.data);
       } catch (err) {
         console.error('获取行业趋势数据失败:', err);
@@ -60,7 +72,7 @@ export default function IndustryTrendModule({ topNLimit }) {
     };
 
     fetchIndustryTrend();
-  }, []);
+  }, [selectedDate]);
 
   // 当切换图表类型或显示数量时，重置隐藏状态
   useEffect(() => {
@@ -95,15 +107,16 @@ export default function IndustryTrendModule({ topNLimit }) {
               共 {topNIndustry.total_stocks} 只股票，{topNIndustry.stats.length} 个行业 · {formatDate(topNIndustry.date)}
             </div>
           </div>
-          <ResponsiveContainer width="100%" height={600}>
-            <BarChart data={topNIndustry.stats.slice(0, 30)} layout="vertical" margin={{ left: 100, right: 50 }}>
+          <ResponsiveContainer width="100%" height={800}>
+            <BarChart data={topNIndustry.stats.slice(0, 30)} layout="vertical" margin={{ left: 120, right: 50 }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis type="number" label={{ value: '股票数量', position: 'bottom' }} />
               <YAxis 
                 type="category" 
                 dataKey="industry" 
-                width={90}
+                width={110}
                 tick={{ fontSize: 11 }}
+                interval={0}
               />
               <Tooltip 
                 formatter={(value, name, props) => [`${value}个 (${props.payload.percentage}%)`, '股票数量']} 

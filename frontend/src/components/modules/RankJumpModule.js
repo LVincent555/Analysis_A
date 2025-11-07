@@ -9,7 +9,7 @@ import { formatDate } from '../../utils';
 
 const sigmaMultipliers = [1.0, 0.75, 0.5, 0.3, 0.15];
 
-export default function RankJumpModule({ jumpBoardType, jumpThreshold }) {
+export default function RankJumpModule({ jumpBoardType, jumpThreshold, selectedDate }) {
   const [rankJumpData, setRankJumpData] = useState(null);
   const [rankJumpLoading, setRankJumpLoading] = useState(false);
   const [rankJumpError, setRankJumpError] = useState(null);
@@ -24,9 +24,11 @@ export default function RankJumpModule({ jumpBoardType, jumpThreshold }) {
       setRankJumpLoading(true);
       setRankJumpError(null);
       try {
-        const response = await axios.get(
-          `${API_BASE_URL}/api/rank-jump?board_type=${jumpBoardType}&min_rank_change=${jumpThreshold}&sigma_multiplier=${jumpSigmaMultiplier}`
-        );
+        let url = `${API_BASE_URL}/api/rank-jump?board_type=${jumpBoardType}&jump_threshold=${jumpThreshold}&sigma_multiplier=${jumpSigmaMultiplier}`;
+        if (selectedDate) {
+          url += `&date=${selectedDate}`;
+        }
+        const response = await axios.get(url);
         setRankJumpData(response.data);
       } catch (err) {
         console.error('获取排名跳变数据失败:', err);
@@ -37,7 +39,7 @@ export default function RankJumpModule({ jumpBoardType, jumpThreshold }) {
     };
 
     fetchRankJumpData();
-  }, [jumpBoardType, jumpThreshold, jumpSigmaMultiplier]);
+  }, [jumpBoardType, jumpThreshold, jumpSigmaMultiplier, selectedDate]);
 
   // 搜索过滤逻辑
   const filteredStocks = useMemo(() => {

@@ -8,7 +8,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { API_BASE_URL } from '../../constants/config';
 import { formatDate } from '../../utils';
 
-export default function StockQueryModule({ stockCode, queryTrigger }) {
+export default function StockQueryModule({ stockCode, queryTrigger, selectedDate }) {
   const [stockHistory, setStockHistory] = useState(null);
   const [stockLoading, setStockLoading] = useState(false);
   const [stockError, setStockError] = useState(null);
@@ -30,7 +30,11 @@ export default function StockQueryModule({ stockCode, queryTrigger }) {
       setStockLoading(true);
       setStockError(null);
       try {
-        const response = await axios.get(`${API_BASE_URL}/api/stock/${stockCode.trim()}`);
+        let url = `${API_BASE_URL}/api/stock/${stockCode.trim()}`;
+        if (selectedDate) {
+          url += `?date=${selectedDate}`;
+        }
+        const response = await axios.get(url);
         const data = response.data;
         
         const transformedData = {

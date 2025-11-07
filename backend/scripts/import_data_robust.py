@@ -160,14 +160,14 @@ def import_excel_file(file_path: Path, state_manager) -> tuple:
     date_str = extract_date_from_filename(filename)
     
     if not date_str:
-        logger.warning(f"⏭️  跳过文件（无法提取日期）: {filename}")
+        logger.warning(f"[跳过] 文件（无法提取日期）: {filename}")
         return 0, 0, False
     
     # === 幂等性检查：基于状态文件 ===
     if not state_manager.should_reimport(date_str, file_path):
-        logger.info(f"⏭️  跳过文件（已成功导入）: {filename}")
-        import_info = state_manager.get_import_info(date_str)
-        return import_info.get('imported_count', 0), 0, True
+        logger.info(f"[跳过] 文件（已成功导入）: {filename}")
+        # 文件已导入，计入跳过统计（导入=0，跳过=1）
+        return 0, 1, True
     
     # 记录开始导入
     state_manager.start_import(date_str, filename, file_path)
@@ -185,6 +185,46 @@ def import_excel_file(file_path: Path, state_manager) -> tuple:
         df = pd.read_excel(file_path)
         total_rows = len(df)
         logger.info(f"📊 读取到 {total_rows} 条记录")
+        
+        # === 智能去重（只去除明显异常的重复）===
+        from deduplicate_helper import DataDeduplicator, print_dedup_summary
+        
+        deduplicator = DataDeduplicator()
+        df, dedup_stats = deduplicator.deduplicate_stock_data(df)
+        
+        # 记录去重信息到JSON
+        state_manager.record_dedup_info(date_str, dedup_stats)
+        
+        # 打印去重摘要
+        if dedup_stats.get('removed_count', 0) > 0:
+            print_dedup_summary(dedup_stats)
+            logger.info(f"📊 去重后剩余 {len(df)} 条记录")
+        elif dedup_stats.get('has_duplicates') and dedup_stats.get('removed_count', 0) == 0:
+            logger.warning(f"⚠️  检测到重复但未去重（条件不满足），将在后续检查中处理")
+        
+        # === 检查是否还有重复（严格检查，触发ERROR）===
+        # ⚠️ 重要：确保临时列不存在，避免"灯下黑"
+        if '代码_normalized' in df.columns:
+            df = df.drop(columns=['代码_normalized'])
+        
+        # 重新标准化检查
+        df['代码_normalized'] = df['代码'].apply(normalize_stock_code)
+        duplicates = df[df.duplicated(subset=['代码_normalized'], keep=False)]
+        
+        if not duplicates.empty:
+            dup_codes = duplicates['代码_normalized'].unique()
+            logger.error(f"❌ Excel文件中存在重复的股票代码（去重后仍存在）: {', '.join(dup_codes)}")
+            logger.error(f"   重复记录数: {len(duplicates)}")
+            for code in dup_codes:
+                dup_rows = df[df['代码_normalized'] == code]
+                logger.error(f"   股票 {code} 出现了 {len(dup_rows)} 次，在行: {list(dup_rows.index + 2)}")  # +2因为Excel从1开始且有表头
+            
+            # 清理临时列
+            df = df.drop(columns=['代码_normalized'])
+            
+            error_msg = f"Excel文件包含重复的股票代码: {', '.join(dup_codes)}"
+            state_manager.mark_failed(date_str, error_msg, 0)
+            raise ValueError(error_msg)
         
         imported_count = 0
         skipped_count = 0

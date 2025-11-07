@@ -8,7 +8,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { API_BASE_URL, COLORS } from '../../constants';
 import { formatDate } from '../../utils';
 
-export default function HotSpotsModule({ boardType, selectedPeriod, topN }) {
+export default function HotSpotsModule({ boardType, selectedPeriod, topN, selectedDate }) {
   const [analysisData, setAnalysisData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -19,15 +19,17 @@ export default function HotSpotsModule({ boardType, selectedPeriod, topN }) {
   // 获取分析数据
   useEffect(() => {
     const fetchData = async () => {
-      if (!selectedPeriod || !boardType || !topN) return;
+      if (!selectedPeriod || !boardType || !topN || !selectedDate) return;
       
       setLoading(true);
       setError(null);
       setAnalysisData(null);
       try {
-        const response = await axios.get(
-          `${API_BASE_URL}/api/analyze/${selectedPeriod}?board_type=${boardType}&top_n=${topN}`
-        );
+        let url = `${API_BASE_URL}/api/analyze/${selectedPeriod}?board_type=${boardType}&top_n=${topN}`;
+        if (selectedDate) {
+          url += `&date=${selectedDate}`;
+        }
+        const response = await axios.get(url);
         setAnalysisData(response.data);
       } catch (err) {
         console.error('获取分析数据失败:', err);
@@ -42,22 +44,25 @@ export default function HotSpotsModule({ boardType, selectedPeriod, topN }) {
     };
 
     fetchData();
-  }, [selectedPeriod, boardType, topN]);
+  }, [selectedPeriod, boardType, topN, selectedDate]);
 
   // 获取前1000名行业数据
   useEffect(() => {
-    if (!top1000Industry) {
-      const fetchTop1000Industry = async () => {
-        try {
-          const response = await axios.get(`${API_BASE_URL}/api/industry/top1000`);
-          setTop1000Industry(response.data);
-        } catch (err) {
-          console.error('获取前1000名行业数据失败:', err);
+    const fetchTop1000Industry = async () => {
+      if (!selectedDate) return;
+      try {
+        let url = `${API_BASE_URL}/api/industry/top1000?limit=1000`;
+        if (selectedDate) {
+          url += `&date=${selectedDate}`;
         }
-      };
-      fetchTop1000Industry();
-    }
-  }, [top1000Industry]);
+        const response = await axios.get(url);
+        setTop1000Industry(response.data);
+      } catch (err) {
+        console.error('获取前1000名行业数据失败:', err);
+      }
+    };
+    fetchTop1000Industry();
+  }, [selectedDate]);
 
 
   // 统计行业分布

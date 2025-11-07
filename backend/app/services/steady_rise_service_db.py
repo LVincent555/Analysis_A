@@ -2,7 +2,7 @@
 稳步上升服务 - 数据库版
 简单SQL查询 + 后端计算
 """
-from typing import List
+from typing import List, Optional
 import statistics
 import logging
 
@@ -31,7 +31,8 @@ class SteadyRiseServiceDB:
         period: int = 3,
         board_type: str = 'main',
         min_rank_improvement: int = 100,
-        sigma_multiplier: float = 1.0
+        sigma_multiplier: float = 1.0,
+        target_date: Optional[str] = None
     ) -> SteadyRiseResult:
         """
         稳步上升分析
@@ -47,22 +48,35 @@ class SteadyRiseServiceDB:
             board_type: 板块类型 ('all': 全部, 'main': 主板, 'bjs': 北交所)
             min_rank_improvement: 最小排名提升
             sigma_multiplier: σ倍数
+            target_date: 指定日期 (YYYYMMDD格式)，不传则使用最新日期
         
         Returns:
             稳步上升结果
         """
-        cache_key = f"steady_rise_{period}_{board_type}_{min_rank_improvement}_{sigma_multiplier}"
+        # 缓存键包含target_date，避免不同日期返回相同数据
+        cache_key = f"steady_rise_{period}_{board_type}_{min_rank_improvement}_{sigma_multiplier}_{target_date}"
         if cache_key in self.cache:
             return self.cache[cache_key]
         
         db = self.get_db()
         try:
             # 1. 简单SQL：获取最近N天的日期
-            recent_dates = db.query(DailyStockData.date)\
-                .distinct()\
-                .order_by(desc(DailyStockData.date))\
-                .limit(period)\
-                .all()
+            # 如果指定target_date，从该日期往前推period天
+            from datetime import datetime
+            if target_date:
+                target_date_obj = datetime.strptime(target_date, '%Y%m%d').date()
+                recent_dates = db.query(DailyStockData.date)\
+                    .distinct()\
+                    .filter(DailyStockData.date <= target_date_obj)\
+                    .order_by(desc(DailyStockData.date))\
+                    .limit(period)\
+                    .all()
+            else:
+                recent_dates = db.query(DailyStockData.date)\
+                    .distinct()\
+                    .order_by(desc(DailyStockData.date))\
+                    .limit(period)\
+                    .all()
             
             if len(recent_dates) < period:
                 return self._empty_result(period)

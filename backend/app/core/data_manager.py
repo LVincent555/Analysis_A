@@ -15,10 +15,12 @@ from typing import Tuple, Dict
 # 添加scripts目录到路径
 sys.path.append(str(Path(__file__).parent.parent.parent / "scripts"))
 
-from scripts.import_state_manager import get_state_manager
+from scripts.import_state_manager import get_state_manager, ImportStateManager
 from scripts.import_data_robust import get_data_files, import_excel_file
+from scripts.import_sectors_robust import get_sector_data_files, import_sector_excel_file
 from ..database import SessionLocal, test_connection
 from ..db_models import Stock, DailyStockData
+from ..config import DATA_DIR
 from sqlalchemy import func, text
 
 logger = logging.getLogger(__name__)
@@ -33,7 +35,7 @@ class DataManager:
     
     def auto_import_data(self) -> Tuple[int, int, int]:
         """
-        自动导入新数据
+        自动导入新数据（股票+板块）
         
         Returns:
             (成功文件数, 失败文件数, 总导入记录数)
@@ -42,16 +44,17 @@ class DataManager:
         logger.info("🔄 检查并导入新数据...")
         logger.info("=" * 60)
         
-        files = get_data_files()
-        if not files:
-            logger.info("📂 data目录中没有数据文件")
-            return 0, 0, 0
+        # 1. 导入股票数据
+        logger.info("📊 检查股票数据...")
+        stock_files = get_data_files()
+        if not stock_files:
+            logger.info("📂 data目录中没有股票数据文件")
         
         success_count = 0
         failed_count = 0
         total_imported = 0
         
-        for file_path in files:
+        for file_path in stock_files:
             imported, skipped, success = import_excel_file(file_path, self.state_manager)
             total_imported += imported
             
@@ -60,6 +63,24 @@ class DataManager:
             else:
                 failed_count += 1
         
+        # 2. 导入板块数据
+        logger.info("📊 检查板块数据...")
+        sector_state_manager = ImportStateManager(state_file="sector_import_state.json")
+        sector_files = get_sector_data_files(DATA_DIR)
+        
+        if not sector_files:
+            logger.info("📂 data目录中没有板块数据文件")
+        
+        for file_path in sector_files:
+            imported, skipped, success = import_sector_excel_file(file_path, sector_state_manager)
+            total_imported += imported
+            
+            if success:
+                success_count += 1
+            else:
+                failed_count += 1
+        
+        # 3. 汇总结果
         if total_imported > 0:
             logger.info(f"✅ 新导入 {total_imported} 条记录")
         else:
@@ -118,7 +139,7 @@ class DataManager:
             # 4. 日期数量
             date_count = db.query(func.count(func.distinct(DailyStockData.date))).scalar()
             result["date_count"] = date_count
-            logger.info(f"✅ 数据日期数: {date_count} 天")
+            logger.info(f"✅ 股票数据日期数: {date_count} 天")
             
             # 5. ID序列检查
             if daily_count > 0:
@@ -127,10 +148,33 @@ class DataManager:
                 
                 if min_id_result == 1 and max_id_result == daily_count:
                     result["id_sequence_ok"] = True
-                    logger.info(f"✅ ID序列完整: 1 到 {max_id_result}")
+                    logger.info(f"✅ 股票ID序列完整: 1 到 {max_id_result}")
                 else:
-                    result["issues"].append(f"⚠️  ID序列异常: {min_id_result} 到 {max_id_result}")
-                    logger.warning(f"⚠️  ID序列异常")
+                    result["issues"].append(f"⚠️  股票ID序列异常: {min_id_result} 到 {max_id_result}")
+                    logger.warning(f"⚠️  股票ID序列异常")
+            
+            # 6. 板块数据检查
+            from ..db_models import SectorDailyData
+            sector_count = db.query(func.count(SectorDailyData.id)).scalar()
+            result["sector_data_count"] = sector_count
+            logger.info(f"✅ 板块数据记录: {sector_count}")
+            
+            # 7. 板块日期数量
+            sector_date_count = db.query(func.count(func.distinct(SectorDailyData.date))).scalar()
+            result["sector_date_count"] = sector_date_count
+            logger.info(f"✅ 板块数据日期数: {sector_date_count} 天")
+            
+            # 8. 板块ID序列检查
+            if sector_count > 0:
+                min_sector_id = db.query(func.min(SectorDailyData.id)).scalar()
+                max_sector_id = db.query(func.max(SectorDailyData.id)).scalar()
+                
+                if min_sector_id == 1 and max_sector_id == sector_count:
+                    result["sector_id_sequence_ok"] = True
+                    logger.info(f"✅ 板块ID序列完整: 1 到 {max_sector_id}")
+                else:
+                    result["issues"].append(f"⚠️  板块ID序列异常: {min_sector_id} 到 {max_sector_id}")
+                    logger.warning(f"⚠️  板块ID序列异常")
             
             # 汇总
             if len(result["issues"]) == 0:
