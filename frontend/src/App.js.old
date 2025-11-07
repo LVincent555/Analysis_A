@@ -1,0 +1,61 @@
+/**
+ * 主应用组件 - 模块化重构版本
+ * 使用分离的功能模块组件
+ */
+import React, { useState } from 'react';
+import { Sidebar } from './components/common';
+import { 
+  HotSpotsModule, 
+  StockQueryModule, 
+  IndustryTrendModule, 
+  RankJumpModule, 
+  SteadyRiseModule 
+} from './components/modules';
+
+function App() {
+  // 导航状态
+  const [activeModule, setActiveModule] = useState('hot-spots');
+  const [expandedMenu, setExpandedMenu] = useState('hot-spots');
+
+  // 渲染当前激活的模块
+  const renderModule = () => {
+    switch (activeModule) {
+      case 'hot-spots':
+        return <HotSpotsModule />;
+      case 'stock-query':
+        return <StockQueryModule />;
+      case 'industry-analysis':
+        return <IndustryTrendModule />;
+      case 'rank-jump':
+        return <RankJumpModule />;
+      case 'steady-rise':
+        return <SteadyRiseModule />;
+      default:
+        return <HotSpotsModule />;
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50 flex">
+      {/* 侧边栏 */}
+      <Sidebar
+        activeModule={activeModule}
+        setActiveModule={setActiveModule}
+        expandedMenu={expandedMenu}
+        setExpandedMenu={setExpandedMenu}
+      />
+
+      {/* 主内容区 */}
+      <div className="flex-1 p-8">
+        {renderModule()}
+        
+        {/* 页脚 */}
+        <footer className="mt-12 pb-6 text-center text-gray-600 text-sm">
+          <p>© 2025 股票分析系统 | 数据实时更新</p>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
+export default App;

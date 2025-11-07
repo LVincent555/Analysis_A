@@ -2,9 +2,10 @@
 应用主入口文件
 """
 import logging
+import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import PROJECT_NAME, VERSION, ALLOWED_ORIGINS
@@ -14,7 +15,7 @@ from .core import preload_cache, run_startup_checks
 # 配置日志
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
@@ -46,6 +47,41 @@ app = FastAPI(
     description="A股数据分析系统API",
     lifespan=lifespan
 )
+
+# 添加请求日志中间件
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    """记录所有HTTP请求"""
+    import sys
+    start_time = time.time()
+    
+    # 请求开始日志 - 强制输出到stderr
+    sys.stderr.write(f"\n{'='*60}\n")
+    sys.stderr.write(f"📨 收到请求: {request.method} {request.url.path}\n")
+    if request.query_params:
+        sys.stderr.write(f"📝 查询参数: {dict(request.query_params)}\n")
+    sys.stderr.write(f"{'='*60}\n")
+    sys.stderr.flush()
+    
+    response = await call_next(request)
+    
+    process_time = time.time() - start_time
+    
+    # 禁用浏览器缓存
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    
+    # 请求完成日志
+    sys.stderr.write(f"\n{'='*60}\n")
+    sys.stderr.write(f"✅ 响应完成: {request.method} {request.url.path}\n")
+    sys.stderr.write(f"📊 状态码: {response.status_code}\n")
+    sys.stderr.write(f"⏱️  耗时: {process_time:.3f}s\n")
+    sys.stderr.write(f"{'='*60}\n\n")
+    sys.stderr.flush()
+    
+    return response
+
 
 # 配置CORS
 app.add_middleware(

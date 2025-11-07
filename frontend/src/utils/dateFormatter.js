@@ -3,25 +3,22 @@
  */
 
 /**
- * 格式化日期字符串，从YYYYMMDD转换为YYYY年MM月DD日
- * @param {string} dateStr - 日期字符串
- * @returns {string} - 格式化后的日期
+ * 格式化日期为中文格式
+ * @param {string} dateStr - 格式为 'YYYYMMDD' 的日期字符串
+ * @returns {string} - 格式化后的日期，如 '2025年01月06日'
  */
 export const formatDate = (dateStr) => {
-  if (!dateStr || dateStr.length !== 8) return dateStr;
-  const year = dateStr.slice(0, 4);
-  const month = dateStr.slice(4, 6);
-  const day = dateStr.slice(6, 8);
-  return `${year}年${month}月${day}日`;
+  if (!dateStr) return '';
+  return `${dateStr.slice(0, 4)}年${dateStr.slice(4, 6)}月${dateStr.slice(6, 8)}日`;
 };
 
 /**
- * 格式化日期为简短格式 MM/DD
- * @param {string} dateStr - 日期字符串
- * @returns {string} - 格式化后的日期
+ * 格式化日期为短格式
+ * @param {string} dateStr - 格式为 'YYYYMMDD' 的日期字符串
+ * @returns {string} - 格式化后的日期，如 '01/06'
  */
 export const formatShortDate = (dateStr) => {
-  if (!dateStr || dateStr.length !== 8) return dateStr;
+  if (!dateStr) return '';
   const month = dateStr.slice(4, 6);
   const day = dateStr.slice(6, 8);
   return `${month}/${day}`;

@@ -21,10 +21,6 @@ logger = logging.getLogger(__name__)
 class AnalysisServiceDB:
     """热点分析服务（数据库版）"""
     
-    def __init__(self):
-        """初始化"""
-        self.cache = {}
-    
     def get_db(self):
         """获取数据库会话"""
         return SessionLocal()
@@ -65,10 +61,12 @@ class AnalysisServiceDB:
         Returns:
             分析结果
         """
-        cache_key = f"analysis_{period}_{max_count}_{board_type}"
-        if cache_key in self.cache:
-            logger.info(f"使用缓存: {cache_key}")
-            return self.cache[cache_key]
+        # 添加详细日志
+        print(f"\n🔍 Service层收到参数:")
+        print(f"   period={period}")
+        print(f"   max_count={max_count}")
+        print(f"   board_type={board_type}")
+        print()
         
         db = self.get_db()
         try:
@@ -209,9 +207,7 @@ class AnalysisServiceDB:
                 all_dates=date_strs
             )
             
-            # 缓存结果
-            self.cache[cache_key] = result
-            logger.info(f"分析完成: period={period}, 股票数={len(stocks_list)}")
+            logger.info(f"分析完成: period={period}, max_count={max_count}, 股票数={len(stocks_list)}")
             
             return result
             

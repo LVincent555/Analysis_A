@@ -117,9 +117,12 @@ async def get_industry_trend(period: int = 14, top_n: int = 100):
 
 
 @router.get("/industry/top1000", response_model=IndustryStats)
-async def get_top1000_industry():
+async def get_top1000_industry(limit: int = 1000):
     """
-    获取前1000名行业统计
+    获取前N名行业统计
+    
+    Args:
+        limit: 前N名数量，默认1000，可选1000/2000/3000/5000
     
     Returns:
         行业统计数据（包含日期和stats列表）
@@ -128,6 +131,10 @@ async def get_top1000_industry():
         from ..database import SessionLocal
         from ..db_models import DailyStockData
         from sqlalchemy import desc
+        
+        # 参数验证
+        if limit not in [1000, 2000, 3000, 5000]:
+            limit = 1000  # 默认值
         
         # 获取最新日期
         db = SessionLocal()
@@ -142,8 +149,8 @@ async def get_top1000_industry():
             
             date_str = latest_date[0].strftime('%Y%m%d')
             
-            # 获取统计数据
-            stats = industry_service.analyze_industry(period=1, top_n=1000)
+            # 获取统计数据（使用limit参数）
+            stats = industry_service.analyze_industry(period=1, top_n=limit)
             total_stocks = sum(s.count for s in stats)
             
             return IndustryStats(

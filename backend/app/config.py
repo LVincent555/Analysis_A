@@ -13,7 +13,7 @@ DATA_DIR = BASE_DIR.parent / "data"
 # API配置
 API_V1_PREFIX = "/api"
 PROJECT_NAME = "股票分析系统"
-VERSION = "0.2.1"  # 数据库版本（支持北交所）
+VERSION = "0.2.2"  # 添加前N个股票选择功能
 
 # 数据源配置
 USE_DATABASE = os.getenv("USE_DATABASE", "true").lower() == "true"  # 是否使用数据库

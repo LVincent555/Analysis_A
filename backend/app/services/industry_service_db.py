@@ -17,10 +17,6 @@ logger = logging.getLogger(__name__)
 class IndustryServiceDB:
     """行业趋势服务（数据库版）"""
     
-    def __init__(self):
-        """初始化"""
-        self.cache = {}
-    
     def get_db(self):
         """获取数据库会话"""
         return SessionLocal()
@@ -45,10 +41,6 @@ class IndustryServiceDB:
         Returns:
             行业趋势列表
         """
-        cache_key = f"industry_{period}_{top_n}"
-        if cache_key in self.cache:
-            return self.cache[cache_key]
-        
         db = self.get_db()
         try:
             # 1. 简单SQL：获取最近N天的日期
@@ -88,8 +80,7 @@ class IndustryServiceDB:
             # 按股票数量排序
             stats.sort(key=lambda x: x.count, reverse=True)
             
-            self.cache[cache_key] = stats
-            logger.info(f"行业分析完成: {len(stats)}个行业")
+            logger.info(f"行业分析完成: {len(stats)}个行业, top_n={top_n}")
             
             return stats
             
