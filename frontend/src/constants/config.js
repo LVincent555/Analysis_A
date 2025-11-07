@@ -3,7 +3,11 @@
  */
 
 // API配置
-export const API_BASE_URL = 'http://localhost:8000';
+// 优先使用环境变量，否则使用当前域名的8000端口，本地开发使用localhost
+export const API_BASE_URL = process.env.REACT_APP_API_URL || 
+  (process.env.NODE_ENV === 'production' 
+    ? `${window.location.protocol}//${window.location.hostname}:8000`
+    : 'http://localhost:8000');
 
 // 分析周期选项
 export const PERIODS = [2, 3, 5, 7, 14];
