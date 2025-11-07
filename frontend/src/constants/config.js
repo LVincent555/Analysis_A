@@ -3,10 +3,9 @@
  */
 
 // API配置
-// 生产环境：直接访问服务器后端
-// 注意：如果需要本地开发，请临时改为 '' 并配置package.json的proxy
-// API配置 - 生产环境：直接访问服务器后端
-export const API_BASE_URL = 'http://60.205.251.109:8000';
+// 生产环境：通过Nginx代理访问后端（使用相对路径）
+// 本地开发：改为 'http://localhost:8000'
+export const API_BASE_URL = '';  // 空字符串表示使用相对路径，通过Nginx代理
 
 // 分析周期选项
 export const PERIODS = [2, 3, 5, 7, 14];
