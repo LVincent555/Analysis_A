@@ -10,7 +10,8 @@ ENV/
 .venv
 *.egg-info/
 dist/
-build/
+backend/build/
+!frontend/build/
 
 # Node
 node_modules/
@@ -19,7 +20,7 @@ yarn-debug.log*
 yarn-error.log*
 
 # React
-frontend/build/
+# frontend/build/ - 注释掉，需要提交编译文件到Git
 frontend/.env.local
 frontend/.env.development.local
 frontend/.env.test.local
@@ -51,8 +52,12 @@ Thumbs.db
 # Data files
 data/*.xlsx
 data/*.xls
-data/data_import_state.json
+data/*.json
 !data/.gitkeep
+# 特别保护：服务器数据库配置和状态文件
+data/data_import_state.json
+data/db_config.json
+data/database.json
 
 # Database
 *.db
@@ -75,7 +80,10 @@ deploy/*.conf.bak
 # Server specific - 服务器特定配置，不要提交
 deploy/server_config.local.py
 backend/app/config.local.py
+backend/app/database_config.py
+backend/database.env
 .env.production
+.env.local
 
 # Service management
 logs/
