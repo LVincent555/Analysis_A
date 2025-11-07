@@ -3,6 +3,7 @@ import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
+import { API_BASE_URL } from '../../constants/config';
 
 // 样式定义
 const styles = {
@@ -100,7 +101,7 @@ const SectorModule = ({ selectedDate, onDateChange }) => {
       if (selectedDate) params.append('date', selectedDate);
       params.append('limit', topN.toString());
 
-      const response = await fetch(`http://localhost:8000/api/sectors/ranking?${params}`);
+      const response = await fetch(`${API_BASE_URL}/api/sectors/ranking?${params}`);
       if (!response.ok) throw new Error('获取板块排名失败');
       
       const data = await response.json();
@@ -123,7 +124,7 @@ const SectorModule = ({ selectedDate, onDateChange }) => {
       if (selectedDate) params.append('date', selectedDate);
 
       const response = await fetch(
-        `http://localhost:8000/api/sectors/${encodeURIComponent(sectorName)}?${params}`
+        `${API_BASE_URL}/api/sectors/${encodeURIComponent(sectorName)}?${params}`
       );
       if (!response.ok) throw new Error('获取板块详情失败');
       
