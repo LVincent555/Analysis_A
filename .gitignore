@@ -8,6 +8,9 @@ env/
 venv/
 ENV/
 .venv
+*.egg-info/
+dist/
+build/
 
 # Node
 node_modules/
@@ -39,3 +42,32 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Environment files
+.env
+*.env
+!.env.example
+
+# Data files
+data/*.xlsx
+data/*.xls
+data/data_import_state.json
+!data/.gitkeep
+
+# Database
+*.db
+*.sqlite
+*.sql.backup
+
+# Cache
+backend/cache/
+cache/
+
+# Build outputs
+frontend/build/
+dist/
+
+# Deployment specific
+deploy/*.service.bak
+deploy/*.conf.bak
+*.sh.backup

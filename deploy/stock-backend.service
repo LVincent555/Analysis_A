@@ -1,0 +1,24 @@
+[Unit]
+Description=Stock Analysis Backend API
+After=network.target postgresql.service
+Requires=postgresql.service
+
+[Service]
+Type=simple
+User=your_user
+Group=your_user
+WorkingDirectory=/path/to/stock_analysis_app/backend
+Environment="PATH=/path/to/stock_analysis_app/backend/venv/bin"
+Environment="PYTHONUNBUFFERED=1"
+ExecStart=/path/to/stock_analysis_app/backend/venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# 安全加固
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
