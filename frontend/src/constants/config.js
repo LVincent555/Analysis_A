@@ -3,12 +3,9 @@
  */
 
 // API配置
-// 开发环境：使用proxy (package.json中配置)
-// 生产环境：使用Nginx反向代理 /api -> localhost:8000
-// 本地构建测试：直接访问8000端口
-export const API_BASE_URL = process.env.NODE_ENV === 'development' 
-  ? '' // 开发模式使用proxy
-  : 'http://60.205.251.109:8000'; // 生产模式直接访问后端
+// 生产环境：直接访问服务器后端
+// 注意：如果需要本地开发，请临时改为 '' 并配置package.json的proxy
+export const API_BASE_URL = 'http://60.205.251.109:8000';
 
 // 分析周期选项
 export const PERIODS = [2, 3, 5, 7, 14];
