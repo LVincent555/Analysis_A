@@ -81,7 +81,9 @@ deploy/*.conf.bak
 deploy/server_config.local.py
 backend/app/config.local.py
 backend/app/database_config.py
+backend/app/database.py           # ⚠️ 重要：数据库配置，绝对不能提交！
 backend/database.env
+backend/.env
 .env.production
 .env.local
 
