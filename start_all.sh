@@ -1,16 +1,25 @@
 #!/bin/bash
 # 一键启动所有服务（后端 + 前端）
+# 用法: ./start_all.sh [dev|prod]
 
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
+MODE=${1:-dev}  # 默认dev模式
 
 echo "============================================================"
-echo "🚀 一键启动股票分析系统"
+echo "🚀 一键启动股票分析系统 - ${MODE^^} 模式"
 echo "============================================================"
 echo ""
 echo "📍 项目目录: $PROJECT_DIR"
-echo "📋 将启动以下服务:"
-echo "   1️⃣  后端API  (http://localhost:8000)"
-echo "   2️⃣  前端应用 (http://localhost:3000)"
+
+if [ "$MODE" = "prod" ]; then
+    echo "📋 生产模式:"
+    echo "   1️⃣  后端API  (http://0.0.0.0:8000)"
+    echo "   2️⃣  前端构建 (静态文件，需要Nginx)"
+else
+    echo "📋 开发模式:"
+    echo "   1️⃣  后端API  (http://0.0.0.0:8000)"
+    echo "   2️⃣  前端应用 (http://0.0.0.0:3000)"
+fi
 echo ""
 echo "============================================================"
 
@@ -29,40 +38,103 @@ echo "  日志: $PROJECT_DIR/logs/backend.log"
 # 等待后端启动
 sleep 3
 
-# 后台启动前端
-echo ""
-echo "▶ 启动前端服务..."
-cd "$PROJECT_DIR/frontend"
-nohup npm start > "$PROJECT_DIR/logs/frontend.log" 2>&1 &
-FRONTEND_PID=$!
-echo "✓ 前端已启动 (PID: $FRONTEND_PID)"
-echo "  日志: $PROJECT_DIR/logs/frontend.log"
-
-# 等待前端启动
-echo ""
-echo "⏳ 等待服务完全启动..."
-sleep 10
+if [ "$MODE" = "prod" ]; then
+    # 生产模式：构建前端
+    echo ""
+    echo "▶ 构建前端（生产模式）..."
+    cd "$PROJECT_DIR/frontend"
+    
+    if [ ! -d "build" ]; then
+        echo "  开始构建（可能需要3-5分钟）..."
+        npm run build > "$PROJECT_DIR/logs/frontend-build.log" 2>&1
+        if [ $? -eq 0 ]; then
+            echo "✓ 前端构建完成"
+            echo "  构建目录: $PROJECT_DIR/frontend/build"
+            echo "  ⚠️  需要配置Nginx指向此目录"
+        else
+            echo "✗ 前端构建失败，查看日志: $PROJECT_DIR/logs/frontend-build.log"
+        fi
+    else
+        echo "✓ 前端已构建 (使用现有build目录)"
+        echo "  构建目录: $PROJECT_DIR/frontend/build"
+    fi
+    
+    FRONTEND_PID="N/A"
+else
+    # 开发模式：启动开发服务器
+    echo ""
+    echo "▶ 启动前端开发服务器..."
+    cd "$PROJECT_DIR/frontend"
+    
+    # 检查proxy配置
+    if ! grep -q '"proxy"' package.json; then
+        echo "  ⚠️  警告：package.json 缺少 proxy 配置"
+        echo "  添加proxy配置以连接后端..."
+        
+        # 备份package.json
+        cp package.json package.json.bak
+        
+        # 添加proxy（在最后一个}之前）
+        sed -i '$ s/}/,\n  "proxy": "http:\/\/localhost:8000"\n}/' package.json
+        echo "  ✓ 已添加 proxy 配置"
+    fi
+    
+    nohup npm start > "$PROJECT_DIR/logs/frontend.log" 2>&1 &
+    FRONTEND_PID=$!
+    echo "✓ 前端已启动 (PID: $FRONTEND_PID)"
+    echo "  日志: $PROJECT_DIR/logs/frontend.log"
+    
+    # 等待前端启动
+    echo ""
+    echo "⏳ 等待前端启动（约30-60秒）..."
+    sleep 10
+fi
 
 echo ""
 echo "============================================================"
 echo "✅ 所有服务已启动！"
 echo "============================================================"
 echo ""
-echo "📊 服务状态:"
-ps aux | grep -E "uvicorn|node" | grep -v grep | awk '{printf "  • PID %-6s  %s\n", $2, $11}'
 
-echo ""
-echo "🌐 访问地址:"
-echo "  • 后端API:  http://localhost:8000"
-echo "  • API文档:  http://localhost:8000/docs"
-echo "  • 前端应用: http://localhost:3000"
-echo ""
-echo "📝 查看日志:"
-echo "  tail -f $PROJECT_DIR/logs/backend.log"
-echo "  tail -f $PROJECT_DIR/logs/frontend.log"
+if [ "$MODE" = "prod" ]; then
+    echo "📊 服务状态:"
+    echo "  • 后端: PID $BACKEND_PID"
+    echo "  • 前端: 已构建静态文件"
+    echo ""
+    echo "🌐 访问方式:"
+    echo "  • 后端API:  http://60.205.251.109:8000"
+    echo "  • API文档:  http://60.205.251.109:8000/docs"
+    echo "  • 前端: 需要配置Nginx"
+    echo ""
+    echo "📝 Nginx配置示例:"
+    echo "  server {"
+    echo "    listen 80;"
+    echo "    root $PROJECT_DIR/frontend/build;"
+    echo "    location /api { proxy_pass http://localhost:8000; }"
+    echo "  }"
+    echo ""
+    echo "📖 详细配置: deploy/configs/nginx-stock-analysis.conf"
+else
+    echo "📊 服务状态:"
+    ps aux | grep -E "uvicorn|node" | grep -v grep | awk '{printf "  • PID %-6s  %s\n", $2, $11}'
+    echo ""
+    echo "🌐 访问地址:"
+    echo "  • 后端API:  http://60.205.251.109:8000"
+    echo "  • API文档:  http://60.205.251.109:8000/docs"
+    echo "  • 前端应用: http://60.205.251.109:3000"
+    echo ""
+    echo "💡 提示: 前端通过proxy连接后端"
+    echo ""
+    echo "📝 查看日志:"
+    echo "  tail -f $PROJECT_DIR/logs/backend.log"
+    echo "  tail -f $PROJECT_DIR/logs/frontend.log"
+fi
+
 echo ""
 echo "🛑 停止服务:"
 echo "  ./stop.sh"
-echo "  或者: kill $BACKEND_PID $FRONTEND_PID"
+if [ "$FRONTEND_PID" != "N/A" ]; then
+    echo "  或者: kill $BACKEND_PID $FRONTEND_PID"
+fi
 echo ""
 echo "============================================================"
