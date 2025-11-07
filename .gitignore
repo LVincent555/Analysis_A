@@ -19,7 +19,7 @@ yarn-debug.log*
 yarn-error.log*
 
 # React
-frontend/build/
+# frontend/build/  # 允许提交编译后的build目录，供服务器使用
 frontend/.env.local
 frontend/.env.development.local
 frontend/.env.test.local
@@ -64,7 +64,7 @@ backend/cache/
 cache/
 
 # Build outputs
-frontend/build/
+# frontend/build/  # 已在上面React部分注释
 dist/
 
 # Deployment specific
