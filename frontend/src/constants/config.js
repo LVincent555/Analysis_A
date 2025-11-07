@@ -3,11 +3,28 @@
  */
 
 // API配置
-// 优先使用环境变量，否则使用当前域名的8000端口，本地开发使用localhost
-export const API_BASE_URL = process.env.REACT_APP_API_URL || 
-  (process.env.NODE_ENV === 'production' 
-    ? `${window.location.protocol}//${window.location.hostname}:8000`
-    : 'http://localhost:8000');
+// 优先使用环境变量
+// Linux服务器: 使用服务器IP (60.205.251.109:8000)
+// Windows本地: 使用localhost (localhost:8000)
+const getApiBaseUrl = () => {
+  // 1. 优先使用环境变量
+  if (process.env.REACT_APP_API_URL) {
+    return process.env.REACT_APP_API_URL;
+  }
+  
+  // 2. 根据访问域名判断
+  const hostname = window.location.hostname;
+  
+  // 如果是IP访问（服务器）或者不是localhost，使用完整URL
+  if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+    return `${window.location.protocol}//${hostname}:8000`;
+  }
+  
+  // 3. 本地开发使用localhost
+  return 'http://localhost:8000';
+};
+
+export const API_BASE_URL = getApiBaseUrl();
 
 // 分析周期选项
 export const PERIODS = [2, 3, 5, 7, 14];
