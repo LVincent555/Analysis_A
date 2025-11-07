@@ -71,3 +71,10 @@ dist/
 deploy/*.service.bak
 deploy/*.conf.bak
 *.sh.backup
+
+
+# Service management
+logs/
+.pids/
+*.pid
+service_config.json
