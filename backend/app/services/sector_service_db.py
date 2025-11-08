@@ -1,6 +1,6 @@
 """
-板块数据服务（数据库版）
-提供板块查询、排名、趋势分析等功能
+板块数据服务 - 内存缓存版
+使用memory_cache替代数据库查询，大幅提升性能
 """
 from typing import List, Dict, Optional
 from datetime import datetime, date
@@ -9,17 +9,19 @@ from sqlalchemy.orm import Session
 from ..database import SessionLocal
 from ..db_models import Sector, SectorDailyData
 from ..models import SectorRankingResult, SectorInfo, SectorDetail
+from ..utils.ttl_cache import TTLCache
+from .memory_cache import memory_cache
 import logging
 
 logger = logging.getLogger(__name__)
 
 
 class SectorServiceDB:
-    """板块数据服务（数据库版）"""
+    """板块数据服务（内存缓存版）"""
     
     def __init__(self):
-        """初始化"""
-        self.cache = {}
+        """初始化计算结果缓存"""
+        self.cache = TTLCache(default_ttl_seconds=1800)  # 30分钟TTL缓存
     
     def get_db(self):
         """获取数据库会话"""
@@ -27,21 +29,12 @@ class SectorServiceDB:
     
     def get_available_dates(self) -> List[str]:
         """
-        获取所有可用的数据日期
+        获取所有可用的数据日期（从内存缓存）
         
         Returns:
             日期列表（降序）
         """
-        db = self.get_db()
-        try:
-            dates = db.query(SectorDailyData.date)\
-                .distinct()\
-                .order_by(desc(SectorDailyData.date))\
-                .all()
-            
-            return [d[0].strftime('%Y%m%d') for d in dates]
-        finally:
-            db.close()
+        return memory_cache.get_sector_available_dates()
     
     def get_sector_ranking(
         self,

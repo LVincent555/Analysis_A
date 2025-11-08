@@ -48,6 +48,13 @@ class StockInfo(BaseModel):
                 {"date": info.date, "rank": info.rank} 
                 for info in self.date_rank_info
             ]
+            
+            # 添加最新一天的涨跌幅（从最后一个date_rank_info中获取）
+            if len(self.date_rank_info) > 0:
+                latest_info = self.date_rank_info[-1]
+                result["price_change"] = latest_info.price_change
+        else:
+            result["price_change"] = None
         
         return result
 

@@ -6,7 +6,10 @@ from .stock import (
     RankJumpStock, RankJumpResult,
     SteadyRiseStock, SteadyRiseResult
 )
-from .industry import IndustryStats, IndustryTrend, IndustryStat, IndustryDateData
+from .industry import (
+    IndustryStats, IndustryTrend, IndustryStat, IndustryDateData,
+    IndustryStatWeighted, IndustryStatsWeighted
+)
 from .analysis import AnalysisResult, AvailableDates
 from .sector import SectorInfo, SectorRankingResult, SectorDetail
 
@@ -22,6 +25,8 @@ __all__ = [
     "IndustryTrend",
     "IndustryStat",
     "IndustryDateData",
+    "IndustryStatWeighted",
+    "IndustryStatsWeighted",
     "AnalysisResult",
     "AvailableDates",
     "SectorInfo",
