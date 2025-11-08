@@ -30,16 +30,16 @@ export default function StockQueryModule({ stockCode, queryTrigger, selectedDate
       setStockLoading(true);
       setStockError(null);
       try {
-        let url = `${API_BASE_URL}/api/stock/${stockCode.trim()}`;
-        if (selectedDate) {
-          url += `?date=${selectedDate}`;
-        }
+        // 不使用selectedDate，始终查询全部历史数据
+        const url = `${API_BASE_URL}/api/stock/${stockCode.trim()}`;
         const response = await axios.get(url);
         const data = response.data;
         
+        // 保持原始升序（旧→新），图表需要这个顺序
+        // 最新数据是数组最后一个元素
         const transformedData = {
           ...data,
-          latestRank: data.date_rank_info[0]?.rank || 0
+          latestRank: data.date_rank_info[data.date_rank_info.length - 1]?.rank || 0
         };
         
         setStockHistory(transformedData);
@@ -55,7 +55,7 @@ export default function StockQueryModule({ stockCode, queryTrigger, selectedDate
     if (queryTrigger > 0) {
       handleStockQuery();
     }
-  }, [queryTrigger, stockCode]);
+  }, [queryTrigger, stockCode]); // 移除selectedDate依赖
 
   return (
     <>
@@ -104,7 +104,8 @@ export default function StockQueryModule({ stockCode, queryTrigger, selectedDate
             
             {/* 最新一天的数据（高亮显示） */}
             {(() => {
-              const latest = stockHistory.date_rank_info[0];
+              // 获取最后一个元素（最新日期）
+              const latest = stockHistory.date_rank_info[stockHistory.date_rank_info.length - 1];
               return (
                 <div className="mt-4 bg-gradient-to-r from-indigo-50 to-purple-50 border-2 border-indigo-200 rounded-lg p-4">
                   <div className="flex items-center justify-between mb-3">
@@ -160,7 +161,8 @@ export default function StockQueryModule({ stockCode, queryTrigger, selectedDate
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {stockHistory.date_rank_info.map((item, index) => (
+                    {/* 表格显示：降序（最新在上） */}
+                    {[...stockHistory.date_rank_info].reverse().map((item, index) => (
                       <tr key={index} className="hover:bg-gray-50">
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                           {formatDate(item.date)}

@@ -14,9 +14,10 @@ import {
   HotSpotsModule,
   StockQueryModule,
   IndustryTrendModule,
+  IndustryWeightedModule,
+  SectorTrendModule,
   RankJumpModule,
-  SteadyRiseModule,
-  SectorModule
+  SteadyRiseModule
 } from './components/modules';
 
 function App() {
@@ -98,30 +99,34 @@ function App() {
                 <h1 className="text-3xl font-bold text-gray-900">
                   潘哥的底裤
                 </h1>
-                {window.location.port !== '3002' && (
-                  <p className="text-xs text-orange-600 mt-1">
-                    ⚠️ 建议访问: http://localhost:3002
-                  </p>
-                )}
+                <p className="text-xs text-gray-500 mt-1">
+                  一个兴趣使然的股票分析系统
+                </p>
               </div>
             </div>
             {availableDates && selectedDate && (
-              <div className="flex items-center space-x-3">
-                <Calendar className="h-5 w-5 text-gray-600" />
+              <div className="flex items-center space-x-3 bg-white rounded-lg px-4 py-2 shadow-sm border border-gray-200">
+                <Calendar className="h-5 w-5 text-indigo-600" />
                 <div className="flex items-center space-x-2">
                   <label className="text-sm font-medium text-gray-700">数据日期:</label>
                   <select
                     value={selectedDate}
                     onChange={(e) => setSelectedDate(e.target.value)}
-                    className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-colors cursor-pointer"
+                    className="px-3 py-1.5 border-0 bg-transparent text-base font-semibold text-gray-900 focus:outline-none focus:ring-0 cursor-pointer"
+                    style={{ minWidth: '160px' }}
                   >
                     {availableDates.dates.map((date) => (
                       <option key={date} value={date}>
                         {formatDate(date)}
-                        {date === availableDates.latest_date && ' (最新)'}
+                        {date === availableDates.latest_date && ' ⭐'}
                       </option>
                     ))}
                   </select>
+                  {selectedDate === availableDates.latest_date && (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                      最新
+                    </span>
+                  )}
                 </div>
               </div>
             )}
@@ -307,10 +312,9 @@ function App() {
                   <button
                     onClick={() => {
                       setExpandedMenu(expandedMenu === 'industry-trend' ? null : 'industry-trend');
-                      setActiveModule('industry-trend');
                     }}
                     className={`w-full flex items-center justify-between p-3 rounded-lg font-medium transition-all ${
-                      activeModule === 'industry-trend'
+                      (activeModule === 'industry-trend' || activeModule === 'industry-weighted' || activeModule === 'sector-trend')
                         ? 'bg-green-50 text-green-700'
                         : 'text-gray-700 hover:bg-gray-50'
                     }`}
@@ -328,33 +332,102 @@ function App() {
 
                   {/* 行业趋势子菜单 */}
                   {expandedMenu === 'industry-trend' && (
-                    <div className="mt-2 ml-4 space-y-2 border-l-2 border-green-200 pl-3">
-                      <div className="text-xs text-gray-600 mb-2">
-                        分析前N名行业分布及变化趋势
+                    <div className="mt-2 ml-4 space-y-3 border-l-2 border-green-200 pl-3">
+                      {/* 原版：数量统计（保留前1000/2000/3000，删除5000） */}
+                      <div>
+                        <button
+                          onClick={() => setActiveModule('industry-trend')}
+                          className={`w-full text-left py-2 px-3 rounded text-sm font-medium transition-colors ${
+                            activeModule === 'industry-trend'
+                              ? 'bg-green-100 text-green-700'
+                              : 'text-gray-600 hover:bg-gray-50'
+                          }`}
+                        >
+                          📊 股票板块-直接数量统计
+                        </button>
+                        {activeModule === 'industry-trend' && (
+                          <div className="mt-2 ml-2 space-y-2">
+                            <div className="text-xs text-gray-600 mb-2">
+                              分析前N名行业分布及变化趋势
+                            </div>
+                            <div className="text-xs font-semibold text-gray-500 uppercase mb-2">数据范围</div>
+                            <div className="grid grid-cols-3 gap-2">
+                              {[1000, 2000, 3000].map((limit) => (
+                                <button
+                                  key={limit}
+                                  onClick={() => setTopNLimit(limit)}
+                                  className={`py-2 px-2 rounded text-sm font-medium transition-colors ${
+                                    topNLimit === limit
+                                      ? 'bg-green-600 text-white'
+                                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                  }`}
+                                >
+                                  前{limit}名
+                                </button>
+                              ))}
+                            </div>
+                            <div className="text-xs text-green-600 font-medium mt-3">
+                              • 今日前{topNLimit}名行业统计
+                            </div>
+                            <div className="text-xs text-green-600 font-medium">
+                              • 全部数据行业趋势
+                            </div>
+                          </div>
+                        )}
                       </div>
                       
-                      <div className="text-xs font-semibold text-gray-500 uppercase mb-2">数据范围</div>
-                      <div className="grid grid-cols-2 gap-2">
-                        {[1000, 2000, 3000, 5000].map((limit) => (
-                          <button
-                            key={limit}
-                            onClick={() => setTopNLimit(limit)}
-                            className={`py-2 px-2 rounded text-sm font-medium transition-colors ${
-                              topNLimit === limit
-                                ? 'bg-green-600 text-white'
-                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                            }`}
-                          >
-                            前{limit}名
-                          </button>
-                        ))}
+                      {/* 加权版：股票热度分析 */}
+                      <div>
+                        <button
+                          onClick={() => setActiveModule('industry-weighted')}
+                          className={`w-full text-left py-2 px-3 rounded text-sm font-medium transition-colors ${
+                            activeModule === 'industry-weighted'
+                              ? 'bg-gradient-to-r from-green-100 to-indigo-100 text-indigo-700 border-2 border-indigo-300'
+                              : 'text-gray-600 hover:bg-gray-50'
+                          }`}
+                        >
+                          🔥 股票板块-权值热度
+                        </button>
+                        {activeModule === 'industry-weighted' && (
+                          <div className="mt-2 ml-2">
+                            <div className="text-xs text-indigo-600 font-medium">
+                              • 从5000+股票聚合
+                            </div>
+                            <div className="text-xs text-indigo-600 font-medium">
+                              • k值调节聚焦程度
+                            </div>
+                            <div className="text-xs text-indigo-600 font-medium">
+                              • 4个维度立体分析
+                            </div>
+                          </div>
+                        )}
                       </div>
                       
-                      <div className="text-xs text-green-600 font-medium mt-3">
-                        • 今日前{topNLimit}名行业统计
-                      </div>
-                      <div className="text-xs text-green-600 font-medium">
-                        • 全部数据行业趋势
+                      {/* 新版：板块趋势分析 */}
+                      <div>
+                        <button
+                          onClick={() => setActiveModule('sector-trend')}
+                          className={`w-full text-left py-2 px-3 rounded text-sm font-medium transition-colors ${
+                            activeModule === 'sector-trend'
+                              ? 'bg-gradient-to-r from-blue-100 to-cyan-100 text-cyan-700 border-2 border-cyan-300'
+                              : 'text-gray-600 hover:bg-gray-50'
+                          }`}
+                        >
+                          📈 dc板块数据分析（偷偷看）
+                        </button>
+                        {activeModule === 'sector-trend' && (
+                          <div className="mt-2 ml-2">
+                            <div className="text-xs text-cyan-600 font-medium">
+                              • 直接查询板块数据
+                            </div>
+                            <div className="text-xs text-cyan-600 font-medium">
+                              • 趋势变化图
+                            </div>
+                            <div className="text-xs text-cyan-600 font-medium">
+                              • 排名变化统计
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}
@@ -543,50 +616,6 @@ function App() {
                   )}
                 </div>
 
-                {/* 板块分析模块 */}
-                <div className="mb-2">
-                  <button
-                    onClick={() => {
-                      setExpandedMenu(expandedMenu === 'sector-analysis' ? null : 'sector-analysis');
-                      setActiveModule('sector-analysis');
-                    }}
-                    className={`w-full flex items-center justify-between p-3 rounded-lg font-medium transition-all ${
-                      activeModule === 'sector-analysis'
-                        ? 'bg-teal-50 text-teal-700'
-                        : 'text-gray-700 hover:bg-gray-50'
-                    }`}
-                  >
-                    <div className="flex items-center space-x-2">
-                      <BarChart2 className="h-5 w-5" />
-                      <span>板块分析</span>
-                    </div>
-                    {expandedMenu === 'sector-analysis' ? (
-                      <ChevronUp className="h-4 w-4" />
-                    ) : (
-                      <ChevronDown className="h-4 w-4" />
-                    )}
-                  </button>
-
-                  {/* 板块分析子菜单 */}
-                  {expandedMenu === 'sector-analysis' && (
-                    <div className="mt-2 ml-4 space-y-2 border-l-2 border-teal-200 pl-3">
-                      <div className="text-xs text-gray-600 mb-2">
-                        分析板块排名、趋势及历史表现
-                      </div>
-                      
-                      <div className="text-xs text-teal-600 font-medium">
-                        • 板块排名对比
-                      </div>
-                      <div className="text-xs text-teal-600 font-medium">
-                        • 板块历史趋势
-                      </div>
-                      <div className="text-xs text-teal-600 font-medium">
-                        • 涨跌幅分析
-                      </div>
-                    </div>
-                  )}
-                </div>
-
                 {/* 未来扩展预留 */}
                 <div className="mt-4 p-3 bg-gray-50 rounded-lg text-center text-xs text-gray-500">
                   更多功能即将推出...
@@ -618,6 +647,16 @@ function App() {
                 selectedDate={selectedDate}
               />
             )}
+            {activeModule === 'industry-weighted' && (
+              <IndustryWeightedModule 
+                selectedDate={selectedDate}
+              />
+            )}
+            {activeModule === 'sector-trend' && (
+              <SectorTrendModule 
+                selectedDate={selectedDate}
+              />
+            )}
             {activeModule === 'rank-jump' && (
               <RankJumpModule 
                 jumpBoardType={jumpBoardType}
@@ -631,12 +670,6 @@ function App() {
                 riseBoardType={riseBoardType}
                 minRankImprovement={minRankImprovement}
                 selectedDate={selectedDate}
-              />
-            )}
-            {activeModule === 'sector-analysis' && (
-              <SectorModule 
-                selectedDate={selectedDate}
-                onDateChange={setSelectedDate}
               />
             )}
           </div>

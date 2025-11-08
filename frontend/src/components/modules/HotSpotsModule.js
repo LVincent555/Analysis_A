@@ -13,8 +13,9 @@ export default function HotSpotsModule({ boardType, selectedPeriod, topN, select
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useState(10); // 默认每页10条
   const [top1000Industry, setTop1000Industry] = useState(null);
+  const [sortBy, setSortBy] = useState('hit_count'); // 'hit_count', 'rank', 'price_change'
 
   // 获取分析数据
   useEffect(() => {
@@ -80,13 +81,37 @@ export default function HotSpotsModule({ boardType, selectedPeriod, topN, select
       .sort((a, b) => b.value - a.value);
   }, [analysisData]);
 
+  // 排序后的股票列表（带固定排名）
+  const sortedStocks = useMemo(() => {
+    if (!analysisData || !analysisData.stocks || !Array.isArray(analysisData.stocks)) return [];
+    
+    // 先按命中次数排序并添加固定排名
+    const stocksWithFixedRank = [...analysisData.stocks]
+      .sort((a, b) => (b.appearances || 0) - (a.appearances || 0)) // 使用 appearances 字段
+      .map((stock, index) => ({
+        ...stock,
+        fixed_rank: index + 1 // 固定排名（按命中次数）
+      }));
+    
+    // 根据sortBy进行二次排序
+    switch (sortBy) {
+      case 'rank':
+        return stocksWithFixedRank.sort((a, b) => (a.latest_rank || 0) - (b.latest_rank || 0)); // 按最新排名升序
+      case 'price_change':
+        return stocksWithFixedRank.sort((a, b) => (b.price_change || 0) - (a.price_change || 0)); // 按涨跌幅降序
+      case 'hit_count':
+      default:
+        return stocksWithFixedRank; // 保持按命中次数排序（已经排序过了）
+    }
+  }, [analysisData, sortBy]);
+
   // 分页数据
   const paginatedStocks = useMemo(() => {
-    if (!analysisData || !analysisData.stocks || !Array.isArray(analysisData.stocks)) return [];
+    if (!sortedStocks || sortedStocks.length === 0) return [];
     const start = (currentPage - 1) * pageSize;
     const end = start + pageSize;
-    return analysisData.stocks.slice(start, end);
-  }, [analysisData, currentPage, pageSize]);
+    return sortedStocks.slice(start, end);
+  }, [sortedStocks, currentPage, pageSize]);
 
   // 总页数
   const totalPages = useMemo(() => {
@@ -94,10 +119,10 @@ export default function HotSpotsModule({ boardType, selectedPeriod, topN, select
     return Math.ceil(analysisData.stocks.length / pageSize);
   }, [analysisData, pageSize]);
 
-  // 切换周期或板块时重置到第一页
+  // 切换周期、板块或排序方式时重置到第一页
   useEffect(() => {
     setCurrentPage(1);
-  }, [selectedPeriod, boardType]);
+  }, [selectedPeriod, boardType, sortBy]);
 
   return (
     <>
@@ -129,6 +154,43 @@ export default function HotSpotsModule({ boardType, selectedPeriod, topN, select
             </p>
           </div>
 
+          {/* 排序按钮 */}
+          <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
+            <div className="flex items-center space-x-2">
+              <span className="text-sm text-gray-600 font-medium">排序方式:</span>
+              <button
+                onClick={() => setSortBy('hit_count')}
+                className={`px-3 py-1 rounded text-sm transition-colors ${
+                  sortBy === 'hit_count'
+                    ? 'bg-indigo-600 text-white font-medium'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                按命中次数
+              </button>
+              <button
+                onClick={() => setSortBy('rank')}
+                className={`px-3 py-1 rounded text-sm transition-colors ${
+                  sortBy === 'rank'
+                    ? 'bg-indigo-600 text-white font-medium'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                按排名
+              </button>
+              <button
+                onClick={() => setSortBy('price_change')}
+                className={`px-3 py-1 rounded text-sm transition-colors ${
+                  sortBy === 'price_change'
+                    ? 'bg-indigo-600 text-white font-medium'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                按涨跌幅
+              </button>
+            </div>
+          </div>
+
           {/* Table */}
           {analysisData.stocks && Array.isArray(analysisData.stocks) && analysisData.stocks.length > 0 ? (
             <div className="overflow-x-auto">
@@ -153,6 +215,9 @@ export default function HotSpotsModule({ boardType, selectedPeriod, topN, select
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       最新排名
                     </th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      涨跌幅
+                    </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       出现日期及排名
                     </th>
@@ -165,7 +230,7 @@ export default function HotSpotsModule({ boardType, selectedPeriod, topN, select
                       className="hover:bg-gray-50 transition-colors"
                     >
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        {(currentPage - 1) * pageSize + index + 1}
+                        {stock.fixed_rank}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className="text-sm font-semibold text-indigo-600">
@@ -191,6 +256,19 @@ export default function HotSpotsModule({ boardType, selectedPeriod, topN, select
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                           第 {stock.latest_rank} 名
                         </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right">
+                        {stock.price_change !== null && stock.price_change !== undefined ? (
+                          <span className={`text-sm font-medium ${
+                            stock.price_change > 0 ? 'text-red-600' : 
+                            stock.price_change < 0 ? 'text-green-600' : 
+                            'text-gray-600'
+                          }`}>
+                            {stock.price_change > 0 ? '+' : ''}{stock.price_change.toFixed(2)}%
+                          </span>
+                        ) : (
+                          <span className="text-sm text-gray-400">-</span>
+                        )}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-600">
                         {stock.date_rank_info && Array.isArray(stock.date_rank_info) && stock.date_rank_info.length > 0
@@ -300,35 +378,6 @@ export default function HotSpotsModule({ boardType, selectedPeriod, topN, select
         <div className="bg-white rounded-lg shadow-md p-12 text-center mb-6">
           <RefreshCw className="mx-auto h-12 w-12 text-indigo-600 animate-spin mb-4" />
           <p className="text-gray-600 text-lg">正在分析数据...</p>
-        </div>
-      )}
-
-      {/* 今日全部行业分布统计 (前20名) */}
-      {!loading && top1000Industry && top1000Industry.stats && (
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center space-x-2">
-              <BarChart3 className="h-5 w-5 text-indigo-600" />
-              <h3 className="text-lg font-bold text-gray-900">今日全部行业分布统计</h3>
-              <span className="text-sm text-gray-500">(前20个行业)</span>
-            </div>
-            <div className="text-sm text-gray-600">
-              基于前1000名股票 · {formatDate(top1000Industry.date)}
-            </div>
-          </div>
-          <ResponsiveContainer width="100%" height={350}>
-            <BarChart data={top1000Industry.stats.slice(0, 20)}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="industry" angle={-45} textAnchor="end" height={120} tick={{ fontSize: 11 }} />
-              <YAxis label={{ value: '股票数量', angle: -90, position: 'insideLeft' }} />
-              <Tooltip formatter={(value, name, props) => [`${value}个 (${props.payload.percentage}%)`, '股票数量']} />
-              <Bar dataKey="count" fill="#6366f1">
-                {top1000Industry.stats.slice(0, 20).map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
         </div>
       )}
     </>

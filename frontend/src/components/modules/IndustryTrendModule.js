@@ -57,10 +57,14 @@ export default function IndustryTrendModule({ topNLimit, selectedDate }) {
       setTrendLoading(true);
       setTrendError(null);
       try {
-        let url = `${API_BASE_URL}/api/industry/trend`;
+        // 构建URL参数
+        const params = new URLSearchParams();
+        params.append('top_n', topNLimit.toString());
         if (selectedDate) {
-          url += `?date=${selectedDate}`;
+          params.append('date', selectedDate);
         }
+        
+        const url = `${API_BASE_URL}/api/industry/trend?${params}`;
         const response = await axios.get(url);
         setIndustryTrend(response.data);
       } catch (err) {
@@ -72,7 +76,7 @@ export default function IndustryTrendModule({ topNLimit, selectedDate }) {
     };
 
     fetchIndustryTrend();
-  }, [selectedDate]);
+  }, [selectedDate, topNLimit]); // 添加topNLimit依赖
 
   // 当切换图表类型或显示数量时，重置隐藏状态
   useEffect(() => {
