@@ -7,7 +7,7 @@ import React, { createContext, useState, useContext } from 'react';
 // 默认阈值配置
 const DEFAULT_THRESHOLDS = {
   hotListTop: 100,
-  rankJumpMin: 2000,
+  rankJumpMin: 1000,  // 跳变榜阈值改为1000
   steadyRiseDays: 3,
   priceSurgeMin: 5.0,
   volumeSurgeMin: 10.0,

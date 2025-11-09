@@ -19,8 +19,8 @@ class SignalThresholds:
         self,
         hot_list_top: int = 100,
         hot_list_top2: int = 500,
-        rank_jump_min: int = 2000,  # 排名跳变最小阈值（改为2000名）
-        rank_jump_large: int = 3000,  # 排名大幅跳变（改为3000名）
+        rank_jump_min: int = 1000,  # 排名跳变最小阈值
+        rank_jump_large: int = 1500,  # 排名大幅跳变（1.5倍）
         steady_rise_days_min: int = 3,
         steady_rise_days_large: int = 5,
         price_surge_min: float = 5.0,

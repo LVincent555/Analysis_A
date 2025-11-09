@@ -21,7 +21,7 @@ async def analyze_rank_jump(
     # 信号阈值参数
     calculate_signals: bool = Query(default=False, description="是否计算其他信号标签"),
     hot_list_top: int = Query(default=100, ge=10, le=1000),
-    rank_jump_min: int = Query(default=2000, ge=500, le=5000),
+    rank_jump_min: int = Query(default=1000, ge=500, le=5000),  # 跳变阈值改为1000
     steady_rise_days: int = Query(default=3, ge=2, le=14),
     price_surge_min: float = Query(default=5.0, ge=1.0, le=20.0),
     volume_surge_min: float = Query(default=10.0, ge=1.0, le=50.0),
