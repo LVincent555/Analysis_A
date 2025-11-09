@@ -7,6 +7,13 @@
 -- 2. 创建 stocks 主表
 -- 3. 创建 daily_stock_data 表 (已使用 DECIMAL(30, 10) 修复)
 -- 4. 创建所有性能索引
+--
+-- [重要说明]
+-- 1. 股票数据与板块数据完全独立，无关联关系
+-- 2. 股票数据 → main.sql (stocks + daily_stock_data)
+-- 3. 板块数据 → sectors.sql (sectors + daily_sector_data)
+-- 4. 股票的'行业'字段（如：退货、食品、建材）是板块分类，可用于分组分析
+-- 5. 但无法与独立的板块数据（工程建设、社区团购等）直接关联
 -- ===================================================================
 */
 
@@ -14,18 +21,25 @@
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
 /* -- 步骤 2: 创建 stocks 表 (股票主表)
-   -- 目的：存储股票基本信息，消除冗余，支持模糊查询。
+   -- 数据源：*_data_sma_feature_color.xlsx (股票数据Excel，约3MB)
+   -- 目的：存储股票基本信息，消除冗余，支持模糊查询
+   -- Excel列映射：
+   --   Excel'代码'列 (如: S00161)      → stock_code
+   --   Excel'名称'列 (如: 浙元股份)    → stock_name
+   --   Excel'行业'列 (如: 退货/食品)   → industry (⚠️ 这是板块分类)
 */
 CREATE TABLE IF NOT EXISTS stocks (
-    stock_code VARCHAR(10) PRIMARY KEY, -- '代码'
-    stock_name VARCHAR(50) NOT NULL,   -- '名称'
-    industry VARCHAR(100),            -- '行业'
+    stock_code VARCHAR(10) PRIMARY KEY, -- Excel'代码'列 (股票代码)
+    stock_name VARCHAR(50) NOT NULL,   -- Excel'名称'列 (股票名称)
+    industry VARCHAR(100),            -- Excel'行业'列 (板块分类，如：退货、食品、建材)
     last_updated TIMESTAMP             -- 股票信息最后更新时间
 );
 
 /* -- 步骤 3: 创建 daily_stock_data 表 (全量每日数据表)
-   -- 目的：存储 Excel 中的所有83个每日指标
+   -- 数据源：*_data_sma_feature_color.xlsx (股票数据Excel，约3MB)
+   -- 目的：存储 Excel 中的所有83个每日技术指标
    -- [注意] 所有 DECIMAL 类型已设置为 (30, 10) 以防止溢出
+   -- Excel列与数据库字段完全对应，详见下方注释
 */
 CREATE TABLE IF NOT EXISTS daily_stock_data (
     id BIGSERIAL PRIMARY KEY,  -- 自动递增ID

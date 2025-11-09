@@ -3,15 +3,26 @@
 -- 数据库扩展脚本 (2025-11-07) - [最终规范化版]
 -- 新增: 创建 sectors 和 daily_sector_data 表
 -- 目的: 高效存储 500+ 板块的每日指标数据
+-- 
+-- [重要说明]
+-- 1. 板块数据与股票数据完全独立，无关联关系
+-- 2. 股票数据 → main.sql (stocks + daily_stock_data)
+-- 3. 板块数据 → sectors.sql (sectors + daily_sector_data)
+-- 4. 股票Excel中的'行业'字段（如：退货、食品、建材）是板块分类
+-- 5. 板块Excel中的'代码'列存储的是板块名称（如：工程建设、社区团购）
 -- ===================================================================
 */
 
 /* -- 步骤 1: 创建 sectors 表 (板块主表)
-   -- 目的：存储 500+ 板块的基本信息，消除冗余，支持模糊查询。
+   -- 数据源：*_allbk_sma_feature_color.xlsx (板块数据Excel，约300KB)
+   -- 目的：存储 500+ 板块的基本信息，消除冗余，支持模糊查询
+   -- Excel列映射：
+   --   Excel'代码'列 (如: 工程建设)  → sector_name 
+   --   Excel'名称'列 (固定值: none)  → 不导入（无意义字段）
 */
 CREATE TABLE IF NOT EXISTS sectors (
     id BIGSERIAL PRIMARY KEY,           -- 自动递增的数字ID (例如 1)
-    sector_name VARCHAR(100) NOT NULL,  -- 板块名称 (例如 '工程建设')
+    sector_name VARCHAR(100) NOT NULL,  -- Excel'代码'列 (板块名称，如：工程建设、社区团购、转基因)
     
     -- 索引：确保板块名称不重复，并加速按名称查找
     CONSTRAINT uq_sector_name UNIQUE (sector_name)
@@ -25,7 +36,10 @@ CREATE INDEX IF NOT EXISTS idx_sectors_name_trgm
 
 
 /* -- 步骤 2: 创建 daily_sector_data 表 (全量每日板块数据)
-   -- 目的：存储板块Excel中的所有指标，通过 sector_id 关联
+   -- 数据源：*_allbk_sma_feature_color.xlsx (板块数据Excel，约300KB)
+   -- 目的：存储板块Excel中的所有81个技术指标，通过 sector_id 关联
+   -- [注意] 相比股票数据，去掉了'jump'字段和'总市值(亿)'字段
+   -- Excel列与数据库字段完全对应，详见下方注释
 */
 CREATE TABLE IF NOT EXISTS daily_sector_data (
     id BIGSERIAL PRIMARY KEY,  -- 自动递增ID

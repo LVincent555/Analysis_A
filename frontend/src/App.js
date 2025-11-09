@@ -5,7 +5,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { 
-  TrendingUp, Calendar, Activity, BarChart2, Search, 
+  TrendingUp, Calendar, Activity, BarChart2, Search, Settings,
   TrendingUp as TrendingUpIcon, TrendingDown, ChevronUp, ChevronDown, RefreshCw 
 } from 'lucide-react';
 import { API_BASE_URL } from './constants/config';
@@ -13,19 +13,45 @@ import { formatDate } from './utils';
 import {
   HotSpotsModule,
   StockQueryModule,
+  IndustryQueryModule,
   IndustryTrendModule,
   IndustryWeightedModule,
   SectorTrendModule,
   RankJumpModule,
   SteadyRiseModule
 } from './components/modules';
+import IndustryDetailPage from './pages/IndustryDetailPage';
+import { SignalConfigProvider, useSignalConfig } from './contexts/SignalConfigContext';
+import SignalConfigPanel from './components/SignalConfigPanel';
 
-function App() {
+function AppContent() {
+  // 全局配置
+  const { openConfig } = useSignalConfig();
+  
   // 全局状态
   const [activeModule, setActiveModule] = useState('hot-spots');
   const [expandedMenu, setExpandedMenu] = useState('hot-spots');
   const [availableDates, setAvailableDates] = useState(null);
   const [selectedDate, setSelectedDate] = useState(null); // 用户选择的日期
+  
+  // Phase 6: 板块详情页面状态
+  const [showDetailPage, setShowDetailPage] = useState(false);
+  const [selectedIndustry, setSelectedIndustry] = useState(null);
+  
+  // 查询系统子模块状态
+  const [querySubModule, setQuerySubModule] = useState('stock'); // 'stock' 或 'industry'
+  
+  // 导航到详情页面
+  const navigateToDetail = (industryName) => {
+    setSelectedIndustry(industryName);
+    setShowDetailPage(true);
+  };
+  
+  // 返回主页面
+  const backToMain = () => {
+    setShowDetailPage(false);
+    setSelectedIndustry(null);
+  };
 
   // 最新热点模块状态
   const [boardType, setBoardType] = useState('main');
@@ -87,6 +113,11 @@ function App() {
     setTimeout(() => setLoading(false), 100);
   };
 
+  // 如果显示详情页面，则渲染详情页
+  if (showDetailPage && selectedIndustry) {
+    return <IndustryDetailPage industryName={selectedIndustry} onBack={backToMain} />;
+  }
+  
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       {/* Header */}
@@ -104,32 +135,44 @@ function App() {
                 </p>
               </div>
             </div>
-            {availableDates && selectedDate && (
-              <div className="flex items-center space-x-3 bg-white rounded-lg px-4 py-2 shadow-sm border border-gray-200">
-                <Calendar className="h-5 w-5 text-indigo-600" />
-                <div className="flex items-center space-x-2">
-                  <label className="text-sm font-medium text-gray-700">数据日期:</label>
-                  <select
-                    value={selectedDate}
-                    onChange={(e) => setSelectedDate(e.target.value)}
-                    className="px-3 py-1.5 border-0 bg-transparent text-base font-semibold text-gray-900 focus:outline-none focus:ring-0 cursor-pointer"
-                    style={{ minWidth: '160px' }}
-                  >
-                    {availableDates.dates.map((date) => (
-                      <option key={date} value={date}>
-                        {formatDate(date)}
-                        {date === availableDates.latest_date && ' ⭐'}
-                      </option>
-                    ))}
-                  </select>
-                  {selectedDate === availableDates.latest_date && (
-                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
-                      最新
-                    </span>
-                  )}
+            <div className="flex items-center gap-3">
+              {/* 全局信号配置按钮 */}
+              <button
+                onClick={openConfig}
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white rounded-lg transition-all shadow-md hover:shadow-lg"
+              >
+                <Settings className="h-4 w-4" />
+                <span className="font-medium">信号配置</span>
+              </button>
+              
+              {/* 日期选择器 */}
+              {availableDates && selectedDate && (
+                <div className="flex items-center space-x-3 bg-white rounded-lg px-4 py-2 shadow-sm border border-gray-200">
+                  <Calendar className="h-5 w-5 text-indigo-600" />
+                  <div className="flex items-center space-x-2">
+                    <label className="text-sm font-medium text-gray-700">数据日期:</label>
+                    <select
+                      value={selectedDate}
+                      onChange={(e) => setSelectedDate(e.target.value)}
+                      className="px-3 py-1.5 border-0 bg-transparent text-base font-semibold text-gray-900 focus:outline-none focus:ring-0 cursor-pointer"
+                      style={{ minWidth: '160px' }}
+                    >
+                      {availableDates.dates.map((date) => (
+                        <option key={date} value={date}>
+                          {formatDate(date)}
+                          {date === availableDates.latest_date && ' ⭐'}
+                        </option>
+                      ))}
+                    </select>
+                    {selectedDate === availableDates.latest_date && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                        最新
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
       </header>
@@ -253,56 +296,102 @@ function App() {
                   )}
                 </div>
 
-                {/* 股票查询模块 */}
+                {/* 查询系统模块（包含股票查询和板块查询） */}
                 <div className="mb-2">
                   <button
                     onClick={() => {
-                      setExpandedMenu(expandedMenu === 'stock-query' ? null : 'stock-query');
-                      setActiveModule('stock-query');
+                      setExpandedMenu(expandedMenu === 'query-system' ? null : 'query-system');
                     }}
                     className={`w-full flex items-center justify-between p-3 rounded-lg font-medium transition-all ${
-                      activeModule === 'stock-query'
+                      (activeModule === 'stock-query' || activeModule === 'industry-query')
                         ? 'bg-purple-50 text-purple-700'
                         : 'text-gray-700 hover:bg-gray-50'
                     }`}
                   >
                     <div className="flex items-center space-x-2">
                       <Search className="h-5 w-5" />
-                      <span>股票查询</span>
+                      <span>查询系统</span>
                     </div>
-                    {expandedMenu === 'stock-query' ? (
+                    {expandedMenu === 'query-system' ? (
                       <ChevronUp className="h-4 w-4" />
                     ) : (
                       <ChevronDown className="h-4 w-4" />
                     )}
                   </button>
 
-                  {/* 股票查询子菜单 */}
-                  {expandedMenu === 'stock-query' && (
-                    <div className="mt-2 ml-4 space-y-2 border-l-2 border-purple-200 pl-3">
-                      <div className="text-xs text-gray-600 mb-2">
-                        查询个股历史排名及数据变化
-                      </div>
-                      <div className="flex space-x-2">
-                        <input
-                          type="text"
-                          value={stockCode}
-                          onChange={(e) => setStockCode(e.target.value)}
-                          onKeyPress={(e) => e.key === 'Enter' && handleStockQuery()}
-                          placeholder="股票代码"
-                          className="flex-1 px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
-                        />
+                  {/* 查询系统子菜单 */}
+                  {expandedMenu === 'query-system' && (
+                    <div className="mt-2 ml-4 space-y-3 border-l-2 border-purple-200 pl-3">
+                      {/* 股票查询 */}
+                      <div>
                         <button
-                          onClick={handleStockQuery}
-                          disabled={stockLoading}
-                          className="px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded text-sm font-medium transition-colors disabled:opacity-50"
+                          onClick={() => {
+                            setActiveModule('stock-query');
+                            setQuerySubModule('stock');
+                          }}
+                          className={`w-full text-left py-2 px-3 rounded text-sm font-medium transition-colors ${
+                            activeModule === 'stock-query'
+                              ? 'bg-purple-100 text-purple-700'
+                              : 'text-gray-600 hover:bg-gray-50'
+                          }`}
                         >
-                          <Search className={`h-4 w-4 ${stockLoading ? 'animate-pulse' : ''}`} />
+                          🔍 股票查询
                         </button>
+                        {activeModule === 'stock-query' && (
+                          <div className="mt-2 ml-2 space-y-2">
+                            <div className="text-xs text-gray-600 mb-2">
+                              查询个股历史排名及数据变化
+                            </div>
+                            <div className="flex space-x-2">
+                              <input
+                                type="text"
+                                value={stockCode}
+                                onChange={(e) => setStockCode(e.target.value)}
+                                onKeyPress={(e) => e.key === 'Enter' && handleStockQuery()}
+                                placeholder="股票代码"
+                                className="flex-1 px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                              />
+                              <button
+                                onClick={handleStockQuery}
+                                disabled={stockLoading}
+                                className="px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded text-sm font-medium transition-colors disabled:opacity-50"
+                              >
+                                <Search className={`h-4 w-4 ${stockLoading ? 'animate-pulse' : ''}`} />
+                              </button>
+                            </div>
+                            {stockError && (
+                              <p className="text-xs text-red-600 mt-1">{stockError}</p>
+                            )}
+                          </div>
+                        )}
                       </div>
-                      {stockError && (
-                        <p className="text-xs text-red-600 mt-1">{stockError}</p>
-                      )}
+
+                      {/* 板块查询 */}
+                      <div>
+                        <button
+                          onClick={() => {
+                            setActiveModule('industry-query');
+                            setQuerySubModule('industry');
+                          }}
+                          className={`w-full text-left py-2 px-3 rounded text-sm font-medium transition-colors ${
+                            activeModule === 'industry-query'
+                              ? 'bg-purple-100 text-purple-700'
+                              : 'text-gray-600 hover:bg-gray-50'
+                          }`}
+                        >
+                          📊 板块查询
+                        </button>
+                        {activeModule === 'industry-query' && (
+                          <div className="mt-2 ml-2 space-y-2">
+                            <div className="text-xs text-gray-600 mb-2">
+                              查看板块详细分析及成分股信息
+                            </div>
+                            <div className="text-xs text-purple-600 font-medium">
+                              💡 提示：请在右侧输入板块名称
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -641,15 +730,22 @@ function App() {
                 selectedDate={selectedDate}
               />
             )}
+            {activeModule === 'industry-query' && (
+              <IndustryQueryModule 
+                onNavigate={navigateToDetail}
+              />
+            )}
             {activeModule === 'industry-trend' && (
               <IndustryTrendModule 
                 topNLimit={topNLimit}
                 selectedDate={selectedDate}
+                onNavigate={navigateToDetail}
               />
             )}
             {activeModule === 'industry-weighted' && (
               <IndustryWeightedModule 
                 selectedDate={selectedDate}
+                onNavigate={navigateToDetail}
               />
             )}
             {activeModule === 'sector-trend' && (
@@ -676,6 +772,16 @@ function App() {
         </div>
       </main>
     </div>
+  );
+}
+
+// 包装组件提供全局配置
+function App() {
+  return (
+    <SignalConfigProvider>
+      <AppContent />
+      <SignalConfigPanel />
+    </SignalConfigProvider>
   );
 }
 

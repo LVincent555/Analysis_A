@@ -12,6 +12,10 @@ from .industry import (
 )
 from .analysis import AnalysisResult, AvailableDates
 from .sector import SectorInfo, SectorRankingResult, SectorDetail
+from .industry_detail import (
+    StockSignalInfo, IndustryStocksResponse, IndustryDetailResponse,
+    IndustryTrendResponse, IndustryCompareRequest, IndustryCompareResponse
+)
 
 __all__ = [
     "StockInfo",
@@ -32,4 +36,10 @@ __all__ = [
     "SectorInfo",
     "SectorRankingResult",
     "SectorDetail",
+    "StockSignalInfo",
+    "IndustryStocksResponse",
+    "IndustryDetailResponse",
+    "IndustryTrendResponse",
+    "IndustryCompareRequest",
+    "IndustryCompareResponse",
 ]

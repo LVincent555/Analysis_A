@@ -86,9 +86,9 @@ class StockServiceDB:
         if not history_data:
             return None
         
-        # 3. 组装日期排名信息
+        # 3. 组装日期排名信息（反转为升序：旧→新，图表需要这个顺序）
         date_rank_info = []
-        for data in history_data:
+        for data in reversed(history_data):  # 反转：降序变升序
             info = {
                 'date': data.date.strftime('%Y%m%d'),
                 'rank': data.rank,

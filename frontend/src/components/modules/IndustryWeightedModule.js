@@ -9,20 +9,38 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { API_BASE_URL } from '../../constants/config';
 import { COLORS } from '../../constants/colors';
 import { formatDate } from '../../utils';
+import IndustryDetailDialog from '../dialogs/IndustryDetailDialog';
 
 // k值的吸附点（黄金分割相关）
 const K_SNAP_POINTS = [0.382, 0.618, 1.0, 1.618];
 const K_MIN = 0.3;
 const K_MAX = 1.8;
 
-export default function IndustryWeightedModule({ selectedDate }) {
+export default function IndustryWeightedModule({ selectedDate, onNavigate }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [data, setData] = useState(null);
   
   // 用户控制的参数
-  const [kValue, setKValue] = useState(0.618);
+  const [kValue, setKValue] = useState(1.0);  // 默认改为1.0（标准倒数）
   const [metric, setMetric] = useState('B1');
+  
+  // 对话框状态
+  const [showDialog, setShowDialog] = useState(false);
+  const [selectedIndustry, setSelectedIndustry] = useState(null);
+  
+  // 打开板块详情对话框
+  const handleIndustryClick = (industryName) => {
+    setSelectedIndustry(industryName);
+    setShowDialog(true);
+  };
+  
+  // 跳转到完整分析页面
+  const handleViewDetails = (industryName) => {
+    if (onNavigate) {
+      onNavigate(industryName);
+    }
+  };
   
   // k值滑块的吸附逻辑（增强吸附力）
   const handleKChange = (e) => {
@@ -250,6 +268,9 @@ export default function IndustryWeightedModule({ selectedDate }) {
                 行业热度排名（{getMetricName()}）
               </h3>
               <span className="text-sm text-gray-500">(前30个行业)</span>
+              <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                💡 点击柱状图查看板块详情
+              </span>
             </div>
             <div className="text-sm text-gray-600">
               共 {data.total_stocks} 只股票，{data.stats.length} 个行业 · {formatDate(data.date)}
@@ -278,6 +299,12 @@ export default function IndustryWeightedModule({ selectedDate }) {
                 dataKey={(stat) => parseFloat(getMetricValue(stat))}
                 fill="#10b981" 
                 label={{ position: 'right', fontSize: 11, fill: '#666', formatter: (val) => parseFloat(val).toFixed(2) }}
+                onClick={(data) => {
+                  if (data && data.industry) {
+                    handleIndustryClick(data.industry);
+                  }
+                }}
+                cursor="pointer"
               >
                 {data.stats.slice(0, 30).map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
@@ -373,6 +400,18 @@ export default function IndustryWeightedModule({ selectedDate }) {
             </div>
           </div>
         </div>
+      )}
+      
+      {/* 板块详情对话框 */}
+      {showDialog && selectedIndustry && (
+        <IndustryDetailDialog
+          industryName={selectedIndustry}
+          onClose={() => {
+            setShowDialog(false);
+            setSelectedIndustry(null);
+          }}
+          onViewDetails={handleViewDetails}
+        />
       )}
     </>
   );

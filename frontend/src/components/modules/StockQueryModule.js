@@ -2,13 +2,17 @@
  * 股票查询模块 - 完整版
  */
 import React, { useState, useEffect } from 'react';
-import { Search, TrendingDown, RefreshCw } from 'lucide-react';
+import { Search, TrendingDown, RefreshCw, Activity } from 'lucide-react';
 import axios from 'axios';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend as RechartsLegend } from 'recharts';
 import { API_BASE_URL } from '../../constants/config';
 import { formatDate } from '../../utils';
+import { useSignalConfig } from '../../contexts/SignalConfigContext';
 
 export default function StockQueryModule({ stockCode, queryTrigger, selectedDate }) {
+  // 使用全局信号配置
+  const { signalThresholds } = useSignalConfig();
+  
   const [stockHistory, setStockHistory] = useState(null);
   const [stockLoading, setStockLoading] = useState(false);
   const [stockError, setStockError] = useState(null);
@@ -87,6 +91,8 @@ export default function StockQueryModule({ stockCode, queryTrigger, selectedDate
       {/* 查询结果 */}
       {stockHistory && !stockLoading && (
         <div className="space-y-6 mb-6">
+          {/* 本地配置已删除，使用全局配置 */}
+          
           {/* Stock Info Card */}
           <div className="bg-white rounded-lg shadow-md p-6">
             <div className="flex items-center justify-between mb-4">
@@ -106,16 +112,69 @@ export default function StockQueryModule({ stockCode, queryTrigger, selectedDate
             {(() => {
               // 获取最后一个元素（最新日期）
               const latest = stockHistory.date_rank_info[stockHistory.date_rank_info.length - 1];
+              const previous = stockHistory.date_rank_info.length > 1 ? stockHistory.date_rank_info[stockHistory.date_rank_info.length - 2] : null;
+              
+              // 简单信号判断（使用配置的阈值）
+              const signals = [];
+              if (latest.rank <= signalThresholds.hotListTop) {
+                signals.push({ label: `🔥 热点榜TOP${signalThresholds.hotListTop}`, type: 'hot' });
+              }
+              if (previous && (previous.rank - latest.rank) >= signalThresholds.rankJumpMin) {
+                signals.push({ label: `📈 排名跳变↑${previous.rank - latest.rank}`, type: 'jump' });
+              }
+              if (latest.price_change >= signalThresholds.priceSurgeMin) {
+                signals.push({ label: `💰 涨幅${latest.price_change.toFixed(1)}%`, type: 'price' });
+              }
+              if (latest.turnover_rate >= signalThresholds.volumeSurgeMin) {
+                signals.push({ label: `📦 换手率${latest.turnover_rate.toFixed(1)}%`, type: 'volume' });
+              }
+              if (previous && latest.volatility && previous.volatility && previous.volatility > 0) {
+                const volatilityChangePercent = ((latest.volatility - previous.volatility) / previous.volatility) * 100;
+                if (volatilityChangePercent >= signalThresholds.volatilitySurgeMin) {
+                  signals.push({ label: `⚡ 波动率↑${volatilityChangePercent.toFixed(1)}%`, type: 'volatility' });
+                }
+              }
+              
               return (
                 <div className="mt-4 bg-gradient-to-r from-indigo-50 to-purple-50 border-2 border-indigo-200 rounded-lg p-4">
                   <div className="flex items-center justify-between mb-3">
                     <h4 className="text-lg font-bold text-gray-900">
                       {formatDate(latest.date)}
                     </h4>
-                    <span className="text-xl font-bold text-indigo-600">
-                      第 {latest.rank} 名
-                    </span>
+                    <div className="text-right">
+                      <span className="text-xl font-bold text-indigo-600">
+                        第 {latest.rank} 名
+                      </span>
+                      {signals.length > 0 && (
+                        <div className="mt-1">
+                          <span className="text-xs font-medium text-purple-700 bg-purple-100 px-2 py-1 rounded">
+                            {signals.length}个信号
+                          </span>
+                        </div>
+                      )}
+                    </div>
                   </div>
+                  
+                  {/* 信号标识 */}
+                  {signals.length > 0 && (
+                    <div className="mb-3 flex flex-wrap gap-2">
+                      {signals.map((signal, idx) => (
+                        <span
+                          key={idx}
+                          className={`text-xs font-medium px-2 py-1 rounded border ${
+                            signal.type === 'hot' ? 'bg-green-100 text-green-800 border-green-300' :
+                            signal.type === 'jump' ? 'bg-blue-100 text-blue-800 border-blue-300' :
+                            signal.type === 'price' ? 'bg-orange-100 text-orange-800 border-orange-300' :
+                            signal.type === 'volume' ? 'bg-red-100 text-red-800 border-red-300' :
+                            'bg-indigo-100 text-indigo-800 border-indigo-300'
+                          }`}
+                        >
+                          {signal.label}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  
                   <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                     <div className="bg-white rounded-lg p-3 shadow-sm">
                       <p className="text-xs text-gray-500 mb-1">涨跌幅</p>
@@ -138,6 +197,57 @@ export default function StockQueryModule({ stockCode, queryTrigger, selectedDate
                     <div className="bg-white rounded-lg p-3 shadow-sm">
                       <p className="text-xs text-gray-500 mb-1">波动率</p>
                       <p className="text-lg font-bold text-gray-900">{latest.volatility?.toFixed(2)}%</p>
+                    </div>
+                  </div>
+                  
+                  {/* 多维度信号说明 */}
+                  <div className="mt-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg p-3 border border-purple-200">
+                    <h4 className="text-xs font-bold text-purple-900 mb-2 flex items-center gap-2">
+                      <Activity className="h-3 w-3" />
+                      🎯 多维度信号说明
+                    </h4>
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 text-xs">
+                      <div className="bg-white rounded p-2 border border-green-200 shadow-sm">
+                        <span className="font-bold text-green-900 flex items-center gap-1 text-xs">
+                          🔥 热点榜
+                        </span>
+                        <p className="text-green-700 mt-1 text-xs leading-tight">排名TOP100，市场关注度高</p>
+                      </div>
+                      <div className="bg-white rounded p-2 border border-blue-200 shadow-sm">
+                        <span className="font-bold text-blue-900 flex items-center gap-1 text-xs">
+                          📈 排名跳变
+                        </span>
+                        <p className="text-blue-700 mt-1 text-xs leading-tight">排名大幅提升≥2000名</p>
+                      </div>
+                      <div className="bg-white rounded p-2 border border-purple-200 shadow-sm">
+                        <span className="font-bold text-purple-900 flex items-center gap-1 text-xs">
+                          📊 稳步上升
+                        </span>
+                        <p className="text-purple-700 mt-1 text-xs leading-tight">连续多天排名上升</p>
+                      </div>
+                      <div className="bg-white rounded p-2 border border-orange-200 shadow-sm">
+                        <span className="font-bold text-orange-900 flex items-center gap-1 text-xs">
+                          💰 涨幅榜
+                        </span>
+                        <p className="text-orange-700 mt-1 text-xs leading-tight">涨跌幅≥5%</p>
+                      </div>
+                      <div className="bg-white rounded p-2 border border-red-200 shadow-sm">
+                        <span className="font-bold text-red-900 flex items-center gap-1 text-xs">
+                          📦 成交量榜
+                        </span>
+                        <p className="text-red-700 mt-1 text-xs leading-tight">换手率≥10%</p>
+                      </div>
+                      <div className="bg-white rounded p-2 border border-indigo-200 shadow-sm">
+                        <span className="font-bold text-indigo-900 flex items-center gap-1 text-xs">
+                          ⚡ 波动率上升
+                        </span>
+                        <p className="text-indigo-700 mt-1 text-xs leading-tight">波动率百分比上升≥30%</p>
+                      </div>
+                    </div>
+                    <div className="mt-2 text-xs bg-white rounded p-2 border border-purple-100">
+                      <p className="text-purple-700">
+                        <strong>💡 提示：</strong>信号越多说明该股票越值得关注，多个信号叠加通常意味着更强的市场信号
+                      </p>
                     </div>
                   </div>
                 </div>

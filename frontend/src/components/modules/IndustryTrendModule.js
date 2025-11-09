@@ -11,8 +11,9 @@ import {
 } from 'recharts';
 import { API_BASE_URL, COLORS } from '../../constants';
 import { formatDate } from '../../utils';
+import IndustryDetailDialog from '../dialogs/IndustryDetailDialog';
 
-export default function IndustryTrendModule({ topNLimit, selectedDate }) {
+export default function IndustryTrendModule({ topNLimit, selectedDate, onNavigate }) {
   const [industryTrend, setIndustryTrend] = useState(null);
   const [topNIndustry, setTopNIndustry] = useState(null);
   const [trendLoading, setTrendLoading] = useState(false);
@@ -21,6 +22,23 @@ export default function IndustryTrendModule({ topNLimit, selectedDate }) {
   const [trendTopN, setTrendTopN] = useState(10);
   const [hiddenIndustries, setHiddenIndustries] = useState([]);
   const [highlightedIndustry, setHighlightedIndustry] = useState(null);
+  
+  // Phase 5: 对话框状态
+  const [showDialog, setShowDialog] = useState(false);
+  const [selectedIndustry, setSelectedIndustry] = useState(null);
+  
+  // 打开板块详情对话框
+  const handleIndustryClick = (industryName) => {
+    setSelectedIndustry(industryName);
+    setShowDialog(true);
+  };
+  
+  // 跳转到完整分析页面（Phase 6）
+  const handleViewDetails = (industryName) => {
+    if (onNavigate) {
+      onNavigate(industryName);
+    }
+  };
 
   // 获取前N名行业数据
   useEffect(() => {
@@ -106,6 +124,9 @@ export default function IndustryTrendModule({ topNLimit, selectedDate }) {
               <BarChart3 className="h-5 w-5 text-green-600" />
               <h3 className="text-lg font-bold text-gray-900">今日前{topNLimit}名行业分布</h3>
               <span className="text-sm text-gray-500">(前30个行业)</span>
+              <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                💡 点击柱状图查看板块详情
+              </span>
             </div>
             <div className="text-sm text-gray-600">
               共 {topNIndustry.total_stocks} 只股票，{topNIndustry.stats.length} 个行业 · {formatDate(topNIndustry.date)}
@@ -125,9 +146,22 @@ export default function IndustryTrendModule({ topNLimit, selectedDate }) {
               <Tooltip 
                 formatter={(value, name, props) => [`${value}个 (${props.payload.percentage}%)`, '股票数量']} 
               />
-              <Bar dataKey="count" fill="#10b981" label={{ position: 'right', fontSize: 11, fill: '#666' }}>
+              <Bar 
+                dataKey="count" 
+                fill="#10b981" 
+                label={{ position: 'right', fontSize: 11, fill: '#666' }}
+                onClick={(data) => {
+                  if (data && data.industry) {
+                    handleIndustryClick(data.industry);
+                  }
+                }}
+                cursor="pointer"
+              >
                 {topNIndustry.stats.slice(0, 30).map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  <Cell 
+                    key={`cell-${index}`} 
+                    fill={COLORS[index % COLORS.length]}
+                  />
                 ))}
               </Bar>
             </BarChart>
@@ -178,12 +212,18 @@ export default function IndustryTrendModule({ topNLimit, selectedDate }) {
                         cursor: 'pointer',
                         border: isHighlighted ? '1px solid #0ea5e9' : '1px solid transparent'
                       }}
-                      onClick={() => {
-                        console.log('Clicked:', entry.value);
-                        handleLegendClick(entry.value);
+                      onClick={(e) => {
+                        // 双击打开详情对话框
+                        if (e.detail === 2) {
+                          handleIndustryClick(entry.value);
+                        } else {
+                          // 单击切换显示/隐藏
+                          handleLegendClick(entry.value);
+                        }
                       }}
                       onMouseEnter={() => setHighlightedIndustry(entry.value)}
                       onMouseLeave={() => setHighlightedIndustry(null)}
+                      title="单击切换显示/隐藏，双击查看详情"
                     >
                       <div
                         className="w-3 h-3 mr-1.5 rounded-sm flex-shrink-0"
@@ -371,6 +411,18 @@ export default function IndustryTrendModule({ topNLimit, selectedDate }) {
           </div>
         );
       })()}
+      
+      {/* Phase 5: 板块详情对话框 */}
+      {showDialog && selectedIndustry && (
+        <IndustryDetailDialog
+          industryName={selectedIndustry}
+          onClose={() => {
+            setShowDialog(false);
+            setSelectedIndustry(null);
+          }}
+          onViewDetails={handleViewDetails}
+        />
+      )}
     </>
   );
 }

@@ -31,7 +31,9 @@ class RankJumpServiceDB:
         jump_threshold: int = 2500,
         board_type: str = 'main',
         sigma_multiplier: float = 1.0,
-        target_date: Optional[str] = None
+        target_date: Optional[str] = None,
+        calculate_signals: bool = False,
+        signal_thresholds = None
     ) -> RankJumpResult:
         """
         排名跳变分析
@@ -51,8 +53,13 @@ class RankJumpServiceDB:
         Returns:
             排名跳变结果
         """
-        # 缓存键包含target_date，避免不同日期返回相同数据
-        cache_key = f"rank_jump_{jump_threshold}_{board_type}_{sigma_multiplier}_{target_date}"
+        # 缓存键包含target_date和signal配置，避免不同参数返回相同数据
+        if calculate_signals and signal_thresholds:
+            threshold_hash = f"{signal_thresholds.rank_jump_min}_{signal_thresholds.hot_list_top}"
+            cache_key = f"rank_jump_{jump_threshold}_{board_type}_{sigma_multiplier}_{target_date}_{threshold_hash}"
+        else:
+            cache_key = f"rank_jump_{jump_threshold}_{board_type}_{sigma_multiplier}_{target_date}"
+        
         if cache_key in self.cache:
             return self.cache[cache_key]
         

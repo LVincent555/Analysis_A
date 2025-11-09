@@ -13,7 +13,7 @@ DATA_DIR = BASE_DIR.parent / "data"
 # API配置
 API_V1_PREFIX = "/api"
 PROJECT_NAME = "股票分析系统"
-VERSION = "0.2.5"  # 本地缓存架构优化（30-150倍性能提升）、TTL缓存机制
+VERSION = "0.2.6"  # 全局信号配置系统
 
 # 数据源配置
 USE_DATABASE = os.getenv("USE_DATABASE", "true").lower() == "true"  # 是否使用数据库

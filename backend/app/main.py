@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .config import PROJECT_NAME, VERSION, ALLOWED_ORIGINS
 from .routers import analysis_router, stock_router, industry_router, rank_jump_router, steady_rise_router, sector_router
 from .routers.cache_mgmt import router as cache_mgmt_router
+from .routers.industry_detail import router as industry_detail_router
 from .core import preload_cache, run_startup_checks
 
 # 配置日志
@@ -97,6 +98,7 @@ app.add_middleware(
 app.include_router(analysis_router)
 app.include_router(stock_router)
 app.include_router(industry_router)
+app.include_router(industry_detail_router)  # 板块成分股详细分析
 app.include_router(rank_jump_router)
 app.include_router(steady_rise_router)
 app.include_router(sector_router)
