@@ -6,12 +6,13 @@ import React, { createContext, useState, useContext } from 'react';
 
 // 默认阈值配置
 const DEFAULT_THRESHOLDS = {
+  hotListMode: 'instant',  // 热点榜模式：instant=总分TOP信号，frequent=最新热点TOP信号
   hotListTop: 100,
   rankJumpMin: 1000,  // 跳变榜阈值改为1000
   steadyRiseDays: 3,
   priceSurgeMin: 5.0,
   volumeSurgeMin: 10.0,
-  volatilitySurgeMin: 30.0
+  volatilitySurgeMin: 10.0  // 波动率上升阈值默认改为10%
 };
 
 // 创建Context

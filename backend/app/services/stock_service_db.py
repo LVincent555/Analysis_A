@@ -27,19 +27,21 @@ class StockServiceDB:
         """获取数据库会话"""
         return SessionLocal()
     
-    def search_stock(self, keyword: str, target_date: Optional[str] = None) -> Optional[StockHistory]:
+    def search_stock(self, keyword: str, target_date: Optional[str] = None, signal_thresholds=None) -> Optional[StockHistory]:
         """
         搜索股票（从内存缓存）
         
         Args:
             keyword: 股票代码或名称
             target_date: 指定日期 (YYYYMMDD格式)
+            signal_thresholds: 信号配置
         
         Returns:
             股票历史数据
         """
-        # 缓存key
-        cache_key = f"stock_{keyword}_{target_date}"
+        # 缓存key（包含信号配置）
+        hot_list_mode = signal_thresholds.hot_list_mode if signal_thresholds else 'instant'
+        cache_key = f"stock_{keyword}_{target_date}_{hot_list_mode}"
         if cache_key in self.cache:
             logger.info(f"✨ 缓存命中: {cache_key}")
             return self.cache[cache_key]
@@ -100,14 +102,30 @@ class StockServiceDB:
             }
             date_rank_info.append(info)
         
-        # 4. 构建结果并缓存
+        # 4. 计算信号（最新日期）
+        signals = []
+        if history_data:
+            from .signal_calculator import SignalCalculator
+            
+            latest_data = history_data[0]  # 最新数据
+            calculator = SignalCalculator(signal_thresholds)
+            signal_result = calculator.calculate_signals(
+                stock_code=stock_code,
+                current_date=latest_data.date,
+                current_data=latest_data,
+                history_days=7
+            )
+            signals = signal_result.get('signals', [])
+        
+        # 5. 构建结果并缓存
         result = StockHistory(
             code=stock_info.stock_code,
             name=stock_info.stock_name,
             industry=stock_info.industry or '未知',
             date_rank_info=date_rank_info,
             appears_count=len(date_rank_info),
-            dates=[info['date'] for info in date_rank_info]
+            dates=[info['date'] for info in date_rank_info],
+            signals=signals
         )
         
         self.cache[cache_key] = result

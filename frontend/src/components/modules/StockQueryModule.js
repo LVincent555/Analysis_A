@@ -36,7 +36,12 @@ export default function StockQueryModule({ stockCode, queryTrigger, selectedDate
       try {
         // 不使用selectedDate，始终查询全部历史数据
         const url = `${API_BASE_URL}/api/stock/${stockCode.trim()}`;
-        const response = await axios.get(url);
+        const response = await axios.get(url, {
+          params: {
+            hot_list_mode: signalThresholds.hotListMode || 'instant'
+          }
+        });
+        
         const data = response.data;
         
         // 保持原始升序（旧→新），图表需要这个顺序
@@ -59,7 +64,7 @@ export default function StockQueryModule({ stockCode, queryTrigger, selectedDate
     if (queryTrigger > 0) {
       handleStockQuery();
     }
-  }, [queryTrigger, stockCode]); // 移除selectedDate依赖
+  }, [queryTrigger, stockCode, signalThresholds.hotListMode]); // 添加热点榜模式依赖
 
   return (
     <>
@@ -112,28 +117,9 @@ export default function StockQueryModule({ stockCode, queryTrigger, selectedDate
             {(() => {
               // 获取最后一个元素（最新日期）
               const latest = stockHistory.date_rank_info[stockHistory.date_rank_info.length - 1];
-              const previous = stockHistory.date_rank_info.length > 1 ? stockHistory.date_rank_info[stockHistory.date_rank_info.length - 2] : null;
               
-              // 简单信号判断（使用配置的阈值）
-              const signals = [];
-              if (latest.rank <= signalThresholds.hotListTop) {
-                signals.push({ label: `🔥 热点榜TOP${signalThresholds.hotListTop}`, type: 'hot' });
-              }
-              if (previous && (previous.rank - latest.rank) >= signalThresholds.rankJumpMin) {
-                signals.push({ label: `📈 排名跳变↑${previous.rank - latest.rank}`, type: 'jump' });
-              }
-              if (latest.price_change >= signalThresholds.priceSurgeMin) {
-                signals.push({ label: `💰 涨幅${latest.price_change.toFixed(1)}%`, type: 'price' });
-              }
-              if (latest.turnover_rate >= signalThresholds.volumeSurgeMin) {
-                signals.push({ label: `📦 换手率${latest.turnover_rate.toFixed(1)}%`, type: 'volume' });
-              }
-              if (previous && latest.volatility && previous.volatility && previous.volatility > 0) {
-                const volatilityChangePercent = ((latest.volatility - previous.volatility) / previous.volatility) * 100;
-                if (volatilityChangePercent >= signalThresholds.volatilitySurgeMin) {
-                  signals.push({ label: `⚡ 波动率↑${volatilityChangePercent.toFixed(1)}%`, type: 'volatility' });
-                }
-              }
+              // 使用后端返回的信号数据
+              const signals = (stockHistory.signals || []).map(label => ({ label }))
               
               return (
                 <div className="mt-4 bg-gradient-to-r from-indigo-50 to-purple-50 border-2 border-indigo-200 rounded-lg p-4">
@@ -158,20 +144,34 @@ export default function StockQueryModule({ stockCode, queryTrigger, selectedDate
                   {/* 信号标识 */}
                   {signals.length > 0 && (
                     <div className="mb-3 flex flex-wrap gap-2">
-                      {signals.map((signal, idx) => (
-                        <span
-                          key={idx}
-                          className={`text-xs font-medium px-2 py-1 rounded border ${
-                            signal.type === 'hot' ? 'bg-green-100 text-green-800 border-green-300' :
-                            signal.type === 'jump' ? 'bg-blue-100 text-blue-800 border-blue-300' :
-                            signal.type === 'price' ? 'bg-orange-100 text-orange-800 border-orange-300' :
-                            signal.type === 'volume' ? 'bg-red-100 text-red-800 border-red-300' :
-                            'bg-indigo-100 text-indigo-800 border-indigo-300'
-                          }`}
-                        >
-                          {signal.label}
-                        </span>
-                      ))}
+                      {signals.map((signal, idx) => {
+                        // 根据信号内容判断类型
+                        const getSignalStyle = (label) => {
+                          if (label.includes('热点榜') || label.includes('TOP')) {
+                            return 'bg-green-100 text-green-800 border-green-300';
+                          } else if (label.includes('跳变')) {
+                            return 'bg-blue-100 text-blue-800 border-blue-300';
+                          } else if (label.includes('稳步上升')) {
+                            return 'bg-purple-100 text-purple-800 border-purple-300';
+                          } else if (label.includes('涨幅')) {
+                            return 'bg-orange-100 text-orange-800 border-orange-300';
+                          } else if (label.includes('换手率')) {
+                            return 'bg-red-100 text-red-800 border-red-300';
+                          } else if (label.includes('波动率')) {
+                            return 'bg-indigo-100 text-indigo-800 border-indigo-300';
+                          }
+                          return 'bg-gray-100 text-gray-800 border-gray-300';
+                        };
+                        
+                        return (
+                          <span
+                            key={idx}
+                            className={`text-xs font-medium px-2 py-1 rounded border ${getSignalStyle(signal.label)}`}
+                          >
+                            {signal.label}
+                          </span>
+                        );
+                      })}
                     </div>
                   )}
                   
@@ -211,7 +211,9 @@ export default function StockQueryModule({ stockCode, queryTrigger, selectedDate
                         <span className="font-bold text-green-900 flex items-center gap-1 text-xs">
                           🔥 热点榜
                         </span>
-                        <p className="text-green-700 mt-1 text-xs leading-tight">排名TOP100，市场关注度高</p>
+                        <p className="text-green-700 mt-1 text-xs leading-tight">
+                          总分TOP或最新热点TOP（可配置）
+                        </p>
                       </div>
                       <div className="bg-white rounded p-2 border border-blue-200 shadow-sm">
                         <span className="font-bold text-blue-900 flex items-center gap-1 text-xs">

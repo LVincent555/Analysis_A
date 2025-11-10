@@ -2,11 +2,13 @@
  * 最新热点分析模块 - 完整版
  */
 import React, { useState, useEffect, useMemo } from 'react';
-import { TrendingUp, RefreshCw, Calendar, BarChart3, ChevronLeft, ChevronRight } from 'lucide-react';
+import { TrendingUp, RefreshCw, Calendar, BarChart3, ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react';
 import axios from 'axios';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { API_BASE_URL, COLORS } from '../../constants';
 import { formatDate } from '../../utils';
+import SearchBar from '../common/SearchBar';
+import HighlightText from '../common/HighlightText';
 
 export default function HotSpotsModule({ boardType, selectedPeriod, topN, selectedDate }) {
   const [analysisData, setAnalysisData] = useState(null);
@@ -16,6 +18,7 @@ export default function HotSpotsModule({ boardType, selectedPeriod, topN, select
   const [pageSize, setPageSize] = useState(10); // 默认每页10条
   const [top1000Industry, setTop1000Industry] = useState(null);
   const [sortBy, setSortBy] = useState('hit_count'); // 'hit_count', 'rank', 'price_change'
+  const [searchQuery, setSearchQuery] = useState(''); // 搜索关键词
 
   // 获取分析数据
   useEffect(() => {
@@ -105,19 +108,38 @@ export default function HotSpotsModule({ boardType, selectedPeriod, topN, select
     }
   }, [analysisData, sortBy]);
 
-  // 分页数据
+  // 搜索过滤后的股票列表
+  const filteredStocks = useMemo(() => {
+    if (!searchQuery.trim()) {
+      return sortedStocks;
+    }
+    
+    const query = searchQuery.toLowerCase().trim();
+    return sortedStocks.filter(stock => {
+      const code = (stock.stock_code || '').toLowerCase();
+      const name = (stock.stock_name || stock.name || '').toLowerCase();
+      return code.includes(query) || name.includes(query);
+    });
+  }, [sortedStocks, searchQuery]);
+
+  // 搜索后重置到第一页
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery]);
+
+  // 分页数据（使用过滤后的列表）
   const paginatedStocks = useMemo(() => {
-    if (!sortedStocks || sortedStocks.length === 0) return [];
+    if (!filteredStocks || filteredStocks.length === 0) return [];
     const start = (currentPage - 1) * pageSize;
     const end = start + pageSize;
-    return sortedStocks.slice(start, end);
-  }, [sortedStocks, currentPage, pageSize]);
+    return filteredStocks.slice(start, end);
+  }, [filteredStocks, currentPage, pageSize]);
 
-  // 总页数
+  // 总页数（使用过滤后的列表）
   const totalPages = useMemo(() => {
-    if (!analysisData || !analysisData.stocks) return 0;
-    return Math.ceil(analysisData.stocks.length / pageSize);
-  }, [analysisData, pageSize]);
+    if (!filteredStocks) return 0;
+    return Math.ceil(filteredStocks.length / pageSize);
+  }, [filteredStocks, pageSize]);
 
   // 切换周期、板块或排序方式时重置到第一页
   useEffect(() => {
@@ -154,8 +176,24 @@ export default function HotSpotsModule({ boardType, selectedPeriod, topN, select
             </p>
           </div>
 
-          {/* 排序按钮 */}
-          <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
+          {/* 搜索框和排序按钮 */}
+          <div className="px-6 py-4 bg-gray-50 border-b border-gray-200 space-y-3">
+            {/* 搜索框 */}
+            <div className="flex items-center space-x-3">
+              <SearchBar
+                value={searchQuery}
+                onChange={setSearchQuery}
+                placeholder="搜索股票代码或名称..."
+                className="flex-1 max-w-md"
+              />
+              {searchQuery && (
+                <div className="text-sm text-gray-600">
+                  找到 <span className="font-semibold text-indigo-600">{filteredStocks.length}</span> 只股票
+                </div>
+              )}
+            </div>
+            
+            {/* 排序按钮 */}
             <div className="flex items-center space-x-2">
               <span className="text-sm text-gray-600 font-medium">排序方式:</span>
               <button
@@ -234,12 +272,12 @@ export default function HotSpotsModule({ boardType, selectedPeriod, topN, select
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className="text-sm font-semibold text-indigo-600">
-                          {stock.stock_code}
+                          <HighlightText text={stock.stock_code} highlight={searchQuery} />
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className="text-sm font-medium text-gray-900">
-                          {stock?.stock_name || stock?.name || '-'}
+                          <HighlightText text={stock?.stock_name || stock?.name || '-'} highlight={searchQuery} />
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -287,9 +325,21 @@ export default function HotSpotsModule({ boardType, selectedPeriod, topN, select
             </div>
           ) : (
             <div className="px-6 py-12 text-center text-gray-500">
-              <BarChart3 className="mx-auto h-12 w-12 text-gray-400 mb-3" />
-              <p className="text-lg font-medium">未找到符合条件的股票</p>
-              <p className="text-sm mt-1">尝试选择其他分析周期</p>
+              {searchQuery ? (
+                <>
+                  <AlertCircle className="mx-auto h-12 w-12 text-gray-400 mb-3" />
+                  <p className="text-lg font-medium">未找到包含 "{searchQuery}" 的股票</p>
+                  <p className="text-sm mt-1 text-gray-400">
+                    该股票可能不在当前热点榜中，请尝试其他关键词
+                  </p>
+                </>
+              ) : (
+                <>
+                  <BarChart3 className="mx-auto h-12 w-12 text-gray-400 mb-3" />
+                  <p className="text-lg font-medium">未找到符合条件的股票</p>
+                  <p className="text-sm mt-1">尝试选择其他分析周期</p>
+                </>
+              )}
             </div>
           )}
           
@@ -297,7 +347,8 @@ export default function HotSpotsModule({ boardType, selectedPeriod, topN, select
           <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <span className="text-sm text-gray-700">
-                显示 {(currentPage - 1) * pageSize + 1} - {Math.min(currentPage * pageSize, analysisData.total_stocks)} 条，共 {analysisData.total_stocks} 条
+                显示 {(currentPage - 1) * pageSize + 1} - {Math.min(currentPage * pageSize, filteredStocks.length)} 条，共 {filteredStocks.length} 条
+                {searchQuery && <span className="text-indigo-600 ml-1">（搜索结果）</span>}
               </span>
             </div>
             <div className="flex items-center space-x-4">

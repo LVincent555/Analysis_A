@@ -3,6 +3,7 @@
 """
 import logging
 from ..services.memory_cache import memory_cache
+from ..services.hot_spots_cache import HotSpotsCache
 
 logger = logging.getLogger(__name__)
 
@@ -12,7 +13,7 @@ def preload_cache():
     logger.info("🚀 启动全量内存缓存...")
     
     try:
-        # 一次性加载所有数据到内存
+        # 1. 加载所有数据到内存
         memory_cache.load_all_data()
         
         # 输出统计信息
@@ -25,6 +26,19 @@ def preload_cache():
         logger.info(f"   📊 板块数据记录: {stats['sector_daily_data_count']:,}")
         logger.info(f"   📊 板块交易日数: {stats['sector_dates_count']:,}")
         logger.info(f"   ⚡ 查询性能: < 1ms")
+        logger.info("=" * 60)
+        
+        # 2. 预加载热点榜缓存
+        logger.info("🔥 预加载热点榜缓存（最近3天）...")
+        HotSpotsCache.preload_recent_dates(days=3)
+        
+        hot_stats = HotSpotsCache.get_cache_stats()
+        logger.info("=" * 60)
+        logger.info("✅ 热点榜缓存已就绪")
+        logger.info(f"   📅 已缓存日期: {', '.join(hot_stats['cached_dates'][:5])}")
+        logger.info(f"   📊 缓存天数: {hot_stats['total_dates']}")
+        logger.info(f"   💾 内存占用: {hot_stats['memory_usage_kb']} KB")
+        logger.info(f"   ⚡ 查询性能: O(1)")
         logger.info("=" * 60)
         
     except Exception as e:

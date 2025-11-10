@@ -49,7 +49,7 @@ class IndustryDetailService:
         # 缓存key（包含信号计算标志和阈值配置）
         # 如果开启信号计算，缓存key需要包含阈值配置，否则修改配置后仍返回旧结果
         if calculate_signals and signal_thresholds:
-            threshold_hash = f"{signal_thresholds.rank_jump_min}_{signal_thresholds.steady_rise_days_min}_{signal_thresholds.hot_list_top}"
+            threshold_hash = f"{signal_thresholds.hot_list_mode}_{signal_thresholds.rank_jump_min}_{signal_thresholds.steady_rise_days_min}_{signal_thresholds.hot_list_top}"
             cache_key = f"industry_stocks_{industry_name}_{target_date}_{sort_mode}_{calculate_signals}_{threshold_hash}"
         else:
             cache_key = f"industry_stocks_{industry_name}_{target_date}_{sort_mode}_{calculate_signals}"

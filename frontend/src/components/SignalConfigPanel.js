@@ -16,11 +16,16 @@ export default function SignalConfigPanel() {
     resetToDefault
   } = useSignalConfig();
 
+  // 应用配置
+  const handleApply = () => {
+    applyConfig();
+  };
+
   if (!showConfig) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center pt-20" style={{ zIndex: 9999 }}>
-      <div className="bg-white rounded-lg shadow-2xl max-w-4xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center pt-12" style={{ zIndex: 9999 }}>
+      <div className="bg-white rounded-lg shadow-2xl max-w-6xl w-full mx-4 max-h-[85vh] overflow-y-auto">
         {/* 标题栏 */}
         <div className="sticky top-0 bg-gradient-to-r from-purple-600 to-blue-600 text-white px-6 py-4 flex items-center justify-between">
           <div>
@@ -37,27 +42,57 @@ export default function SignalConfigPanel() {
 
         {/* 配置内容 */}
         <div className="p-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-            {/* 热点榜阈值 */}
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 mb-6">
+            {/* 热点榜模式选择 */}
+            <div className="bg-green-50 border border-green-200 rounded-lg p-5">
               <label className="block text-sm font-semibold text-green-900 mb-2">
-                🔥 热点榜阈值
+                🔥 热点榜信号模式
               </label>
               <select
-                value={tempThresholds.hotListTop}
-                onChange={(e) => setTempThresholds({...tempThresholds, hotListTop: Number(e.target.value)})}
-                className="w-full px-3 py-2 border border-green-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                value={tempThresholds.hotListMode || 'instant'}
+                onChange={(e) => setTempThresholds({...tempThresholds, hotListMode: e.target.value})}
+                className="w-full px-3 py-2 border border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 mb-3"
               >
-                <option value={50}>TOP 50</option>
-                <option value={100}>TOP 100</option>
-                <option value={200}>TOP 200</option>
-                <option value={500}>TOP 500</option>
+                <option value="instant">总分TOP信号</option>
+                <option value="frequent">最新热点TOP信号</option>
               </select>
-              <p className="text-xs text-green-700 mt-2">排名需要进入前X名</p>
+              
+              {/* 模式说明 */}
+              {(tempThresholds.hotListMode || 'instant') === 'instant' ? (
+                <div className="space-y-2">
+                  <p className="text-xs text-green-800 font-medium">
+                    📊 总分TOP信号
+                  </p>
+                  <div className="text-xs text-green-700 space-y-1">
+                    <div>• 基于综合评分排名的即时判断</div>
+                    <div>• 信号格式：热点榜TOP100、热点榜TOP500</div>
+                    <div>• 快速筛选当日综合得分龙头股票</div>
+                    <div>• 排名越靠前，信号权重越高</div>
+                  </div>
+                  <p className="text-xs text-green-600 mt-2 pt-2 border-t border-green-200">
+                    💡 权重25%（固定），阈值可调节（TOP100/200/500）
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-xs text-green-800 font-medium">
+                    🔥 最新热点TOP信号
+                  </p>
+                  <div className="text-xs text-green-700 space-y-1">
+                    <div>• 基于"最新热点"模块14天聚合数据</div>
+                    <div>• 信号格式：TOP100·5次（区间·出现次数）</div>
+                    <div>• 发现持续出现的强势热点股票</div>
+                    <div>• 出现次数越多，权重微调越高</div>
+                  </div>
+                  <p className="text-xs text-green-600 mt-2 pt-2 border-t border-green-200">
+                    💡 权重25%基础，出现12次×1.2、10次×1.1、8次×1.05递增
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* 跳变榜阈值 */}
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-5">
               <label className="block text-sm font-semibold text-blue-900 mb-2">
                 📈 跳变榜阈值
               </label>
@@ -77,7 +112,7 @@ export default function SignalConfigPanel() {
             </div>
 
             {/* 稳步上升天数 */}
-            <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+            <div className="bg-purple-50 border border-purple-200 rounded-lg p-5">
               <label className="block text-sm font-semibold text-purple-900 mb-2">
                 📊 稳步上升天数
               </label>
@@ -97,7 +132,7 @@ export default function SignalConfigPanel() {
             </div>
 
             {/* 涨幅榜阈值 */}
-            <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+            <div className="bg-orange-50 border border-orange-200 rounded-lg p-5">
               <label className="block text-sm font-semibold text-orange-900 mb-2">
                 💰 涨幅榜阈值
               </label>
@@ -115,7 +150,7 @@ export default function SignalConfigPanel() {
             </div>
 
             {/* 成交量阈值 */}
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+            <div className="bg-red-50 border border-red-200 rounded-lg p-5">
               <label className="block text-sm font-semibold text-red-900 mb-2">
                 📦 成交量阈值
               </label>
@@ -133,7 +168,7 @@ export default function SignalConfigPanel() {
             </div>
 
             {/* 波动率上升阈值 */}
-            <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4">
+            <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-5">
               <label className="block text-sm font-semibold text-indigo-900 mb-2">
                 ⚡ 波动率上升阈值
               </label>
@@ -142,6 +177,7 @@ export default function SignalConfigPanel() {
                 onChange={(e) => setTempThresholds({...tempThresholds, volatilitySurgeMin: Number(e.target.value)})}
                 className="w-full px-3 py-2 border border-indigo-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
               >
+                <option value={10}>≥10%</option>
                 <option value={30}>≥30%</option>
                 <option value={50}>≥50%</option>
                 <option value={100}>≥100%</option>
@@ -178,7 +214,7 @@ export default function SignalConfigPanel() {
               取消
             </button>
             <button
-              onClick={applyConfig}
+              onClick={handleApply}
               className="px-6 py-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white rounded-lg transition-colors font-medium"
             >
               ✓ 应用配置

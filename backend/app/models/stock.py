@@ -67,6 +67,7 @@ class StockHistory(BaseModel):
     date_rank_info: List[DateRankInfo]
     appears_count: int  # 出现次数
     dates: List[str]  # 出现的日期列表
+    signals: Optional[List[str]] = []  # 信号列表（如：["TOP100·5次", "排名跳变↑1500"]）
 
 
 class RankJumpStock(BaseModel):

@@ -21,12 +21,13 @@ async def get_industry_stocks(
     sort_mode: str = Query("rank", description="排序模式: rank|score|price_change|volume|signal"),
     calculate_signals: bool = Query(True, description="是否计算信号"),
     # 信号阈值参数（可调节）
+    hot_list_mode: str = Query("instant", description="热点榜模式: instant=总分TOP信号, frequent=最新热点TOP信号"),
     hot_list_top: int = Query(100, ge=50, le=500, description="热点榜阈值（TOP N）"),
     rank_jump_min: int = Query(2000, ge=1000, le=5000, description="跳变榜最小阈值"),
     steady_rise_days: int = Query(3, ge=2, le=10, description="稳步上升最小天数"),
     price_surge_min: float = Query(5.0, ge=1.0, le=10.0, description="涨幅榜最小阈值 %"),
     volume_surge_min: float = Query(10.0, ge=5.0, le=20.0, description="成交量榜最小阈值 %"),
-    volatility_surge_min: float = Query(30.0, ge=10.0, le=200.0, description="波动率上升阈值（百分比变化 %）")
+    volatility_surge_min: float = Query(10.0, ge=10.0, le=200.0, description="波动率上升阈值（百分比变化 %）")
 ):
     """
     获取板块成分股列表（完整版，支持信号计算）
@@ -46,7 +47,7 @@ async def get_industry_stocks(
         steady_rise_days: 稳步上升天数，默认3天
         price_surge_min: 涨幅榜阈值，默认5%
         volume_surge_min: 成交量榜阈值，默认10%
-        volatility_surge_min: 波动率上升阈值（百分比变化），默认30%
+        volatility_surge_min: 波动率上升阈值（百分比变化），默认10%
     
     Returns:
         板块成分股列表及统计信息
@@ -69,6 +70,7 @@ async def get_industry_stocks(
         signal_thresholds = None
         if calculate_signals:
             signal_thresholds = SignalThresholds(
+                hot_list_mode=hot_list_mode,
                 hot_list_top=hot_list_top,
                 hot_list_top2=500,  # 固定值
                 rank_jump_min=rank_jump_min,

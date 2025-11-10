@@ -96,19 +96,22 @@ export default function IndustryDetailPage({ industryName, onBack }) {
       setError(null);
       
       try {
+        const apiParams = {
+          sort_mode: sortMode,
+          calculate_signals: true,
+          hot_list_mode: signalThresholds.hotListMode || 'instant',
+          hot_list_top: signalThresholds.hotListTop,
+          rank_jump_min: signalThresholds.rankJumpMin,
+          steady_rise_days: signalThresholds.steadyRiseDays,
+          price_surge_min: signalThresholds.priceSurgeMin,
+          volume_surge_min: signalThresholds.volumeSurgeMin,
+          volatility_surge_min: signalThresholds.volatilitySurgeMin
+        };
+        
         const [detailRes, stocksRes] = await Promise.all([
           axios.get(`${API_BASE_URL}/api/industry/${encodeURIComponent(industryName)}/detail`),
           axios.get(`${API_BASE_URL}/api/industry/${encodeURIComponent(industryName)}/stocks`, {
-            params: {
-              sort_mode: sortMode,
-              calculate_signals: true,
-              hot_list_top: signalThresholds.hotListTop,
-              rank_jump_min: signalThresholds.rankJumpMin,
-              steady_rise_days: signalThresholds.steadyRiseDays,
-              price_surge_min: signalThresholds.priceSurgeMin,
-              volume_surge_min: signalThresholds.volumeSurgeMin,
-              volatility_surge_min: signalThresholds.volatilitySurgeMin
-            }
+            params: apiParams
           })
         ]);
         
@@ -442,8 +445,11 @@ export default function IndustryDetailPage({ industryName, onBack }) {
                   <span className="font-bold text-green-900 flex items-center gap-1">
                     <span>🔥</span> 热点榜
                   </span>
-                  <p className="text-green-700 mt-1 leading-relaxed">排名进入TOP100（可配置），说明当前市场关注度高</p>
-                  <p className="text-green-600 mt-1 text-xs font-medium">权重: 25%</p>
+                  <p className="text-green-700 mt-1 leading-relaxed">
+                    <strong>总分TOP：</strong>基于当日综合排名，信号如"热点榜TOP100"<br/>
+                    <strong>最新热点TOP：</strong>基于14天聚合数据，信号如"TOP100·5次"
+                  </p>
+                  <p className="text-green-600 mt-1 text-xs font-medium">权重: 25%（可配置模式）</p>
                 </div>
                 <div className="bg-white rounded p-2 border border-blue-200 shadow-sm hover:shadow-md transition-shadow">
                   <span className="font-bold text-blue-900 flex items-center gap-1">

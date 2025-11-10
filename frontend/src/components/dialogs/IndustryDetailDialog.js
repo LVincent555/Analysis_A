@@ -34,6 +34,7 @@ export default function IndustryDetailDialog({
             params: {
               sort_mode: 'signal',
               calculate_signals: true,
+              hot_list_mode: signalThresholds.hotListMode || 'instant',
               hot_list_top: signalThresholds.hotListTop,
               rank_jump_min: signalThresholds.rankJumpMin,
               steady_rise_days: signalThresholds.steadyRiseDays,
@@ -57,7 +58,7 @@ export default function IndustryDetailDialog({
     if (industryName) {
       fetchData();
     }
-  }, [industryName, signalThresholds]);
+  }, [industryName, signalThresholds.hotListMode, signalThresholds.rankJumpMin, signalThresholds.steadyRiseDays]);
 
   // 点击背景关闭
   const handleBackdropClick = (e) => {
