@@ -20,12 +20,13 @@ async def analyze_rank_jump(
     date: str = Query(default=None, description="指定日期 (YYYYMMDD格式)"),
     # 信号阈值参数
     calculate_signals: bool = Query(default=False, description="是否计算其他信号标签"),
+    hot_list_mode: str = Query("instant", description="热点榜模式: instant=总分TOP信号, frequent=最新热点TOP信号"),
     hot_list_top: int = Query(default=100, ge=10, le=1000),
     rank_jump_min: int = Query(default=1000, ge=500, le=5000),  # 跳变阈值改为1000
     steady_rise_days: int = Query(default=3, ge=2, le=14),
     price_surge_min: float = Query(default=5.0, ge=1.0, le=20.0),
     volume_surge_min: float = Query(default=10.0, ge=1.0, le=50.0),
-    volatility_surge_min: float = Query(default=30.0, ge=10.0, le=200.0)
+    volatility_surge_min: float = Query(default=10.0, ge=10.0, le=200.0)
 ):
     """
     分析排名跳变的股票
@@ -46,6 +47,7 @@ async def analyze_rank_jump(
         signal_thresholds = None
         if calculate_signals:
             signal_thresholds = SignalThresholds(
+                hot_list_mode=hot_list_mode,
                 hot_list_top=hot_list_top,
                 rank_jump_min=rank_jump_min,
                 rank_jump_large=rank_jump_min * 1.5,

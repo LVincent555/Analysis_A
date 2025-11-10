@@ -55,7 +55,15 @@ class RankJumpServiceDB:
         """
         # 缓存键包含target_date和signal配置，避免不同参数返回相同数据
         if calculate_signals and signal_thresholds:
-            threshold_hash = f"{signal_thresholds.rank_jump_min}_{signal_thresholds.hot_list_top}"
+            threshold_hash = (
+                f"{signal_thresholds.hot_list_mode}_"
+                f"{signal_thresholds.hot_list_top}_"
+                f"{signal_thresholds.rank_jump_min}_"
+                f"{signal_thresholds.steady_rise_days_min}_"
+                f"{signal_thresholds.price_surge_min}_"
+                f"{signal_thresholds.volume_surge_min}_"
+                f"{signal_thresholds.volatility_surge_min}"
+            )
             cache_key = f"rank_jump_{jump_threshold}_{board_type}_{sigma_multiplier}_{target_date}_{threshold_hash}"
         else:
             cache_key = f"rank_jump_{jump_threshold}_{board_type}_{sigma_multiplier}_{target_date}"

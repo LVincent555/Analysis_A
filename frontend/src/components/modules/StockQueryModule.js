@@ -38,7 +38,13 @@ export default function StockQueryModule({ stockCode, queryTrigger, selectedDate
         const url = `${API_BASE_URL}/api/stock/${stockCode.trim()}`;
         const response = await axios.get(url, {
           params: {
-            hot_list_mode: signalThresholds.hotListMode || 'instant'
+            hot_list_mode: signalThresholds.hotListMode || 'instant',
+            hot_list_top: signalThresholds.hotListTop,
+            rank_jump_min: signalThresholds.rankJumpMin,
+            steady_rise_days: signalThresholds.steadyRiseDays,
+            price_surge_min: signalThresholds.priceSurgeMin,
+            volume_surge_min: signalThresholds.volumeSurgeMin,
+            volatility_surge_min: signalThresholds.volatilitySurgeMin
           }
         });
         
@@ -64,7 +70,7 @@ export default function StockQueryModule({ stockCode, queryTrigger, selectedDate
     if (queryTrigger > 0) {
       handleStockQuery();
     }
-  }, [queryTrigger, stockCode, signalThresholds.hotListMode]); // 添加热点榜模式依赖
+  }, [queryTrigger, stockCode, signalThresholds.hotListMode, signalThresholds.hotListTop, signalThresholds.rankJumpMin, signalThresholds.steadyRiseDays, signalThresholds.priceSurgeMin, signalThresholds.volumeSurgeMin, signalThresholds.volatilitySurgeMin]); // 添加所有阈值依赖
 
   return (
     <>

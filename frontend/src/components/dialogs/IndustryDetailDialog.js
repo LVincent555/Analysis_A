@@ -58,7 +58,7 @@ export default function IndustryDetailDialog({
     if (industryName) {
       fetchData();
     }
-  }, [industryName, signalThresholds.hotListMode, signalThresholds.rankJumpMin, signalThresholds.steadyRiseDays]);
+  }, [industryName, signalThresholds.hotListMode, signalThresholds.hotListTop, signalThresholds.rankJumpMin, signalThresholds.steadyRiseDays, signalThresholds.priceSurgeMin, signalThresholds.volumeSurgeMin, signalThresholds.volatilitySurgeMin]);
 
   // 点击背景关闭
   const handleBackdropClick = (e) => {

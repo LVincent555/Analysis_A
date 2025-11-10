@@ -40,8 +40,20 @@ class StockServiceDB:
             股票历史数据
         """
         # 缓存key（包含信号配置）
-        hot_list_mode = signal_thresholds.hot_list_mode if signal_thresholds else 'instant'
-        cache_key = f"stock_{keyword}_{target_date}_{hot_list_mode}"
+        if signal_thresholds:
+            threshold_hash = (
+                f"{signal_thresholds.hot_list_mode}_"
+                f"{signal_thresholds.hot_list_top}_"
+                f"{signal_thresholds.rank_jump_min}_"
+                f"{signal_thresholds.steady_rise_days_min}_"
+                f"{signal_thresholds.price_surge_min}_"
+                f"{signal_thresholds.volume_surge_min}_"
+                f"{signal_thresholds.volatility_surge_min}"
+            )
+            cache_key = f"stock_{keyword}_{target_date}_{threshold_hash}"
+        else:
+            cache_key = f"stock_{keyword}_{target_date}_default"
+        
         if cache_key in self.cache:
             logger.info(f"✨ 缓存命中: {cache_key}")
             return self.cache[cache_key]
