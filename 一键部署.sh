@@ -1,5 +1,5 @@
 #!/bin/bash
-# 股票分析系统 v0.2.6 - 服务器一键部署脚本
+# 股票分析系统 - 服务器一键部署脚本
 # 使用方法：bash 一键部署.sh
 # 参考文档：docs/⚠️重要-配置文件管理和常见错误.md
 
@@ -15,9 +15,12 @@ NC='\033[0m' # No Color
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BACKUP_DIR="$HOME/backup_$(date +%Y%m%d_%H%M%S)"
 
+# 获取当前版本（从git tag）
+CURRENT_VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "未知版本")
+
 echo ""
 echo "============================================================"
-echo "🚀 股票分析系统 v0.2.6 - 服务器部署脚本"
+echo "🚀 股票分析系统 $CURRENT_VERSION - 服务器部署脚本"
 echo "============================================================"
 echo ""
 echo "📍 项目目录: $PROJECT_DIR"
@@ -65,16 +68,18 @@ echo "============================================================"
 cd "$PROJECT_DIR"
 
 # 显示当前版本
+OLD_VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "未知")
 CURRENT_COMMIT=$(git rev-parse --short HEAD)
-echo "当前版本: $CURRENT_COMMIT"
+echo "当前版本: $OLD_VERSION ($CURRENT_COMMIT)"
 
 # 拉取代码
 echo "正在拉取最新代码..."
 git pull origin main
 
+NEW_VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "未知")
 NEW_COMMIT=$(git rev-parse --short HEAD)
 echo "✅ 代码更新完成"
-echo "新版本: $NEW_COMMIT"
+echo "新版本: $NEW_VERSION ($NEW_COMMIT)"
 echo ""
 
 # ============================================================
@@ -243,7 +248,7 @@ echo ""
 # 部署完成
 # ============================================================
 echo "============================================================"
-echo "✅ 部署完成！v0.2.6"
+echo "✅ 部署完成！$NEW_VERSION"
 echo "============================================================"
 echo ""
 
@@ -306,7 +311,7 @@ echo ""
 
 # 版本信息
 echo "📌 版本信息:"
-echo "  • 当前版本: v0.2.6"
+echo "  • 当前版本: $NEW_VERSION"
 echo "  • Git提交: $NEW_COMMIT"
 echo "  • 部署时间: $(date '+%Y-%m-%d %H:%M:%S')"
 echo ""
