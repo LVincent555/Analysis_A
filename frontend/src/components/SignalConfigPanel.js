@@ -40,6 +40,19 @@ export default function SignalConfigPanel() {
           </button>
         </div>
 
+        {/* 持久化提示 */}
+        <div className="mx-6 mt-6 mb-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-start gap-3">
+            <div className="text-blue-600 text-lg">💾</div>
+            <div className="flex-1">
+              <p className="text-sm font-medium text-blue-900">配置自动保存</p>
+              <p className="text-xs text-blue-700 mt-1">
+                您的配置会自动保存到浏览器本地存储，刷新页面后仍然保留。每个用户的配置独立，互不影响。
+              </p>
+            </div>
+          </div>
+        </div>
+
         {/* 配置内容 */}
         <div className="p-6">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 mb-6">

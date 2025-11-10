@@ -1,8 +1,12 @@
 /**
  * 全局信号阈值配置Context
  * 用于在整个应用中共享和同步信号配置
+ * 支持localStorage持久化，刷新后配置保留
  */
-import React, { createContext, useState, useContext } from 'react';
+import React, { createContext, useState, useContext, useEffect } from 'react';
+
+// localStorage key
+const STORAGE_KEY = 'stock_analysis_signal_thresholds';
 
 // 默认阈值配置
 const DEFAULT_THRESHOLDS = {
@@ -15,19 +19,54 @@ const DEFAULT_THRESHOLDS = {
   volatilitySurgeMin: 10.0  // 波动率上升阈值默认改为10%
 };
 
+/**
+ * 从localStorage加载配置
+ */
+const loadThresholdsFromStorage = () => {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      // 合并默认值，确保新增的配置项有默认值
+      return { ...DEFAULT_THRESHOLDS, ...parsed };
+    }
+  } catch (error) {
+    console.error('加载配置失败:', error);
+  }
+  return DEFAULT_THRESHOLDS;
+};
+
+/**
+ * 保存配置到localStorage
+ */
+const saveThresholdsToStorage = (thresholds) => {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(thresholds));
+  } catch (error) {
+    console.error('保存配置失败:', error);
+  }
+};
+
 // 创建Context
 const SignalConfigContext = createContext();
 
 // Provider组件
 export function SignalConfigProvider({ children }) {
-  const [signalThresholds, setSignalThresholdsRaw] = useState(DEFAULT_THRESHOLDS);
+  // 从localStorage初始化配置
+  const [signalThresholds, setSignalThresholdsRaw] = useState(() => loadThresholdsFromStorage());
   const [showConfig, setShowConfig] = useState(false);
-  const [tempThresholds, setTempThresholds] = useState({...DEFAULT_THRESHOLDS});
+  const [tempThresholds, setTempThresholds] = useState({...signalThresholds});
   
-  // 包装setter
+  // 包装setter，同时保存到localStorage
   const setSignalThresholds = (newThresholds) => {
     setSignalThresholdsRaw(newThresholds);
+    saveThresholdsToStorage(newThresholds);
   };
+
+  // 监听配置变化，自动保存（备用机制）
+  useEffect(() => {
+    saveThresholdsToStorage(signalThresholds);
+  }, [signalThresholds]);
 
   // 打开配置面板
   const openConfig = () => {
@@ -42,13 +81,26 @@ export function SignalConfigProvider({ children }) {
 
   // 应用配置
   const applyConfig = () => {
-    setSignalThresholds({...tempThresholds});
+    const newThresholds = {...tempThresholds};
+    setSignalThresholds(newThresholds);
     setShowConfig(false);
   };
 
   // 重置为默认值
   const resetToDefault = () => {
     setTempThresholds({...DEFAULT_THRESHOLDS});
+  };
+
+  // 清除保存的配置（恢复默认）
+  const clearSavedConfig = () => {
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+      const defaultConfig = {...DEFAULT_THRESHOLDS};
+      setSignalThresholdsRaw(defaultConfig);
+      setTempThresholds(defaultConfig);
+    } catch (error) {
+      console.error('清除配置失败:', error);
+    }
   };
 
   const value = {
@@ -62,7 +114,8 @@ export function SignalConfigProvider({ children }) {
     openConfig,
     closeConfig,
     applyConfig,
-    resetToDefault
+    resetToDefault,
+    clearSavedConfig  // 新增：清除保存的配置
   };
 
   return (
