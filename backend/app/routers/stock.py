@@ -18,7 +18,8 @@ async def query_stock(
     stock_code: str, 
     date: str = None,
     # 信号阈值参数（与industry_detail保持一致）
-    hot_list_mode: str = Query("instant", description="热点榜模式: instant=总分TOP信号, frequent=最新热点TOP信号"),
+    hot_list_mode: str = Query("frequent", description="热点榜模式: instant=总分TOP信号, frequent=最新热点TOP信号（默认）"),
+    hot_list_version: str = Query("v2", description="热点榜版本: v1=原版, v2=新版（默认）"),
     hot_list_top: int = Query(100, ge=50, le=500, description="热点榜阈值（TOP N）"),
     rank_jump_min: int = Query(1000, ge=100, le=5000, description="排名跳变最小阈值"),
     steady_rise_days: int = Query(3, ge=2, le=7, description="稳步上升天数"),
@@ -44,8 +45,13 @@ async def query_stock(
         # 构建信号配置
         signal_thresholds = SignalThresholds(
             hot_list_mode=hot_list_mode,
+            hot_list_version=hot_list_version,
             hot_list_top=hot_list_top,
+            hot_list_top2=500,  # 固定值
+            hot_list_top3=2000,  # TOP2000固定值
+            hot_list_top4=3000,  # 新增：TOP3000固定值
             rank_jump_min=rank_jump_min,
+            rank_jump_large=3000,  # 固定值（与板块查询保持一致）
             steady_rise_days_min=steady_rise_days,
             price_surge_min=price_surge_min,
             volume_surge_min=volume_surge_min,

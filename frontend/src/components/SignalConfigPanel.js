@@ -62,16 +62,30 @@ export default function SignalConfigPanel() {
                 🔥 热点榜信号模式
               </label>
               <select
-                value={tempThresholds.hotListMode || 'instant'}
-                onChange={(e) => setTempThresholds({...tempThresholds, hotListMode: e.target.value})}
+                value={
+                  tempThresholds.hotListMode === 'instant' ? 'instant' :
+                  tempThresholds.hotListVersion === 'v1' ? 'frequent_v1' : 'frequent_v2'
+                }
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === 'instant') {
+                    setTempThresholds({...tempThresholds, hotListMode: 'instant', hotListVersion: 'v2'});
+                  } else if (val === 'frequent_v1') {
+                    setTempThresholds({...tempThresholds, hotListMode: 'frequent', hotListVersion: 'v1'});
+                  } else {
+                    setTempThresholds({...tempThresholds, hotListMode: 'frequent', hotListVersion: 'v2'});
+                  }
+                }}
                 className="w-full px-3 py-2 border border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 mb-3"
               >
                 <option value="instant">总分TOP信号</option>
-                <option value="frequent">最新热点TOP信号</option>
+                <option value="frequent_v1">最新热点TOP信号（原版）</option>
+                <option value="frequent_v2">最新热点TOP信号（新版）</option>
               </select>
               
               {/* 模式说明 */}
-              {(tempThresholds.hotListMode || 'instant') === 'instant' ? (
+              {tempThresholds.hotListMode === 'instant' ? (
+                // 模式1：总分TOP信号
                 <div className="space-y-2">
                   <p className="text-xs text-green-800 font-medium">
                     📊 总分TOP信号
@@ -86,19 +100,48 @@ export default function SignalConfigPanel() {
                     💡 权重25%（固定），阈值可调节（TOP100/200/500）
                   </p>
                 </div>
-              ) : (
+              ) : tempThresholds.hotListVersion === 'v1' ? (
+                // 模式2：最新热点TOP信号（原版）
                 <div className="space-y-2">
                   <p className="text-xs text-green-800 font-medium">
-                    🔥 最新热点TOP信号
+                    🔥 最新热点TOP信号（原版）
                   </p>
                   <div className="text-xs text-green-700 space-y-1">
-                    <div>• 基于"最新热点"模块14天聚合数据</div>
+                    <div>• 基于14天聚合数据，与线上服务器版本一致</div>
                     <div>• 信号格式：TOP100·5次（区间·出现次数）</div>
-                    <div>• 发现持续出现的强势热点股票</div>
-                    <div>• 出现次数越多，权重微调越高</div>
+                    <div>• 区间范围：TOP100/200/400/600/800/1000/2000/3000</div>
+                    <div>• <strong className="text-red-700">特点：TOP100权重最高(50%)，多信号优先排序</strong></div>
                   </div>
                   <p className="text-xs text-green-600 mt-2 pt-2 border-t border-green-200">
-                    💡 权重25%基础，出现12次×1.2、10次×1.1、8次×1.05递增
+                    💡 档位倍数：TOP100(2.0×50%)、TOP200(1.5×37.5%)、TOP400(1.2×30%)、TOP600(1.0×25%)、TOP800(0.8×20%)、TOP1000(0.5×12.5%)、TOP2000(0.3×7.5%)、TOP3000(0.2×5%)
+                  </p>
+                  <p className="text-xs text-green-600 mt-1">
+                    💡 次数加权：12次×1.2、10次×1.1、8次×1.05
+                  </p>
+                  <p className="text-xs text-red-600 mt-1">
+                    💡 排序：优先按信号数量，其次信号强度
+                  </p>
+                </div>
+              ) : (
+                // 模式3：最新热点TOP信号（新版）
+                <div className="space-y-2">
+                  <p className="text-xs text-green-800 font-medium">
+                    🔥 最新热点TOP信号（新版）⭐推荐
+                  </p>
+                  <div className="text-xs text-green-700 space-y-1">
+                    <div>• 基于14天聚合数据，优化后的权重分配</div>
+                    <div>• 信号格式：TOP100·5次（区间·出现次数）</div>
+                    <div>• 区间范围：TOP100/200/400/600/800/1000/2000/3000</div>
+                    <div>• <strong className="text-blue-700">特点：降低TOP100权重(37.5%)，强度优先排序</strong></div>
+                  </div>
+                  <p className="text-xs text-green-600 mt-2 pt-2 border-t border-green-200">
+                    💡 档位倍数：TOP100(1.5×37.5%)、TOP200(1.3×32.5%)、TOP400(1.2×30%)、TOP600(1.0×25%)、TOP800(0.9×22.5%)、TOP1000(0.8×20%)、TOP2000(0.6×15%)、TOP3000(0.5×12.5%)
+                  </p>
+                  <p className="text-xs text-green-600 mt-1">
+                    💡 次数加权：12次×1.2、10次×1.1、8次×1.05
+                  </p>
+                  <p className="text-xs text-blue-600 mt-1">
+                    💡 排序：优先按信号强度，其次信号数量
                   </p>
                 </div>
               )}

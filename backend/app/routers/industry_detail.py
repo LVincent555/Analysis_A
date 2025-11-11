@@ -18,10 +18,11 @@ router = APIRouter(prefix="/api/industry", tags=["industry-detail"])
 async def get_industry_stocks(
     industry_name: str,
     date: Optional[str] = Query(None, description="日期 YYYYMMDD，默认最新"),
-    sort_mode: str = Query("rank", description="排序模式: rank|score|price_change|volume|signal"),
+    sort_mode: str = Query("rank", description="排序模式: rank|score|price_change|volume|signal|signal_count"),
     calculate_signals: bool = Query(True, description="是否计算信号"),
     # 信号阈值参数（可调节）
-    hot_list_mode: str = Query("instant", description="热点榜模式: instant=总分TOP信号, frequent=最新热点TOP信号"),
+    hot_list_mode: str = Query("frequent", description="热点榜模式: instant=总分TOP信号, frequent=最新热点TOP信号（默认）"),
+    hot_list_version: str = Query("v2", description="热点榜版本: v1=原版（2.0倍数）, v2=新版（1.5倍数，默认）"),
     hot_list_top: int = Query(100, ge=50, le=500, description="热点榜阈值（TOP N）"),
     rank_jump_min: int = Query(2000, ge=1000, le=5000, description="跳变榜最小阈值"),
     steady_rise_days: int = Query(3, ge=2, le=10, description="稳步上升最小天数"),
@@ -71,8 +72,11 @@ async def get_industry_stocks(
         if calculate_signals:
             signal_thresholds = SignalThresholds(
                 hot_list_mode=hot_list_mode,
+                hot_list_version=hot_list_version,
                 hot_list_top=hot_list_top,
                 hot_list_top2=500,  # 固定值
+                hot_list_top3=2000,  # TOP2000固定值
+                hot_list_top4=3000,  # 新增：TOP3000固定值
                 rank_jump_min=rank_jump_min,
                 rank_jump_large=3000,  # 固定值（更新为3000）
                 steady_rise_days_min=steady_rise_days,

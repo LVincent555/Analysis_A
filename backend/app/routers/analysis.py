@@ -33,7 +33,7 @@ async def analyze_period(period: int, board_type: str = 'main', top_n: int = 100
     Args:
         period: 分析周期（天数）
         board_type: 板块类型 ('all': 全部, 'main': 主板, 'bjs': 北交所)
-        top_n: 每天分析前N个股票，默认100，可选100/200/400/600/800/1000
+        top_n: 每天分析前N个股票，默认100，可选100/200/400/600/800/1000/2000/3000
         date: 指定日期 (YYYYMMDD格式)，不传则使用最新日期
     """
     try:
@@ -52,7 +52,7 @@ async def analyze_period(period: int, board_type: str = 'main', top_n: int = 100
         top_n = int(top_n)
         
         # 参数验证
-        if top_n not in [100, 200, 400, 600, 800, 1000]:
+        if top_n not in [100, 200, 400, 600, 800, 1000, 2000, 3000]:
             sys.stderr.write(f"⚠️  警告: top_n={top_n} 不在允许范围内，使用默认值100\n")
             sys.stderr.flush()
             top_n = 100  # 默认值

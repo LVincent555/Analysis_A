@@ -10,7 +10,8 @@ const STORAGE_KEY = 'stock_analysis_signal_thresholds';
 
 // 默认阈值配置
 const DEFAULT_THRESHOLDS = {
-  hotListMode: 'instant',  // 热点榜模式：instant=总分TOP信号，frequent=最新热点TOP信号
+  hotListMode: 'frequent',  // 热点榜模式：instant=总分TOP信号，frequent=最新热点TOP信号（默认）
+  hotListVersion: 'v2',  // 热点榜版本：v1=原版（2.0倍数），v2=新版（1.5倍数，默认）
   hotListTop: 100,
   rankJumpMin: 1000,  // 跳变榜阈值改为1000
   steadyRiseDays: 3,
@@ -27,13 +28,13 @@ const loadThresholdsFromStorage = () => {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       const parsed = JSON.parse(saved);
-      // 合并默认值，确保新增的配置项有默认值
-      return { ...DEFAULT_THRESHOLDS, ...parsed };
+      // 合并默认值，确保新增配置项有默认值
+      return {...DEFAULT_THRESHOLDS, ...parsed};
     }
   } catch (error) {
     console.error('加载配置失败:', error);
   }
-  return DEFAULT_THRESHOLDS;
+  return {...DEFAULT_THRESHOLDS};
 };
 
 /**

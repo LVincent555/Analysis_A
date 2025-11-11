@@ -99,7 +99,8 @@ export default function IndustryDetailPage({ industryName, onBack }) {
         const apiParams = {
           sort_mode: sortMode,
           calculate_signals: true,
-          hot_list_mode: signalThresholds.hotListMode || 'instant',
+          hot_list_mode: signalThresholds.hotListMode || 'frequent',
+          hot_list_version: signalThresholds.hotListVersion || 'v2',
           hot_list_top: signalThresholds.hotListTop,
           rank_jump_min: signalThresholds.rankJumpMin,
           steady_rise_days: signalThresholds.steadyRiseDays,
@@ -400,13 +401,11 @@ export default function IndustryDetailPage({ industryName, onBack }) {
                   <label className="text-sm font-medium text-gray-700 mr-2">排序方式:</label>
                   <select
                     value={sortMode}
-                    onChange={(e) => {
-                      setSortMode(e.target.value);
-                      setCurrentPage(1);
-                    }}
+                    onChange={(e) => setSortMode(e.target.value)}
                     className="px-3 py-2 border border-gray-300 rounded-lg"
                   >
                     <option value="signal">信号强度</option>
+                    <option value="signal_count">信号数量</option>
                     <option value="rank">市场排名</option>
                     <option value="score">综合评分</option>
                     <option value="price_change">涨跌幅</option>
@@ -443,48 +442,48 @@ export default function IndustryDetailPage({ industryName, onBack }) {
               <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-2 text-xs">
                 <div className="bg-white rounded p-2 border border-green-200 shadow-sm hover:shadow-md transition-shadow">
                   <span className="font-bold text-green-900 flex items-center gap-1">
-                    <span>🔥</span> 热点榜
+                    <span>🥇</span> 热点榜 <span className="text-xs bg-green-100 px-2 py-0.5 rounded">T1</span>
                   </span>
                   <p className="text-green-700 mt-1 leading-relaxed">
                     <strong>总分TOP：</strong>基于当日综合排名，信号如"热点榜TOP100"<br/>
                     <strong>最新热点TOP：</strong>基于14天聚合数据，信号如"TOP100·5次"
                   </p>
-                  <p className="text-green-600 mt-1 text-xs font-medium">权重: 25%（可配置模式）</p>
+                  <p className="text-green-600 mt-1 text-xs font-medium">🥇 权重: 25%基础 - 档位倍数TOP100(1.5×)→TOP3000(0.5×) - 第一层</p>
                 </div>
                 <div className="bg-white rounded p-2 border border-blue-200 shadow-sm hover:shadow-md transition-shadow">
                   <span className="font-bold text-blue-900 flex items-center gap-1">
-                    <span>📈</span> 排名跳变
+                    <span>🥈</span> 排名跳变 <span className="text-xs bg-blue-100 px-2 py-0.5 rounded">T2</span>
                   </span>
                   <p className="text-blue-700 mt-1 leading-relaxed">排名相比前一天大幅提升（≥2000名），说明热度快速上升</p>
-                  <p className="text-blue-600 mt-1 text-xs font-medium">权重: 20%</p>
-                </div>
-                <div className="bg-white rounded p-2 border border-purple-200 shadow-sm hover:shadow-md transition-shadow">
-                  <span className="font-bold text-purple-900 flex items-center gap-1">
-                    <span>📊</span> 稳步上升
-                  </span>
-                  <p className="text-purple-700 mt-1 leading-relaxed">连续多天排名持续上升，说明趋势稳定向好</p>
-                  <p className="text-purple-600 mt-1 text-xs font-medium">权重: 20%</p>
-                </div>
-                <div className="bg-white rounded p-2 border border-orange-200 shadow-sm hover:shadow-md transition-shadow">
-                  <span className="font-bold text-orange-900 flex items-center gap-1">
-                    <span>💰</span> 涨幅榜
-                  </span>
-                  <p className="text-orange-700 mt-1 leading-relaxed">涨跌幅超过阈值（如≥5%），说明价格异动明显</p>
-                  <p className="text-orange-600 mt-1 text-xs font-medium">权重: 10%</p>
-                </div>
-                <div className="bg-white rounded p-2 border border-red-200 shadow-sm hover:shadow-md transition-shadow">
-                  <span className="font-bold text-red-900 flex items-center gap-1">
-                    <span>📦</span> 成交量榜
-                  </span>
-                  <p className="text-red-700 mt-1 leading-relaxed">成交量相对历史放大，说明资金关注度提升</p>
-                  <p className="text-red-600 mt-1 text-xs font-medium">权重: 10%</p>
+                  <p className="text-blue-600 mt-1 text-xs font-medium">🥈 权重: 20% - 第二层（市场关注度）</p>
                 </div>
                 <div className="bg-white rounded p-2 border border-indigo-200 shadow-sm hover:shadow-md transition-shadow">
                   <span className="font-bold text-indigo-900 flex items-center gap-1">
-                    <span>⚡</span> 波动率上升
+                    <span>🥈</span> 波动率上升 <span className="text-xs bg-indigo-100 px-2 py-0.5 rounded">T2</span>
                   </span>
                   <p className="text-indigo-700 mt-1 leading-relaxed">波动率百分比变化≥30%，说明价格波动加剧（计算方式：(当前-前一天)/前一天×100%）</p>
-                  <p className="text-indigo-600 mt-1 text-xs font-medium">权重: 15%</p>
+                  <p className="text-indigo-600 mt-1 text-xs font-medium">🥈 权重: 20% - 第二层（市场关注度）</p>
+                </div>
+                <div className="bg-white rounded p-2 border border-purple-200 shadow-sm hover:shadow-md transition-shadow">
+                  <span className="font-bold text-purple-900 flex items-center gap-1">
+                    <span>🥉</span> 稳步上升 <span className="text-xs bg-purple-100 px-2 py-0.5 rounded">T3</span>
+                  </span>
+                  <p className="text-purple-700 mt-1 leading-relaxed">连续多天排名持续上升，说明趋势稳定向好</p>
+                  <p className="text-purple-600 mt-1 text-xs font-medium">🥉 权重: 15% - 第三层（持续性）</p>
+                </div>
+                <div className="bg-white rounded p-2 border border-orange-200 shadow-sm hover:shadow-md transition-shadow">
+                  <span className="font-bold text-orange-900 flex items-center gap-1">
+                    <span>🎖️</span> 涨幅榜 <span className="text-xs bg-orange-100 px-2 py-0.5 rounded">T4</span>
+                  </span>
+                  <p className="text-orange-700 mt-1 leading-relaxed">涨跌幅超过阈值（如≥5%），说明价格异动明显</p>
+                  <p className="text-orange-600 mt-1 text-xs font-medium">🎖️ 权重: 10% - 第四层（短期活跃度）</p>
+                </div>
+                <div className="bg-white rounded p-2 border border-red-200 shadow-sm hover:shadow-md transition-shadow">
+                  <span className="font-bold text-red-900 flex items-center gap-1">
+                    <span>🎖️</span> 成交量榜 <span className="text-xs bg-red-100 px-2 py-0.5 rounded">T4</span>
+                  </span>
+                  <p className="text-red-700 mt-1 leading-relaxed">成交量相对历史放大，说明资金关注度提升</p>
+                  <p className="text-red-600 mt-1 text-xs font-medium">🎖️ 权重: 10% - 第四层（短期活跃度）</p>
                 </div>
               </div>
               <div className="mt-3 text-xs bg-white rounded p-3 border border-purple-100">
@@ -493,7 +492,7 @@ export default function IndustryDetailPage({ industryName, onBack }) {
                   <p>• <strong>信号数量</strong>：信号越多说明该股票越值得关注</p>
                   <p>• <strong>信号组合</strong>：多个信号叠加通常意味着更强的市场信号</p>
                   <p>• <strong>信号强度</strong>：综合反映了各个信号的权重得分（0-100%）</p>
-                  <p>• <strong>权重设计</strong>：排名和趋势类信号权重更高，价格和成交量类为辅助</p>
+                  <p>• <strong>权重分层</strong>：T1热点榜25% &gt; T2排名跳变/波动率20% &gt; T3稳步上升15% &gt; T4涨幅/成交量10%</p>
                 </div>
               </div>
             </div>

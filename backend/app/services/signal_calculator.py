@@ -18,9 +18,12 @@ class SignalThresholds:
     """信号阈值配置（可调节）"""
     def __init__(
         self,
-        hot_list_mode: str = "instant",  # instant=即时龙头榜, frequent=高频热点榜
+        hot_list_mode: str = "frequent",  # instant=即时龙头榜, frequent=高频热点榜（默认）
+        hot_list_version: str = "v2",  # v1=原版（2.0倍数，按数量排序）, v2=新版（1.5倍数，按强度排序）
         hot_list_top: int = 100,
         hot_list_top2: int = 500,
+        hot_list_top3: int = 2000,  # TOP2000阈值
+        hot_list_top4: int = 3000,  # 新增：TOP3000阈值
         rank_jump_min: int = 1000,  # 排名跳变最小阈值
         rank_jump_large: int = 1500,  # 排名大幅跳变（1.5倍）
         steady_rise_days_min: int = 3,
@@ -31,8 +34,11 @@ class SignalThresholds:
         volatility_surge_large: float = 100.0  # 波动率大幅上升（百分比变化：100%）
     ):
         self.hot_list_mode = hot_list_mode
+        self.hot_list_version = hot_list_version
         self.hot_list_top = hot_list_top
         self.hot_list_top2 = hot_list_top2
+        self.hot_list_top3 = hot_list_top3
+        self.hot_list_top4 = hot_list_top4
         self.rank_jump_min = rank_jump_min
         self.rank_jump_large = rank_jump_large
         self.steady_rise_days_min = steady_rise_days_min
@@ -44,13 +50,21 @@ class SignalThresholds:
 
 
 class SignalWeights:
-    """信号权重配置（平衡型）"""
-    HOT_LIST_WEIGHT = 0.25
-    RANK_JUMP_WEIGHT = 0.20
-    STEADY_RISE_WEIGHT = 0.20
-    PRICE_SURGE_WEIGHT = 0.10
-    VOLUME_SURGE_WEIGHT = 0.10
-    VOLATILITY_SURGE_WEIGHT = 0.15  # 波动率上升权重
+    """
+    信号权重配置（优化型）
+    
+    权重分层：
+    🥇 T1 第一层 (25%): 热点榜 - 综合评分龙头
+    🥈 T2 第二层 (20%): 排名跳变、波动率上升 - 市场关注度
+    🥉 T3 第三层 (15%): 稳步上升 - 持续性
+    🎖️ T4 第四层 (10%): 涨幅榜、成交量榜 - 短期活跃度
+    """
+    HOT_LIST_WEIGHT = 0.25          # 🥇 T1: 热点榜 25%
+    RANK_JUMP_WEIGHT = 0.20         # 🥈 T2: 排名跳变 20%
+    VOLATILITY_SURGE_WEIGHT = 0.20  # 🥈 T2: 波动率上升 20%
+    STEADY_RISE_WEIGHT = 0.15       # 🥉 T3: 稳步上升 15%
+    PRICE_SURGE_WEIGHT = 0.10       # 🎖️ T4: 涨幅榜 10%
+    VOLUME_SURGE_WEIGHT = 0.10      # 🎖️ T4: 成交量榜 10%
 
 
 class SignalCalculator:
@@ -134,6 +148,17 @@ class SignalCalculator:
             stock_code, current_date, history_days
         )
         
+        # 调试日志：完整信号计算过程
+        if stock_code in ['000839', '600624']:
+            logger.info(f"📊 [{stock_code}] 信号强度计算明细:")
+            logger.info(f"   热点榜: {hot_signal['score'] if hot_signal else 0:.4f}")
+            logger.info(f"   跳变榜: {jump_signal['score'] if jump_signal else 0:.4f}")
+            logger.info(f"   稳步上升: {rise_signal['score'] if rise_signal else 0:.4f}")
+            logger.info(f"   涨幅榜: {price_signal['score'] if price_signal else 0:.4f}")
+            logger.info(f"   成交量榜: {volume_signal['score'] if volume_signal else 0:.4f}")
+            logger.info(f"   波动率: {volatility_signal['score'] if volatility_signal else 0:.4f}")
+            logger.info(f"   总分: {signal_score:.4f} → 最终: {min(signal_score, 1.0):.4f}")
+        
         return {
             'signals': signals,
             'signal_count': len(signals),
@@ -187,56 +212,115 @@ class SignalCalculator:
                 'rank': 15,               # 实际排名
                 'hit_count': 12           # 出现次数
             }
-            或 None（不在热点榜TOP1000中）
+            或 None（不在热点榜TOP3000中）
         """
         try:
-            # 从缓存查询排名和次数
+            # 从缓存查询排名、次数和档位统计
             result = HotSpotsCache.get_rank(stock_code, date_str)
+            logger.debug(f"🔍 热点信号查询: {stock_code}, date={date_str}, result={result}")
             
             if not result:
                 return None
             
-            rank, hit_count = result
+            rank, hit_count, tier_counts = result
             
-            # 根据排名确定标签和分数
-            label = None
-            score = 0.0
+            # 选择倍数（v1原版 vs v2新版）
+            if self.thresholds.hot_list_version == "v1":
+                # 原版倍数（与线上保持一致）
+                multipliers = {
+                    100: 2.0,   # 50%
+                    200: 1.5,   # 37.5%
+                    400: 1.2,   # 30%
+                    600: 1.0,   # 25%
+                    800: 0.8,   # 20%
+                    1000: 0.5,  # 12.5%
+                    2000: 0.3,  # 7.5%
+                    3000: 0.2   # 5%
+                }
+            else:  # v2新版
+                # 新版倍数（优化后）
+                multipliers = {
+                    100: 1.5,   # 37.5%
+                    200: 1.3,   # 32.5%
+                    400: 1.2,   # 30%
+                    600: 1.0,   # 25%
+                    800: 0.9,   # 22.5%
+                    1000: 0.8,  # 20%
+                    2000: 0.6,  # 15%
+                    3000: 0.5   # 12.5%
+                }
             
-            if rank <= 100:
-                label = f"TOP100·{hit_count}次"
-                score = SignalWeights.HOT_LIST_WEIGHT * 2.0  # 最高权重
-            elif rank <= 200:
-                label = f"TOP200·{hit_count}次"
-                score = SignalWeights.HOT_LIST_WEIGHT * 1.5
-            elif rank <= 400:
-                label = f"TOP400·{hit_count}次"
-                score = SignalWeights.HOT_LIST_WEIGHT * 1.2
-            elif rank <= 600:
-                label = f"TOP600·{hit_count}次"
-                score = SignalWeights.HOT_LIST_WEIGHT * 1.0
-            elif rank <= 800:
-                label = f"TOP800·{hit_count}次"
-                score = SignalWeights.HOT_LIST_WEIGHT * 0.8
-            elif rank <= 1000:
-                label = f"TOP1000·{hit_count}次"
-                score = SignalWeights.HOT_LIST_WEIGHT * 0.5
+            # 根据各档位统计生成有意义的标签
+            # 只显示"次数增加"的档位，忽略次数相同的中间档位
+            # 过滤掉只出现1次的档位（避免误导判断）
+            tiers = [100, 200, 400, 600, 800, 1000, 2000, 3000]
+            labels = []
+            prev_count = 0
+            main_tier = None  # 主要档位（用于计算分数）
+            
+            for tier in tiers:
+                count = tier_counts.get(tier, 0)
+                # 只添加次数增加且>=2次的档位
+                if count > prev_count and count >= 2:
+                    labels.append(f"TOP{tier}·{count}次")
+                    
+                    # 选择最高档位（最小TOP数字）作为主档位
+                    # 优先级：档位 > 次数（体现稀缺性）
+                    if main_tier is None:
+                        main_tier = tier
+                
+                # 更新prev_count（用于检测"次数增加"）
+                if count > prev_count:
+                    prev_count = count
+            
+            # 生成主标签（用于显示）
+            if not labels:
+                # 如果没有>=2次的档位，说明所有档位都只有1次，不显示热点信号
+                logger.debug(f"股票 {stock_code} 所有档位次数都<=1次，不生成热点信号")
+                return None
+            
+            # 主标签显示所有有意义的档位（用逗号分隔）
+            # 只显示前3个最重要的档位，避免太长
+            display_labels = labels[-3:] if len(labels) > 3 else labels
+            label = ', '.join(display_labels)
+            
+            # 使用主档位计算分数
+            # 如果main_tier为None（理论上不会发生），使用默认值
+            if not main_tier:
+                logger.warning(f"股票 {stock_code} main_tier为None，使用默认值3000")
+                main_tier = 3000
+            
+            # 调试日志
+            if stock_code in ['000839', '600624']:
+                logger.info(f"🎯 [{stock_code}] 主档位选择: {main_tier}")
+                logger.info(f"   tier_counts: {tier_counts}")
+                logger.info(f"   multiplier: {multipliers.get(main_tier, 0.5)}")
+            
+            score = SignalWeights.HOT_LIST_WEIGHT * multipliers.get(main_tier, 0.5)
             
             # 根据出现次数微调分数（次数越多，热度越高）
-            # 14天内出现12次以上视为持续热点，额外加权
+            # 14天内出现次数越多，额外加权越高
             if hit_count >= 12:
-                score *= 1.2
+                score *= 1.2    # 持续热点
             elif hit_count >= 10:
-                score *= 1.1
+                score *= 1.1    # 稳定热点
             elif hit_count >= 8:
-                score *= 1.05
+                score *= 1.05   # 一般热点（阈值提高到8次）
             
             if label:
-                return {
-                    'label': label,
+                result = {
+                    'label': label,  # 主标签（最高档位）
+                    'labels': labels,  # 所有档位标签列表
                     'score': score,
                     'rank': rank,
-                    'hit_count': hit_count
+                    'hit_count': hit_count,
+                    'main_tier': main_tier,  # 主档位
+                    'tier_counts': tier_counts  # 各档位统计
                 }
+                # 调试日志
+                if stock_code == '600239':
+                    logger.info(f"🏷️ [600239云南城投] 信号生成: label={label}, labels={labels}, main_tier={main_tier}")
+                return result
             
             return None
             
@@ -269,16 +353,27 @@ class SignalCalculator:
         # 计算排名提升（排名变小 = 提升）
         improvement = prev_data.rank - current_rank
         
+        # 调试日志
+        if stock_code in ['000839', '600624']:
+            logger.info(f"🔍 [{stock_code}] 跳变计算: prev_rank={prev_data.rank}, current_rank={current_rank}, improvement={improvement}")
+            logger.info(f"   阈值: rank_jump_min={self.thresholds.rank_jump_min}, rank_jump_large={self.thresholds.rank_jump_large}")
+        
         if improvement >= self.thresholds.rank_jump_large:
+            score = SignalWeights.RANK_JUMP_WEIGHT
+            if stock_code in ['000839', '600624']:
+                logger.info(f"   ✅ 大幅跳变: score={score} (20%)")
             return {
                 'label': f'大幅跳变↑{improvement}',
-                'score': SignalWeights.RANK_JUMP_WEIGHT,
+                'score': score,
                 'improvement': improvement
             }
         elif improvement >= self.thresholds.rank_jump_min:
+            score = SignalWeights.RANK_JUMP_WEIGHT * 0.6
+            if stock_code in ['000839', '600624']:
+                logger.info(f"   ⚠️ 普通跳变: score={score} (12%)")
             return {
                 'label': f'跳变↑{improvement}',
-                'score': SignalWeights.RANK_JUMP_WEIGHT * 0.6,
+                'score': score,
                 'improvement': improvement
             }
         

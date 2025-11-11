@@ -49,8 +49,10 @@ class IndustryDetailService:
         # 缓存key（包含信号计算标志和阈值配置）
         # 如果开启信号计算，缓存key需要包含阈值配置，否则修改配置后仍返回旧结果
         if calculate_signals and signal_thresholds:
+            logger.info(f"📊 信号配置: mode={signal_thresholds.hot_list_mode}, version={signal_thresholds.hot_list_version}")
             threshold_hash = (
                 f"{signal_thresholds.hot_list_mode}_"
+                f"{signal_thresholds.hot_list_version}_"
                 f"{signal_thresholds.hot_list_top}_"
                 f"{signal_thresholds.rank_jump_min}_"
                 f"{signal_thresholds.steady_rise_days_min}_"
@@ -157,7 +159,7 @@ class IndustryDetailService:
             stocks_list.append(stock_signal)
         
         # 5. 排序
-        stocks_list = self._sort_stocks(stocks_list, sort_mode)
+        stocks_list = self._sort_stocks(stocks_list, sort_mode, signal_thresholds)
         
         # 6. 计算统计信息
         statistics = self._calculate_statistics(stocks_list, query_date)
@@ -177,14 +179,15 @@ class IndustryDetailService:
         
         return response
     
-    def _sort_stocks(self, stocks: List[StockSignalInfo], sort_mode: str) -> List[StockSignalInfo]:
+    def _sort_stocks(self, stocks: List[StockSignalInfo], sort_mode: str, signal_thresholds: Optional[SignalThresholds] = None) -> List[StockSignalInfo]:
         """
         排序股票列表
         
         Args:
             stocks: 股票列表
             sort_mode: 排序模式
-        
+            signal_thresholds: 信号阈值配置（用于判断版本）
+            
         Returns:
             排序后的股票列表
         """
@@ -201,11 +204,31 @@ class IndustryDetailService:
             # 按换手率降序
             return sorted(stocks, key=lambda x: x.turnover_rate_percent or -999, reverse=True)
         elif sort_mode == "signal":
-            # Phase 2: 按信号强度排序
+            # Phase 2: 按信号排序，根据版本决定优先级
+            # v1原版：优先信号数量（多信号共振）
+            # v2新版：优先信号强度（质量优先）
+            version = signal_thresholds.hot_list_version if signal_thresholds else "v2"
+            logger.info(f"🔄 按信号排序，version={version}, 优先级={'数量>强度' if version=='v1' else '强度>数量'}")
+            if signal_thresholds and signal_thresholds.hot_list_version == "v1":
+                # 原版：数量 > 强度 > 排名
+                return sorted(stocks, key=lambda x: (
+                    -x.signal_count,     # 第1优先级：信号数量
+                    -x.signal_strength,  # 第2优先级：信号强度
+                    x.rank               # 第3优先级：原始排名
+                ))
+            else:
+                # 新版（默认）：强度 > 数量 > 排名
+                return sorted(stocks, key=lambda x: (
+                    -x.signal_strength,  # 第1优先级：信号强度（百分比）
+                    -x.signal_count,     # 第2优先级：信号数量
+                    x.rank               # 第3优先级：原始排名
+                ))
+        elif sort_mode == "signal_count":
+            # 按信号数量排序（优先级：数量 > 强度 > 排名）
             return sorted(stocks, key=lambda x: (
-                -x.signal_count,
-                -x.signal_strength,
-                x.rank
+                -x.signal_count,     # 第1优先级：信号数量
+                -x.signal_strength,  # 第2优先级：信号强度
+                x.rank               # 第3优先级：原始排名
             ))
         else:
             # 默认按排名

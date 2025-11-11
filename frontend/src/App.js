@@ -269,7 +269,7 @@ function AppContent() {
 
                       <div className="text-xs font-semibold text-gray-500 uppercase mb-2 mt-4">分析股票数</div>
                       <div className="grid grid-cols-2 gap-2">
-                        {[100, 200, 400, 600, 800, 1000].map((n) => (
+                        {[100, 200, 400, 600, 800, 1000, 2000, 3000].map((n) => (
                           <button
                             key={n}
                             onClick={() => setTopN(n)}

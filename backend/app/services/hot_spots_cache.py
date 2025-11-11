@@ -36,8 +36,8 @@ class HotSpotsCache:
             date: 日期 (YYYYMMDD)
             
         Returns:
-            (rank, hit_count) 元组，如果不在榜单中返回None
-            例如：(15, 12) 表示排名第15，出现12次
+            (rank, hit_count, tier_counts) 元组，如果不在榜单中返回None
+            例如：(15, 12, {100: 10, 200: 12, ...}) 表示排名第15，总共出现12次，各档位统计
         """
         # 确保数据已加载
         if date not in cls._cache or cls._is_expired(date):
@@ -48,7 +48,7 @@ class HotSpotsCache:
         rank_info = rank_map.get(stock_code)
         
         if rank_info:
-            return (rank_info["rank"], rank_info["hit_count"])
+            return (rank_info["rank"], rank_info["hit_count"], rank_info["tier_counts"])
         
         return None
     
@@ -120,17 +120,56 @@ class HotSpotsCache:
                 logger.warning(f"日期 {date} 无可用数据")
                 return
             
-            # 统计每只股票在14天内的出现次数
-            stock_appearances = defaultdict(lambda: {'count': 0, 'dates': []})
+            # 统计每只股票在14天内的出现次数和各档位次数
+            stock_appearances = defaultdict(lambda: {
+                'count': 0, 
+                'dates': [], 
+                'latest_rank': 9999,
+                'tier_counts': {  # 各档位出现次数
+                    100: 0, 200: 0, 400: 0, 600: 0, 800: 0, 1000: 0, 2000: 0, 3000: 0
+                }
+            })
             
-            for date_obj in target_dates:
-                # 获取该日期的TOP1000股票
-                daily_stocks = memory_cache.get_top_n_stocks(date_obj, 1000)
+            # 调试：记录云南城投的统计过程
+            debug_code = '600239'
+            debug_info = []
+            
+            for idx, date_obj in enumerate(target_dates):
+                # 获取该日期的TOP3000股票（扩展范围）
+                daily_stocks = memory_cache.get_top_n_stocks(date_obj, 3000)
                 
                 for stock_data in daily_stocks:
                     code = stock_data.stock_code
+                    rank = stock_data.rank
+                    
                     stock_appearances[code]['count'] += 1
                     stock_appearances[code]['dates'].append(date_obj)
+                    
+                    # 统计各档位出现次数
+                    if rank <= 100:
+                        stock_appearances[code]['tier_counts'][100] += 1
+                    if rank <= 200:
+                        stock_appearances[code]['tier_counts'][200] += 1
+                    if rank <= 400:
+                        stock_appearances[code]['tier_counts'][400] += 1
+                    if rank <= 600:
+                        stock_appearances[code]['tier_counts'][600] += 1
+                    if rank <= 800:
+                        stock_appearances[code]['tier_counts'][800] += 1
+                    if rank <= 1000:
+                        stock_appearances[code]['tier_counts'][1000] += 1
+                    if rank <= 2000:
+                        stock_appearances[code]['tier_counts'][2000] += 1
+                    if rank <= 3000:
+                        stock_appearances[code]['tier_counts'][3000] += 1
+                    
+                    # 调试：记录云南城投每天的排名
+                    if code == debug_code:
+                        debug_info.append(f"{date_obj.strftime('%Y-%m-%d')}: 排名{rank}")
+                    
+                    # 记录最新一天的排名（第一个日期是最新的）
+                    if idx == 0:
+                        stock_appearances[code]['latest_rank'] = rank
                     
                     # 记录股票基础信息（首次）
                     if 'name' not in stock_appearances[code]:
@@ -139,30 +178,41 @@ class HotSpotsCache:
                             stock_appearances[code]['name'] = stock_info.stock_name
                             stock_appearances[code]['industry'] = stock_info.industry or '未知'
             
-            # 按出现次数排序，生成榜单
+            # 输出调试信息
+            if debug_code in stock_appearances:
+                logger.info(f"🔍 [{debug_code}云南城投] 14天统计详情:")
+                for info in debug_info:
+                    logger.info(f"   {info}")
+                tier_info = stock_appearances[debug_code]['tier_counts']
+                logger.info(f"   📊 档位统计: TOP100={tier_info[100]}次, TOP200={tier_info[200]}次, TOP400={tier_info[400]}次, TOP600={tier_info[600]}次")
+                logger.info(f"   📊 档位统计: TOP800={tier_info[800]}次, TOP1000={tier_info[1000]}次, TOP2000={tier_info[2000]}次, TOP3000={tier_info[3000]}次")
+                logger.info(f"   ✅ 总计: {stock_appearances[debug_code]['count']}次, 最新排名: {stock_appearances[debug_code]['latest_rank']}")
+            
+            # 按最新排名排序（与最新热点对齐），而不是按出现次数
             sorted_stocks = sorted(
                 stock_appearances.items(),
-                key=lambda x: x[1]['count'],
-                reverse=True
-            )[:1000]  # 只取前1000名
+                key=lambda x: x[1]['latest_rank']  # 改为按最新排名排序
+            )[:3000]  # 扩展到前3000名
             
-            # 构建完整榜单数据
+            # 构建完整榜单数据（使用最新排名，不重新编号）
             stocks = []
-            for idx, (code, info) in enumerate(sorted_stocks):
+            for code, info in sorted_stocks:
                 stock_data = {
                     'code': code,
                     'name': info['name'],
                     'industry': info['industry'],
-                    'rank': idx + 1,
-                    'hit_count': info['count']
+                    'rank': info['latest_rank'],  # 使用最新排名
+                    'hit_count': info['count'],
+                    'tier_counts': info['tier_counts']  # 保存各档位统计
                 }
                 stocks.append(stock_data)
             
-            # 构建rank_map（快速查询用，包含排名和次数）
+            # 构建rank_map（快速查询用，包含排名、次数和档位统计）
             rank_map = {
                 stock['code']: {
                     "rank": stock["rank"],
-                    "hit_count": stock["hit_count"]
+                    "hit_count": stock["hit_count"],
+                    "tier_counts": stock["tier_counts"]
                 }
                 for stock in stocks
             }
@@ -229,7 +279,7 @@ class HotSpotsCache:
         """根据排名和出现次数返回标签
         
         Args:
-            rank: 排名（1-1000）
+            rank: 排名（1-3000）
             hit_count: 14天内出现次数（2-14）
             
         Returns:
@@ -248,6 +298,10 @@ class HotSpotsCache:
             return f"TOP800·{hit_count}次"
         elif rank <= 1000:
             return f"TOP1000·{hit_count}次"
+        elif rank <= 2000:
+            return f"TOP2000·{hit_count}次"
+        elif rank <= 3000:
+            return f"TOP3000·{hit_count}次"
         return ""
     
     @classmethod
