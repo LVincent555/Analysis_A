@@ -120,15 +120,20 @@ else
     fi
 fi
 
-# 恢复数据导入状态
-if [ -f "$BACKUP_DIR/data_import_state.json" ]; then
+# 检查数据导入状态文件
+# 注意：状态文件应该跟随代码更新，只在文件不存在时才恢复备份
+if [ ! -f "$PROJECT_DIR/data/data_import_state.json" ] && [ -f "$BACKUP_DIR/data_import_state.json" ]; then
     cp "$BACKUP_DIR/data_import_state.json" "$PROJECT_DIR/data/data_import_state.json"
-    echo "✅ 已恢复: data_import_state.json"
+    echo "✅ 已恢复: data_import_state.json（文件缺失）"
+else
+    echo "ℹ️  data_import_state.json 保持最新版本"
 fi
 
-if [ -f "$BACKUP_DIR/sector_import_state.json" ]; then
+if [ ! -f "$PROJECT_DIR/data/sector_import_state.json" ] && [ -f "$BACKUP_DIR/sector_import_state.json" ]; then
     cp "$BACKUP_DIR/sector_import_state.json" "$PROJECT_DIR/data/sector_import_state.json"
-    echo "✅ 已恢复: sector_import_state.json"
+    echo "✅ 已恢复: sector_import_state.json（文件缺失）"
+else
+    echo "ℹ️  sector_import_state.json 保持最新版本"
 fi
 
 echo ""
