@@ -84,6 +84,8 @@ class DataImporter:
     def _run_import_script(self, script_name: str, description: str):
         """运行导入脚本（支持Windows/Linux）"""
         script_path = self.backend_scripts / script_name
+        # 使用项目根目录作为工作目录，避免路径冲突
+        project_root = self.backend_scripts.parent.parent
         
         try:
             import platform
@@ -92,7 +94,7 @@ class DataImporter:
             
             result = subprocess.run(
                 [sys.executable, str(script_path)],
-                cwd=self.backend_scripts,
+                cwd=str(project_root),
                 capture_output=True,
                 text=True,
                 encoding=encoding,
