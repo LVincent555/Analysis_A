@@ -382,6 +382,7 @@ class ImportStateManager:
     def scan_file_changes(self, data_dir: Path, file_pattern: str = "*_data_sma_feature_color.xlsx") -> Dict:
         """
         扫描文件变化，标记缺失或变更的文件
+        同时检测 rolled_back 状态的残留数据
         
         Args:
             data_dir: 数据目录
@@ -393,10 +394,23 @@ class ImportStateManager:
         file_missing_count = 0
         file_changed_count = 0
         file_ok_count = 0
+        rolled_back_count = 0
         
         for date_str, import_info in self.state["imports"].items():
+            status = import_info.get("status")
+            
+            # 检测 rolled_back 状态（可能有数据库残留）
+            if status == "rolled_back":
+                self.mark_warning(date_str, "rollback_residue", None)
+                rolled_back_count += 1
+                logger.warning(
+                    f"⚠️  回滚状态: {import_info.get('filename')} "
+                    f"（可能有数据库残留）"
+                )
+                continue
+            
             # 只检查成功导入的记录
-            if import_info.get("status") != "success":
+            if status != "success":
                 continue
             
             filename = import_info.get("filename")
@@ -427,7 +441,8 @@ class ImportStateManager:
             "file_missing": file_missing_count,
             "file_changed": file_changed_count,
             "file_ok": file_ok_count,
-            "total_checked": file_missing_count + file_changed_count + file_ok_count
+            "rolled_back": rolled_back_count,
+            "total_checked": file_missing_count + file_changed_count + file_ok_count + rolled_back_count
         }
     
     def reset(self):

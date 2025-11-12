@@ -23,7 +23,9 @@ class DataScanner:
         
         total_warnings = (
             stock_warnings['file_missing'] + stock_warnings['file_changed'] +
-            sector_warnings['file_missing'] + sector_warnings['file_changed']
+            stock_warnings.get('rolled_back', 0) +
+            sector_warnings['file_missing'] + sector_warnings['file_changed'] +
+            sector_warnings.get('rolled_back', 0)
         )
         
         if total_warnings > 0:
@@ -63,6 +65,12 @@ class DataScanner:
     def _report_result(self, result: dict, data_type: str):
         """报告扫描结果"""
         logger.info(f"  ✅ 正常: {result['file_ok']} 个")
+        
+        if result.get('rolled_back', 0) > 0:
+            logger.warning(
+                f"  ⚠️  回滚残留: {result['rolled_back']} 个"
+                f"（已标记为warning）"
+            )
         
         if result['file_missing'] > 0:
             logger.warning(
