@@ -250,39 +250,31 @@ class SignalCalculator:
                     3000: 0.5   # 12.5%
                 }
             
-            # 根据各档位统计生成有意义的标签
-            # 只显示"次数增加"的档位，忽略次数相同的中间档位
-            # 过滤掉只出现1次的档位（避免误导判断）
+            # 📊 新逻辑：只显示最新一天排名所在档位的统计
+            # 确定最新排名所属档位
             tiers = [100, 200, 400, 600, 800, 1000, 2000, 3000]
-            labels = []
-            prev_count = 0
-            main_tier = None  # 主要档位（用于计算分数）
-            
+            current_tier = None
             for tier in tiers:
-                count = tier_counts.get(tier, 0)
-                # 只添加次数增加且>=2次的档位
-                if count > prev_count and count >= 2:
-                    labels.append(f"TOP{tier}·{count}次")
-                    
-                    # 选择最高档位（最小TOP数字）作为主档位
-                    # 优先级：档位 > 次数（体现稀缺性）
-                    if main_tier is None:
-                        main_tier = tier
-                
-                # 更新prev_count（用于检测"次数增加"）
-                if count > prev_count:
-                    prev_count = count
+                if rank <= tier:
+                    current_tier = tier
+                    break
             
-            # 生成主标签（用于显示）
-            if not labels:
-                # 如果没有>=2次的档位，说明所有档位都只有1次，不显示热点信号
-                logger.debug(f"股票 {stock_code} 所有档位次数都<=1次，不生成热点信号")
+            if not current_tier:
+                # 排名超过3000，不显示热点信号
+                logger.debug(f"股票 {stock_code} 排名 {rank} 超过TOP3000，不生成热点信号")
                 return None
             
-            # 主标签显示所有有意义的档位（用逗号分隔）
-            # 只显示前3个最重要的档位，避免太长
-            display_labels = labels[-3:] if len(labels) > 3 else labels
-            label = ', '.join(display_labels)
+            # 获取该档位的出现次数
+            hit_count_in_tier = tier_counts.get(current_tier, 0)
+            
+            # 至少出现2次才显示
+            if hit_count_in_tier < 2:
+                logger.debug(f"股票 {stock_code} 在档位TOP{current_tier}只出现{hit_count_in_tier}次，不生成热点信号")
+                return None
+            
+            # 生成标签：只显示当前档位
+            label = f"TOP{current_tier}·{hit_count_in_tier}次"
+            main_tier = current_tier
             
             # 使用主档位计算分数
             # 如果main_tier为None（理论上不会发生），使用默认值
@@ -300,26 +292,26 @@ class SignalCalculator:
             
             # 根据出现次数微调分数（次数越多，热度越高）
             # 14天内出现次数越多，额外加权越高
-            if hit_count >= 12:
+            if hit_count_in_tier >= 12:
                 score *= 1.2    # 持续热点
-            elif hit_count >= 10:
+            elif hit_count_in_tier >= 10:
                 score *= 1.1    # 稳定热点
-            elif hit_count >= 8:
+            elif hit_count_in_tier >= 8:
                 score *= 1.05   # 一般热点（阈值提高到8次）
             
             if label:
                 result = {
-                    'label': label,  # 主标签（最高档位）
-                    'labels': labels,  # 所有档位标签列表
+                    'label': label,  # 主标签（当前档位）
+                    'labels': [label],  # 标签列表（只包含当前档位）
                     'score': score,
                     'rank': rank,
-                    'hit_count': hit_count,
+                    'hit_count': hit_count_in_tier,  # 当前档位的出现次数
                     'main_tier': main_tier,  # 主档位
                     'tier_counts': tier_counts  # 各档位统计
                 }
                 # 调试日志
                 if stock_code == '600239':
-                    logger.info(f"🏷️ [600239云南城投] 信号生成: label={label}, labels={labels}, main_tier={main_tier}")
+                    logger.info(f"🏷️ [600239云南城投] 信号生成: label={label}, main_tier={main_tier}, hit_count={hit_count_in_tier}")
                 return result
             
             return None

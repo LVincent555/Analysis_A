@@ -34,16 +34,12 @@ export default function StockQueryModule({ stockCode, queryTrigger, selectedDate
       setStockLoading(true);
       setStockError(null);
       try {
-        // 不使用selectedDate，始终查询全部历史数据
+        // 使用selectedDate作为基准日期，计算信号时会以该日期为基准往前统计
         const url = `${API_BASE_URL}/api/stock/${stockCode.trim()}`;
         const response = await axios.get(url, {
           params: {
-            hot_list_mode: signalThresholds.hotListMode || 'frequent',
-            hot_list_version: signalThresholds.hotListVersion || 'v2',
-            hot_list_top: signalThresholds.hotListTop,
-            rank_jump_min: signalThresholds.rankJumpMin,
-            steady_rise_days: signalThresholds.steadyRiseDays,
-            price_surge_min: signalThresholds.priceSurgeMin,
+            date: selectedDate,  // 传递日期参数，确保信号标签基于选定日期计算
+            ...signalThresholds,
             volume_surge_min: signalThresholds.volumeSurgeMin,
             volatility_surge_min: signalThresholds.volatilitySurgeMin
           }
