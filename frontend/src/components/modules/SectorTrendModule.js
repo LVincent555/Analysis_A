@@ -4,7 +4,7 @@
  */
 import React, { useState, useEffect } from 'react';
 import { LineChart, Line, AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { TrendingUp, TrendingDown, Minus, BarChart3, Activity, ChevronDown, ChevronUp } from 'lucide-react';
+import { TrendingUp, TrendingDown, Minus, BarChart3, Activity, ChevronDown, ChevronUp, Search } from 'lucide-react';
 import axios from 'axios';
 import { API_BASE_URL } from '../../constants/config';
 import { COLORS } from '../../constants/colors';
@@ -31,6 +31,11 @@ export default function SectorTrendModule({ selectedDate }) {
   const [chartTopN, setChartTopN] = useState(10); // 图表显示前N个（独立控制）
   const [hiddenSectors, setHiddenSectors] = useState([]); // 隐藏的板块
   const [expandedSector, setExpandedSector] = useState(null); // 展开的板块详情
+  
+  // 分页和搜索控制
+  const [pageSize, setPageSize] = useState(50); // 每页显示数量
+  const [currentPage, setCurrentPage] = useState(1); // 当前页码
+  const [searchQuery, setSearchQuery] = useState(''); // 搜索关键词
   
   // 获取趋势数据
   const fetchTrendData = async () => {
@@ -146,6 +151,22 @@ export default function SectorTrendModule({ selectedDate }) {
     if (sortBy === 'price_change') return (b.price_change || 0) - (a.price_change || 0);
     return 0;
   }) : [];
+  
+  // 搜索过滤（保持原始排名）
+  const filteredSectors = sortedSectors.filter(sector => 
+    sector.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+  
+  // 分页计算
+  const totalPages = Math.ceil(filteredSectors.length / pageSize);
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = startIndex + pageSize;
+  const paginatedSectors = filteredSectors.slice(startIndex, endIndex);
+  
+  // 重置页码当搜索或分页大小改变时
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, pageSize]);
   
   // 渲染排名变化图标
   const renderRankChange = (change, isNew) => {
@@ -437,6 +458,49 @@ export default function SectorTrendModule({ selectedDate }) {
               板块详细列表（共{rankChanges.sectors.length}个板块）
             </h4>
             
+            {/* 搜索框和分页控制 */}
+            <div className="flex items-center space-x-4">
+              {/* 搜索框 */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="搜索板块名称..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  style={{ width: '200px' }}
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+              
+              {/* 每页显示数量 */}
+              <div className="flex items-center space-x-2">
+                <label className="text-sm text-gray-600">每页:</label>
+                <select
+                  value={pageSize}
+                  onChange={(e) => setPageSize(Number(e.target.value))}
+                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value={20}>20条</option>
+                  <option value={30}>30条</option>
+                  <option value={50}>50条</option>
+                  <option value={100}>100条</option>
+                  <option value={rankChanges.sectors.length}>全部</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          
+          {/* 排序按钮和搜索结果提示 */}
+          <div className="flex items-center justify-between mb-4">
             {/* 排序按钮 */}
             <div className="flex space-x-2">
               <button
@@ -470,6 +534,18 @@ export default function SectorTrendModule({ selectedDate }) {
                 按涨跌幅
               </button>
             </div>
+            
+            {/* 搜索结果提示 */}
+            {searchQuery && (
+              <div className="text-sm text-gray-600">
+                找到 <span className="font-bold text-indigo-600">{filteredSectors.length}</span> 个匹配结果
+                {filteredSectors.length > 0 && (
+                  <span className="ml-2 text-gray-500">
+                    （显示第 {startIndex + 1}-{Math.min(endIndex, filteredSectors.length)} 个）
+                  </span>
+                )}
+              </div>
+            )}
           </div>
           
           {/* 表格 */}
@@ -487,7 +563,7 @@ export default function SectorTrendModule({ selectedDate }) {
                 </tr>
               </thead>
               <tbody>
-                {sortedSectors.slice(0, 50).map((sector, index) => (
+                {paginatedSectors.map((sector, index) => (
                   <React.Fragment key={index}>
                     <tr 
                       className="border-b border-gray-100 hover:bg-gray-50 transition-colors"
@@ -636,9 +712,109 @@ export default function SectorTrendModule({ selectedDate }) {
             </table>
           </div>
           
-          {sortedSectors.length > 50 && (
-            <div className="mt-4 text-center text-sm text-gray-500">
-              显示前50个板块，共{sortedSectors.length}个
+          {/* 分页控制 */}
+          {filteredSectors.length > 0 && totalPages > 1 && (
+            <div className="mt-6 flex items-center justify-between">
+              <div className="text-sm text-gray-600">
+                显示第 <span className="font-medium">{startIndex + 1}</span> - 
+                <span className="font-medium">{Math.min(endIndex, filteredSectors.length)}</span> 条，
+                共 <span className="font-medium">{filteredSectors.length}</span> 条
+              </div>
+              
+              <div className="flex items-center space-x-2">
+                {/* 上一页 */}
+                <button
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  上一页
+                </button>
+                
+                {/* 页码 */}
+                <div className="flex items-center space-x-1">
+                  {/* 第一页 */}
+                  {currentPage > 3 && (
+                    <>
+                      <button
+                        onClick={() => setCurrentPage(1)}
+                        className="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                      >
+                        1
+                      </button>
+                      {currentPage > 4 && <span className="px-2 text-gray-500">...</span>}
+                    </>
+                  )}
+                  
+                  {/* 当前页附近的页码 */}
+                  {Array.from({ length: totalPages }, (_, i) => i + 1)
+                    .filter(page => Math.abs(page - currentPage) <= 2)
+                    .map(page => (
+                      <button
+                        key={page}
+                        onClick={() => setCurrentPage(page)}
+                        className={`px-3 py-2 border rounded-lg text-sm font-medium transition-colors ${
+                          page === currentPage
+                            ? 'bg-indigo-600 text-white border-indigo-600'
+                            : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    ))
+                  }
+                  
+                  {/* 最后一页 */}
+                  {currentPage < totalPages - 2 && (
+                    <>
+                      {currentPage < totalPages - 3 && <span className="px-2 text-gray-500">...</span>}
+                      <button
+                        onClick={() => setCurrentPage(totalPages)}
+                        className="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                      >
+                        {totalPages}
+                      </button>
+                    </>
+                  )}
+                </div>
+                
+                {/* 下一页 */}
+                <button
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage === totalPages}
+                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  下一页
+                </button>
+                
+                {/* 跳转到指定页 */}
+                <div className="flex items-center space-x-2 ml-4">
+                  <span className="text-sm text-gray-600">跳转到</span>
+                  <input
+                    type="number"
+                    min="1"
+                    max={totalPages}
+                    value={currentPage}
+                    onChange={(e) => {
+                      const page = parseInt(e.target.value);
+                      if (page >= 1 && page <= totalPages) {
+                        setCurrentPage(page);
+                      }
+                    }}
+                    className="w-16 px-2 py-1 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                  <span className="text-sm text-gray-600">页</span>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {/* 无搜索结果提示 */}
+          {searchQuery && filteredSectors.length === 0 && (
+            <div className="mt-6 text-center py-12">
+              <Search className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+              <p className="text-gray-500 text-lg">未找到匹配的板块</p>
+              <p className="text-gray-400 text-sm mt-2">请尝试其他关键词</p>
             </div>
           )}
         </div>
