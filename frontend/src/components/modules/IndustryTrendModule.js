@@ -416,6 +416,7 @@ export default function IndustryTrendModule({ topNLimit, selectedDate, onNavigat
       {showDialog && selectedIndustry && (
         <IndustryDetailDialog
           industryName={selectedIndustry}
+          selectedDate={selectedDate}
           onClose={() => {
             setShowDialog(false);
             setSelectedIndustry(null);

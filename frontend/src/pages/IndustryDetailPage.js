@@ -17,7 +17,7 @@ import {
 } from 'recharts';
 import { useSignalConfig } from '../contexts/SignalConfigContext';
 
-export default function IndustryDetailPage({ industryName, onBack }) {
+export default function IndustryDetailPage({ industryName, selectedDate, onBack }) {
   // 全局信号配置
   const { signalThresholds } = useSignalConfig();
   
@@ -71,9 +71,13 @@ export default function IndustryDetailPage({ industryName, onBack }) {
     
     setCompareLoading(true);
     try {
-      const res = await axios.post(`${API_BASE_URL}/api/industry/compare`, {
+      const comparePayload = {
         industries: compareIndustries
-      });
+      };
+      if (selectedDate) {
+        comparePayload.date = selectedDate;
+      }
+      const res = await axios.post(`${API_BASE_URL}/api/industry/compare`, comparePayload);
       setCompareData(res.data);
     } catch (err) {
       console.error('获取对比数据失败:', err);
@@ -109,8 +113,20 @@ export default function IndustryDetailPage({ industryName, onBack }) {
           volatility_surge_min: signalThresholds.volatilitySurgeMin
         };
         
+        // 添加日期参数
+        if (selectedDate) {
+          apiParams.date = selectedDate;
+        }
+        
+        const detailParams = {};
+        if (selectedDate) {
+          detailParams.date = selectedDate;
+        }
+        
         const [detailRes, stocksRes] = await Promise.all([
-          axios.get(`${API_BASE_URL}/api/industry/${encodeURIComponent(industryName)}/detail`),
+          axios.get(`${API_BASE_URL}/api/industry/${encodeURIComponent(industryName)}/detail`, {
+            params: detailParams
+          }),
           axios.get(`${API_BASE_URL}/api/industry/${encodeURIComponent(industryName)}/stocks`, {
             params: apiParams
           })
@@ -134,16 +150,20 @@ export default function IndustryDetailPage({ industryName, onBack }) {
     };
     
     fetchData();
-  }, [industryName, sortMode, signalThresholds]);
+  }, [industryName, sortMode, signalThresholds, selectedDate]);
   
   // 加载趋势数据
   useEffect(() => {
     if (activeTab === 'trend') {
       const fetchTrend = async () => {
         try {
+          const trendParams = { period: 7 };
+          if (selectedDate) {
+            trendParams.date = selectedDate;
+          }
           const res = await axios.get(
             `${API_BASE_URL}/api/industry/${encodeURIComponent(industryName)}/trend`,
-            { params: { period: 7 } }
+            { params: trendParams }
           );
           
           // 转换数据格式：从 metrics_history 转为图表需要的数组格式

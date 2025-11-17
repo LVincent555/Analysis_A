@@ -115,7 +115,7 @@ function AppContent() {
 
   // 如果显示详情页面，则渲染详情页
   if (showDetailPage && selectedIndustry) {
-    return <IndustryDetailPage industryName={selectedIndustry} onBack={backToMain} />;
+    return <IndustryDetailPage industryName={selectedIndustry} selectedDate={selectedDate} onBack={backToMain} />;
   }
   
   return (

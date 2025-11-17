@@ -406,6 +406,7 @@ export default function IndustryWeightedModule({ selectedDate, onNavigate }) {
       {showDialog && selectedIndustry && (
         <IndustryDetailDialog
           industryName={selectedIndustry}
+          selectedDate={selectedDate}
           onClose={() => {
             setShowDialog(false);
             setSelectedIndustry(null);

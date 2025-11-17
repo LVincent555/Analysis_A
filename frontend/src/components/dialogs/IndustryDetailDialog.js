@@ -9,7 +9,8 @@ import { API_BASE_URL } from '../../constants';
 import { useSignalConfig } from '../../contexts/SignalConfigContext';
 
 export default function IndustryDetailDialog({ 
-  industryName, 
+  industryName,
+  selectedDate,
   onClose, 
   onViewDetails 
 }) {
@@ -27,22 +28,37 @@ export default function IndustryDetailDialog({
       setError(null);
       
       try {
+        // 构建 API 参数
+        const apiParams = {
+          sort_mode: 'signal',
+          calculate_signals: true,
+          hot_list_mode: signalThresholds.hotListMode || 'frequent',
+          hot_list_version: signalThresholds.hotListVersion || 'v2',
+          hot_list_top: signalThresholds.hotListTop,
+          rank_jump_min: signalThresholds.rankJumpMin,
+          steady_rise_days: signalThresholds.steadyRiseDays,
+          price_surge_min: signalThresholds.priceSurgeMin,
+          volume_surge_min: signalThresholds.volumeSurgeMin,
+          volatility_surge_min: signalThresholds.volatilitySurgeMin
+        };
+        
+        // 添加日期参数
+        if (selectedDate) {
+          apiParams.date = selectedDate;
+        }
+        
+        const detailParams = {};
+        if (selectedDate) {
+          detailParams.date = selectedDate;
+        }
+        
         // 并行获取板块详情和成分股列表
         const [detailResponse, stocksResponse] = await Promise.all([
-          axios.get(`${API_BASE_URL}/api/industry/${encodeURIComponent(industryName)}/detail`),
+          axios.get(`${API_BASE_URL}/api/industry/${encodeURIComponent(industryName)}/detail`, {
+            params: detailParams
+          }),
           axios.get(`${API_BASE_URL}/api/industry/${encodeURIComponent(industryName)}/stocks`, {
-            params: {
-              sort_mode: 'signal',
-              calculate_signals: true,
-              hot_list_mode: signalThresholds.hotListMode || 'frequent',
-              hot_list_version: signalThresholds.hotListVersion || 'v2',
-              hot_list_top: signalThresholds.hotListTop,
-              rank_jump_min: signalThresholds.rankJumpMin,
-              steady_rise_days: signalThresholds.steadyRiseDays,
-              price_surge_min: signalThresholds.priceSurgeMin,
-              volume_surge_min: signalThresholds.volumeSurgeMin,
-              volatility_surge_min: signalThresholds.volatilitySurgeMin
-            }
+            params: apiParams
           })
         ]);
         
@@ -59,7 +75,7 @@ export default function IndustryDetailDialog({
     if (industryName) {
       fetchData();
     }
-  }, [industryName, signalThresholds.hotListMode, signalThresholds.hotListVersion, signalThresholds.hotListTop, signalThresholds.rankJumpMin, signalThresholds.steadyRiseDays, signalThresholds.priceSurgeMin, signalThresholds.volumeSurgeMin, signalThresholds.volatilitySurgeMin]);
+  }, [industryName, selectedDate, signalThresholds.hotListMode, signalThresholds.hotListVersion, signalThresholds.hotListTop, signalThresholds.rankJumpMin, signalThresholds.steadyRiseDays, signalThresholds.priceSurgeMin, signalThresholds.volumeSurgeMin, signalThresholds.volatilitySurgeMin]);
 
   // 点击背景关闭
   const handleBackdropClick = (e) => {
