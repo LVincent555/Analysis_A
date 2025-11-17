@@ -1,0 +1,392 @@
+{
+  "version": "1.0",
+  "created_at": "2025-11-06T21:17:35.860844",
+  "last_updated": "2025-11-17T19:51:45.339495",
+  "database": "unknown",
+  "imports": {
+    "20251103": {
+      "filename": "20251103_data_sma_feature_color.xlsx",
+      "status": "success",
+      "file_hash": "16c89f6408ec1d6382636557ecd9fad9",
+      "start_time": "2025-11-06T21:17:35.872452",
+      "imported_count": 5428,
+      "skipped_count": 0,
+      "attempt_count": 1,
+      "end_time": "2025-11-06T21:17:58.464939",
+      "duration_seconds": 22.59,
+      "error": null,
+      "warning_info": null,
+      "deletion_info": null,
+      "dedup_info": null,
+      "data_fixes": {}
+    },
+    "20251104": {
+      "filename": "20251104_data_sma_feature_color.xlsx",
+      "status": "success",
+      "file_hash": "2acb0f393a0a0ba2ea82c86f0b8f597f",
+      "start_time": "2025-11-06T21:17:58.484588",
+      "imported_count": 5430,
+      "skipped_count": 0,
+      "attempt_count": 1,
+      "end_time": "2025-11-06T21:18:20.228967",
+      "duration_seconds": 21.74,
+      "error": null,
+      "warning_info": null,
+      "deletion_info": null,
+      "dedup_info": null,
+      "data_fixes": {}
+    },
+    "20251105": {
+      "filename": "20251105_data_sma_feature_color.xlsx",
+      "status": "success",
+      "file_hash": "dead01c24e51e8ce39b223aaee8e7356",
+      "start_time": "2025-11-06T21:18:20.248539",
+      "imported_count": 5429,
+      "skipped_count": 0,
+      "attempt_count": 1,
+      "end_time": "2025-11-06T21:18:42.472997",
+      "duration_seconds": 22.22,
+      "error": null,
+      "warning_info": null,
+      "deletion_info": null,
+      "dedup_info": null,
+      "data_fixes": {}
+    },
+    "20251106": {
+      "filename": "20251106_data_sma_feature_color.xlsx",
+      "status": "success",
+      "file_hash": "f01d8bf485d8584b0051dcdbcfc8abf7",
+      "start_time": "2025-11-06T21:18:42.498330",
+      "imported_count": 5429,
+      "skipped_count": 0,
+      "attempt_count": 1,
+      "end_time": "2025-11-06T21:19:03.341904",
+      "duration_seconds": 20.84,
+      "error": null,
+      "warning_info": null,
+      "deletion_info": null,
+      "dedup_info": null,
+      "data_fixes": {}
+    },
+    "20251107": {
+      "filename": "20251107_data_sma_feature_color.xlsx",
+      "status": "success",
+      "file_hash": "30c5c76acb3b1f49a45c3c94631c88a0",
+      "start_time": "2025-11-08T00:17:34.694030",
+      "imported_count": 5429,
+      "skipped_count": 0,
+      "attempt_count": 1,
+      "dedup_info": {
+        "detected_duplicates": [
+          "300614",
+          "2909",
+          "300695",
+          "300848",
+          "300686"
+        ],
+        "removed_count": 5,
+        "removed_details": [
+          {
+            "code": "300614",
+            "name": "百川畅银",
+            "rank": 1391,
+            "total_score": 2.5,
+            "global_mean": -4.106588148693412,
+            "distance_from_mean": 6.606588148693412,
+            "z_score": 0.7278764094632917,
+            "reason": "重复记录中偏离全局均值较远（保留最接近均值的）"
+          },
+          {
+            "code": "2909",
+            "name": "集泰股份",
+            "rank": 1562,
+            "total_score": -12.5,
+            "global_mean": -4.106588148693412,
+            "distance_from_mean": 8.393411851306588,
+            "z_score": 0.9247385101013043,
+            "reason": "重复记录中偏离全局均值较远（保留最接近均值的）"
+          },
+          {
+            "code": "300695",
+            "name": "兆丰股份",
+            "rank": 3140,
+            "total_score": -8.0,
+            "global_mean": -4.106588148693412,
+            "distance_from_mean": 3.8934118513065883,
+            "z_score": 0.42895403423192546,
+            "reason": "重复记录中偏离全局均值较远（保留最接近均值的）"
+          },
+          {
+            "code": "300848",
+            "name": "美瑞新材",
+            "rank": 3849,
+            "total_score": -20.5,
+            "global_mean": -4.106588148693412,
+            "distance_from_mean": 16.39341185130659,
+            "z_score": 1.8061331338690887,
+            "reason": "重复记录中偏离全局均值较远（保留最接近均值的）"
+          },
+          {
+            "code": "300686",
+            "name": "智动力",
+            "rank": 4596,
+            "total_score": -15.5,
+            "global_mean": -4.106588148693412,
+            "distance_from_mean": 11.393411851306588,
+            "z_score": 1.2552614940142235,
+            "reason": "重复记录中偏离全局均值较远（保留最接近均值的）"
+          }
+        ],
+        "dedup_time": "2025-11-08T00:17:40.217713"
+      },
+      "end_time": "2025-11-08T00:17:58.588786",
+      "duration_seconds": 23.89,
+      "error": null,
+      "warning_info": null,
+      "deletion_info": null,
+      "data_fixes": {}
+    },
+    "~$20251107": {
+      "filename": "~$20251107_data_sma_feature_color.xlsx",
+      "status": "rolled_back",
+      "file_hash": "",
+      "start_time": "2025-11-09T19:14:27.222170",
+      "imported_count": 0,
+      "skipped_count": 0,
+      "attempt_count": 1,
+      "dedup_info": null,
+      "rollback_reason": "文件导入失败: time data '~$20251107' does not match format '%Y%m%d'",
+      "rollback_time": "2025-11-09T19:14:27.225526",
+      "warning_info": null,
+      "deletion_info": null,
+      "data_fixes": {}
+    },
+    "20251110": {
+      "filename": "20251110_data_sma_feature_color.xlsx",
+      "status": "success",
+      "file_hash": "bb8d8196a93299daf05daea61d3b051f",
+      "start_time": "2025-11-10T19:18:30.670506",
+      "imported_count": 5430,
+      "skipped_count": 0,
+      "attempt_count": 1,
+      "dedup_info": {
+        "detected_duplicates": [
+          "300614",
+          "300695",
+          "300686",
+          "300848",
+          "2909"
+        ],
+        "removed_count": 5,
+        "removed_details": [
+          {
+            "code": "300614",
+            "name": "百川畅银",
+            "rank": 998,
+            "total_score": 6.5,
+            "global_mean": -1.3872861085556578,
+            "distance_from_mean": 7.887286108555658,
+            "z_score": 0.8718846611339792,
+            "reason": "重复记录中偏离全局均值较远（保留最接近均值的）"
+          },
+          {
+            "code": "300695",
+            "name": "兆丰股份",
+            "rank": 3217,
+            "total_score": -1.9,
+            "global_mean": -1.3872861085556578,
+            "distance_from_mean": 0.5127138914443421,
+            "z_score": 0.05667695723827304,
+            "reason": "重复记录中偏离全局均值较远（保留最接近均值的）"
+          },
+          {
+            "code": "300686",
+            "name": "智动力",
+            "rank": 3679,
+            "total_score": -4.0,
+            "global_mean": -1.3872861085556578,
+            "distance_from_mean": 2.612713891444342,
+            "z_score": 0.2888173618313361,
+            "reason": "重复记录中偏离全局均值较远（保留最接近均值的）"
+          },
+          {
+            "code": "300848",
+            "name": "美瑞新材",
+            "rank": 3770,
+            "total_score": -4.7,
+            "global_mean": -1.3872861085556578,
+            "distance_from_mean": 3.3127138914443424,
+            "z_score": 0.3661974966956905,
+            "reason": "重复记录中偏离全局均值较远（保留最接近均值的）"
+          },
+          {
+            "code": "2909",
+            "name": "集泰股份",
+            "rank": 5093,
+            "total_score": -17.0,
+            "global_mean": -1.3872861085556578,
+            "distance_from_mean": 15.612713891444342,
+            "z_score": 1.7258770093122027,
+            "reason": "重复记录中偏离全局均值较远（保留最接近均值的）"
+          }
+        ],
+        "dedup_time": "2025-11-10T19:18:35.320434"
+      },
+      "end_time": "2025-11-10T19:18:52.598018",
+      "duration_seconds": 21.92,
+      "error": null,
+      "warning_info": null,
+      "deletion_info": null,
+      "data_fixes": {}
+    },
+    "20251111": {
+      "filename": "20251111_data_sma_feature_color.xlsx",
+      "status": "success",
+      "file_hash": "9825793261586cbb3fe47dcf2cf16186",
+      "start_time": "2025-11-12T09:46:10.510022",
+      "imported_count": 5428,
+      "skipped_count": 0,
+      "attempt_count": 3,
+      "dedup_info": {
+        "detected_duplicates": [
+          "300695",
+          "300848",
+          "300614",
+          "300686",
+          "2909"
+        ],
+        "removed_count": 5,
+        "removed_details": [
+          {
+            "code": "300695",
+            "name": "兆丰股份",
+            "rank": 3046,
+            "total_score": -2.0,
+            "global_mean": -2.3793116142094606,
+            "distance_from_mean": 0.3793116142094606,
+            "z_score": 0.04296366436719921,
+            "reason": "重复记录中偏离全局均值较远（保留最接近均值的）"
+          },
+          {
+            "code": "300848",
+            "name": "美瑞新材",
+            "rank": 3657,
+            "total_score": -4.5,
+            "global_mean": -2.3793116142094606,
+            "distance_from_mean": 2.1206883857905394,
+            "z_score": 0.2402049940506402,
+            "reason": "重复记录中偏离全局均值较远（保留最接近均值的）"
+          },
+          {
+            "code": "300614",
+            "name": "百川畅银",
+            "rank": 4668,
+            "total_score": -12.5,
+            "global_mean": -2.3793116142094606,
+            "distance_from_mean": 10.12068838579054,
+            "z_score": 1.1463447009877263,
+            "reason": "重复记录中偏离全局均值较远（保留最接近均值的）"
+          },
+          {
+            "code": "300686",
+            "name": "智动力",
+            "rank": 4977,
+            "total_score": -16.2,
+            "global_mean": -2.3793116142094606,
+            "distance_from_mean": 13.82068838579054,
+            "z_score": 1.5654343154461285,
+            "reason": "重复记录中偏离全局均值较远（保留最接近均值的）"
+          },
+          {
+            "code": "2909",
+            "name": "集泰股份",
+            "rank": 5173,
+            "total_score": -20.0,
+            "global_mean": -2.3793116142094606,
+            "distance_from_mean": 17.62068838579054,
+            "z_score": 1.9958506762412447,
+            "reason": "重复记录中偏离全局均值较远（保留最接近均值的）"
+          }
+        ],
+        "dedup_time": "2025-11-12T09:46:14.555994"
+      },
+      "end_time": "2025-11-12T09:46:30.447374",
+      "duration_seconds": 19.93,
+      "error": null,
+      "warning_info": null,
+      "deletion_info": null,
+      "data_fixes": {}
+    },
+    "20251112": {
+      "filename": "20251112_data_sma_feature_color.xlsx",
+      "status": "success",
+      "file_hash": "c42ac7acbea40789e5469c3769bd4fc1",
+      "start_time": "2025-11-12T19:16:19.434717",
+      "imported_count": 5427,
+      "skipped_count": 0,
+      "attempt_count": 1,
+      "dedup_info": null,
+      "end_time": "2025-11-12T19:16:45.946592",
+      "duration_seconds": 26.51,
+      "error": null,
+      "warning_info": null,
+      "deletion_info": null,
+      "data_fixes": {}
+    },
+    "20251113": {
+      "filename": "20251113_data_sma_feature_color.xlsx",
+      "status": "success",
+      "file_hash": "c049e88d5ca76364855a27bd9cf5e947",
+      "start_time": "2025-11-13T18:51:09.883542",
+      "imported_count": 5428,
+      "skipped_count": 0,
+      "attempt_count": 1,
+      "dedup_info": null,
+      "end_time": "2025-11-13T18:51:33.761488",
+      "duration_seconds": 23.87,
+      "error": null,
+      "warning_info": null,
+      "deletion_info": null,
+      "data_fixes": {}
+    },
+    "20251114": {
+      "filename": "20251114_data_sma_feature_color.xlsx",
+      "status": "success",
+      "file_hash": "ebd9d9029ec4f1fb6314bb1e8a099d5b",
+      "start_time": "2025-11-14T20:18:15.789745",
+      "imported_count": 5429,
+      "skipped_count": 0,
+      "attempt_count": 2,
+      "dedup_info": null,
+      "end_time": "2025-11-14T20:18:40.332342",
+      "duration_seconds": 24.54,
+      "error": null,
+      "warning_info": null,
+      "deletion_info": null,
+      "data_fixes": {}
+    },
+    "20251117": {
+      "filename": "20251117_data_sma_feature_color.xlsx",
+      "status": "in_progress",
+      "file_hash": "9ebc344dcd4d274faf501248e337056a",
+      "start_time": "2025-11-17T19:51:24.006279",
+      "imported_count": 0,
+      "skipped_count": 0,
+      "attempt_count": 3,
+      "dedup_info": null,
+      "data_fixes": {
+        "turnover_rate_fix": {
+          "applied": true,
+          "fix_type": "multiply_by_multiplier",
+          "multiplier": 10000,
+          "affected_rows": 5427,
+          "detection_info": {
+            "avg_turnover": 0.0003649753074595652,
+            "median_turnover": 0.00022,
+            "max_turnover": 0.005511,
+            "min_turnover": 5.242752005647293e-06,
+            "total_rows": 5427,
+            "abnormal_count": 5427,
+            "abnormal_ratio": 1.0,
+            "threshold": 0.01,
+            "is_anomaly": 

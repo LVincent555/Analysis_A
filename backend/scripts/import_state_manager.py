@@ -54,6 +54,21 @@ class ImportStateManager:
                     # dedup_info字段
                     if "dedup_info" not in import_info:
                         import_info["dedup_info"] = None
+                    
+                    # data_fixes字段（新增）
+                    if "data_fixes" not in import_info:
+                        import_info["data_fixes"] = {}
+                
+                # 确保fix_config存在（向前兼容）
+                if "fix_config" not in state:
+                    state["fix_config"] = {
+                        "turnover_rate_fix": {
+                            "enabled": True,
+                            "auto_fix": True,
+                            "threshold": 0.01,
+                            "multiplier": 10000
+                        }
+                    }
                 
                 return state
                 
@@ -66,15 +81,23 @@ class ImportStateManager:
     def _create_empty_state(self) -> Dict:
         """创建空状态"""
         return {
-            "version": "1.0",
+            "version": "1.1",  # 升级版本号以支持修补功能
             "created_at": datetime.now().isoformat(),
             "last_updated": datetime.now().isoformat(),
             "database": "unknown",
-            "imports": {}
+            "imports": {},
+            "fix_config": {
+                "turnover_rate_fix": {
+                    "enabled": True,
+                    "auto_fix": True,
+                    "threshold": 0.01,
+                    "multiplier": 10000
+                }
+            }
         }
     
     def _save_state(self):
-        """保存状态到文件"""
+        """保存状态到文件（内部方法）"""
         try:
             self.state["last_updated"] = datetime.now().isoformat()
             with open(self.state_file, 'w', encoding='utf-8') as f:
@@ -82,6 +105,10 @@ class ImportStateManager:
             logger.debug(f"状态文件已保存: {self.state_file}")
         except Exception as e:
             logger.error(f"状态文件保存失败: {str(e)}")
+    
+    def save(self):
+        """保存状态到文件（公开方法）"""
+        self._save_state()
     
     def calculate_file_hash(self, file_path: Path) -> str:
         """
@@ -168,7 +195,8 @@ class ImportStateManager:
             "imported_count": 0,
             "skipped_count": 0,
             "attempt_count": self.state["imports"].get(date_str, {}).get("attempt_count", 0) + 1,
-            "dedup_info": None  # 去重信息
+            "dedup_info": None,  # 去重信息
+            "data_fixes": {}     # 修补信息（新增）
         }
         self._save_state()
         logger.info(f"开始导入: {date_str} - {filename}")

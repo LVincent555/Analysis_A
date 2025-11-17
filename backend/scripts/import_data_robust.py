@@ -202,6 +202,31 @@ def import_excel_file(file_path: Path, state_manager) -> tuple:
         elif dedup_stats.get('has_duplicates') and dedup_stats.get('removed_count', 0) == 0:
             logger.warning(f"⚠️  检测到重复但未去重（条件不满足），将在后续检查中处理")
         
+        # === 数据修补：换手率 ===
+        from data_fixer import TurnoverRateFixer
+        
+        turnover_fixer = TurnoverRateFixer(date_str, data_type='stock')
+        fix_config = state_manager.state.get('fix_config', {}).get('turnover_rate_fix', {})
+        
+        if fix_config.get('enabled', True) and fix_config.get('auto_fix', True):
+            logger.info("🔧 开始换手率数据检测...")
+            df, fix_info = turnover_fixer.fix_dataframe(df)
+            
+            if fix_info.get('applied'):
+                logger.info(
+                    f"✅ 换手率已修补！"
+                    f"影响行数={fix_info['affected_rows']}, "
+                    f"平均值: {fix_info['avg_before']:.6f} → {fix_info['avg_after']:.4f}"
+                )
+                # 记录修补信息（暂时保存在内存中，成功导入后再写入状态文件）
+                turnover_fix_info = fix_info
+            else:
+                logger.info("ℹ️  换手率数据正常，无需修补")
+                turnover_fix_info = None
+        else:
+            logger.info("ℹ️  换手率修补已禁用")
+            turnover_fix_info = None
+        
         # === 检查是否还有重复（严格检查，触发ERROR）===
         # ⚠️ 重要：确保临时列不存在，避免"灯下黑"
         if '代码_normalized' in df.columns:
@@ -301,6 +326,10 @@ def import_excel_file(file_path: Path, state_manager) -> tuple:
         
         # 更新状态文件
         state_manager.mark_success(date_str, imported_count, skipped_count, duration)
+        
+        # 记录修补信息到状态文件
+        if turnover_fix_info and turnover_fix_info.get('applied'):
+            turnover_fixer.record_fix_to_state(turnover_fix_info)
         
         return imported_count, skipped_count, True
         
