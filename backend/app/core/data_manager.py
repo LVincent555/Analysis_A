@@ -33,12 +33,12 @@ class DataManager:
         """初始化"""
         self.state_manager = get_state_manager()
     
-    def auto_import_data(self) -> Tuple[int, int, int]:
+    def auto_import_data(self) -> Tuple[int, int, int, int, int]:
         """
         自动导入新数据（股票+板块）
         
         Returns:
-            (成功文件数, 失败文件数, 总导入记录数)
+            (成功文件数, 失败文件数, 总导入记录数, 股票导入数, 板块导入数)
         """
         logger.info("=" * 60)
         logger.info("🔄 检查并导入新数据...")
@@ -52,18 +52,19 @@ class DataManager:
         
         success_count = 0
         failed_count = 0
-        total_imported = 0
+        stock_imported = 0
+        sector_imported = 0
         
         for file_path in stock_files:
             imported, skipped, success = import_excel_file(file_path, self.state_manager)
-            total_imported += imported
+            stock_imported += imported
             
             if success:
                 success_count += 1
             else:
                 failed_count += 1
         
-        # 2. 导入板块数据
+        # 2. 导入板块数据（允许失败）
         logger.info("📊 检查板块数据...")
         sector_state_manager = ImportStateManager(state_file="sector_import_state.json")
         sector_files = get_sector_data_files(DATA_DIR)
@@ -71,22 +72,32 @@ class DataManager:
         if not sector_files:
             logger.info("📂 data目录中没有板块数据文件")
         
+        sector_failed = 0
         for file_path in sector_files:
-            imported, skipped, success = import_sector_excel_file(file_path, sector_state_manager)
-            total_imported += imported
-            
-            if success:
-                success_count += 1
-            else:
-                failed_count += 1
+            try:
+                imported, skipped, success = import_sector_excel_file(file_path, sector_state_manager)
+                sector_imported += imported
+                
+                if success:
+                    success_count += 1
+                else:
+                    sector_failed += 1
+            except Exception as e:
+                logger.warning(f"⚠️  板块数据导入失败（非致命）: {e}")
+                sector_failed += 1
+        
+        # 板块数据失败不计入总失败数（允许只有股票数据）
+        if sector_failed > 0:
+            logger.warning(f"⚠️  板块数据导入失败 {sector_failed} 个文件（系统仍可正常运行）")
         
         # 3. 汇总结果
+        total_imported = stock_imported + sector_imported
         if total_imported > 0:
-            logger.info(f"✅ 新导入 {total_imported} 条记录")
+            logger.info(f"✅ 新导入 {total_imported} 条记录（股票: {stock_imported}, 板块: {sector_imported}）")
         else:
             logger.info("✅ 所有数据已是最新")
         
-        return success_count, failed_count, total_imported
+        return success_count, failed_count, total_imported, stock_imported, sector_imported
     
     def verify_data_consistency(self) -> Dict:
         """
@@ -208,11 +219,19 @@ class DataManager:
         logger.info("\n")
         
         # 1. 自动导入新数据
-        success, failed, imported = self.auto_import_data()
+        success, failed, total_imported, stock_imported, sector_imported = self.auto_import_data()
         
+        # 只要有股票数据就允许启动（板块数据是可选的）
         if failed > 0:
-            logger.error(f"❌ 数据导入失败: {failed} 个文件")
-            return False
+            logger.warning(f"⚠️  数据导入部分失败: {failed} 个文件")
+            logger.info(f"📊 已导入数据: 股票 {stock_imported} 条, 板块 {sector_imported} 条")
+            
+            # 检查是否有股票数据
+            if stock_imported == 0 and total_imported == 0:
+                logger.error("❌ 没有股票数据导入成功，无法启动")
+                return False
+            else:
+                logger.info("✅ 股票数据导入成功，允许启动（板块数据可选）")
         
         # 2. 数据一致性检验
         result = self.verify_data_consistency()
