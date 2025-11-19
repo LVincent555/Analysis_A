@@ -15,6 +15,7 @@ import os
 from pathlib import Path
 from datetime import datetime
 import pandas as pd
+import numpy as np
 import logging
 import time
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -289,7 +290,11 @@ def import_excel_file(file_path: Path, state_manager) -> tuple:
                 for excel_col, db_col in COLUMN_MAPPING.items():
                     if excel_col in df.columns:
                         value = row[excel_col]
+                        # 处理空值和无穷大值
                         if pd.isna(value):
+                            value = None
+                        elif isinstance(value, (int, float)) and np.isinf(value):
+                            logger.warning(f"⚠️  股票 {stock_code} 的 {excel_col} 字段包含无穷大值，设为None")
                             value = None
                         setattr(daily_data, db_col, value)
                 
