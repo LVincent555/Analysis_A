@@ -180,6 +180,22 @@ def import_excel_file(file_path: Path, state_manager) -> tuple:
     try:
         # 转换日期格式
         target_date = datetime.strptime(date_str, '%Y%m%d').date()
+        
+        # === 清理旧数据（如果状态是deleted/rolled_back，确保数据库干净） ===
+        import_info = state_manager.state["imports"].get(date_str, {})
+        if import_info.get("status") in ["deleted", "rolled_back"]:
+            from sqlalchemy import func
+            old_count = db_session.query(func.count(DailyStockData.id)).filter(
+                func.to_char(DailyStockData.date, 'YYYYMMDD') == date_str
+            ).scalar()
+            
+            if old_count > 0:
+                logger.warning(f"⚠️  检测到 {old_count} 条旧数据残留，正在清理...")
+                db_session.query(DailyStockData).filter(
+                    func.to_char(DailyStockData.date, 'YYYYMMDD') == date_str
+                ).delete(synchronize_session=False)
+                db_session.commit()
+                logger.info(f"✅ 已清理 {old_count} 条旧数据")
         logger.info(f"📂 正在导入: {filename} (日期: {target_date})")
         
         # 读取Excel文件
@@ -306,13 +322,14 @@ def import_excel_file(file_path: Path, state_manager) -> tuple:
                     logger.info(f"  进度: {imported_count}/{total_rows} ({imported_count/total_rows*100:.1f}%)")
                 
             except IntegrityError as e:
-                # 唯一索引冲突：该股票该日期已存在
+                # 唯一索引冲突：数据库中已存在该日期数据
+                # 这说明状态文件和数据库不一致，需要手动清理
                 db_session.rollback()
-                logger.warning(f"  跳过重复数据: {stock_code} - {target_date}")
-                skipped_count += 1
-                # 重新开始当前行的小事务
-                db_session = SessionLocal()
-                continue
+                error_msg = f"数据库中已存在 {stock_code} - {target_date}，请先删除该日期数据"
+                logger.error(f"❌ {error_msg}")
+                logger.error(f"   提示：运行 python update_daily_data.py delete --dates {date_str}")
+                state_manager.mark_failed(date_str, error_msg, imported_count)
+                raise Exception(error_msg) from e
             
             except Exception as e:
                 # 其他错误：立即回滚并抛出

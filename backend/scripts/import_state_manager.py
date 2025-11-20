@@ -151,6 +151,8 @@ class ImportStateManager:
         2. 上次失败 -> 需要重新导入
         3. 文件已变化（哈希不同）-> 需要重新导入
         4. 上次成功且文件未变 -> 不需要导入
+        5. 已删除(deleted) -> 需要导入（数据库已清理）
+        6. 已回滚(rolled_back) -> 需要导入（数据库已回滚）
         
         Args:
             date_str: 日期字符串
@@ -163,18 +165,22 @@ class ImportStateManager:
             return True  # 从未导入
         
         import_info = self.state["imports"][date_str]
+        status = import_info.get("status")
         
-        # 上次失败，需要重新导入
-        if import_info.get("status") != "success":
+        # 成功导入的，检查文件是否变化
+        if status == "success":
+            current_hash = self.calculate_file_hash(file_path)
+            if current_hash and current_hash != import_info.get("file_hash", ""):
+                logger.info(f"检测到文件变化: {file_path.name}，将重新导入")
+                return True
+            return False  # 已成功导入且文件未变
+        
+        # deleted/rolled_back状态：数据库应该已经清理，可以重新导入
+        if status in ["deleted", "rolled_back"]:
             return True
         
-        # 检查文件是否变化
-        current_hash = self.calculate_file_hash(file_path)
-        if current_hash and current_hash != import_info.get("file_hash", ""):
-            logger.info(f"检测到文件变化: {file_path.name}，将重新导入")
-            return True
-        
-        return False  # 已成功导入且文件未变
+        # 其他失败状态（in_progress, failed等）：需要重新导入
+        return True
     
     def start_import(self, date_str: str, filename: str, file_path: Path):
         """
