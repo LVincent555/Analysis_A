@@ -142,51 +142,37 @@ async def get_top1000_industry(limit: int = 1000, date: str = None):
         行业统计数据（包含日期和stats列表）
     """
     try:
-        from ..database import SessionLocal
-        from ..db_models import DailyStockData
-        from sqlalchemy import desc
+        from datetime import datetime
+        from ..services.memory_cache import memory_cache
         
         # 参数验证
         if limit not in [1000, 2000, 3000, 5000]:
             limit = 1000  # 默认值
         
-        # 获取日期
-        db = SessionLocal()
-        try:
-            from datetime import datetime
-            
-            if date:
-                target_date = datetime.strptime(date, '%Y%m%d').date()
-                latest_date = db.query(DailyStockData.date)\
-                    .distinct()\
-                    .filter(DailyStockData.date == target_date)\
-                    .first()
-            else:
-                latest_date = db.query(DailyStockData.date)\
-                    .distinct()\
-                    .order_by(desc(DailyStockData.date))\
-                    .first()
-            
-            if not latest_date:
-                raise HTTPException(status_code=404, detail="没有可用数据")
-            
-            date_str = latest_date[0].strftime('%Y%m%d')
-            
-            # 获取统计数据（使用limit参数，传递日期）
-            stats = industry_service.analyze_industry(
-                period=1, 
-                top_n=limit,
-                target_date=latest_date[0]
-            )
-            total_stocks = sum(s.count for s in stats)
-            
-            return IndustryStats(
-                date=date_str,
-                total_stocks=total_stocks,
-                stats=stats
-            )
-        finally:
-            db.close()
+        # 从内存缓存获取日期（避免数据库查询）
+        if date:
+            target_date = datetime.strptime(date, '%Y%m%d').date()
+        else:
+            target_date = memory_cache.get_latest_date()
+        
+        if not target_date:
+            raise HTTPException(status_code=404, detail="没有可用数据")
+        
+        date_str = target_date.strftime('%Y%m%d')
+        
+        # 获取统计数据（使用limit参数，传递日期）
+        stats = industry_service.analyze_industry(
+            period=1, 
+            top_n=limit,
+            target_date=target_date
+        )
+        total_stocks = sum(s.count for s in stats)
+        
+        return IndustryStats(
+            date=date_str,
+            total_stocks=total_stocks,
+            stats=stats
+        )
     except HTTPException:
         raise
     except Exception as e:
@@ -227,109 +213,110 @@ async def get_industry_weighted(
         if metric not in ['B1', 'B2', 'C1', 'C2']:
             raise HTTPException(status_code=400, detail="metric必须是B1/B2/C1/C2之一")
         
-        db = SessionLocal()
-        try:
-            # 1. 获取目标日期
-            if date:
-                target_date = datetime.strptime(date, '%Y%m%d').date()
-                latest_date = db.query(DailyStockData.date)\
-                    .distinct()\
-                    .filter(DailyStockData.date == target_date)\
-                    .first()
-            else:
-                latest_date = db.query(DailyStockData.date)\
-                    .distinct()\
-                    .order_by(desc(DailyStockData.date))\
-                    .first()
-            
-            if not latest_date:
-                raise HTTPException(status_code=404, detail="没有可用数据")
-            
-            date_str = latest_date[0].strftime('%Y%m%d')
-            
-            # 2. 查询该日期的所有股票数据（不限制数量）
-            results = db.query(
-                DailyStockData.rank,
-                DailyStockData.total_score,
-                Stock.industry
-            ).join(Stock, DailyStockData.stock_code == Stock.stock_code)\
-             .filter(DailyStockData.date == latest_date[0])\
-             .order_by(DailyStockData.rank)\
-             .all()
-            
-            if not results:
-                raise HTTPException(status_code=404, detail="该日期没有数据")
-            
-            # 3. 一次遍历，计算所有4个指标
-            industry_data = defaultdict(lambda: {
-                'count': 0,
-                'total_heat_rank': 0.0,
-                'total_score': 0.0
-            })
-            
-            total_stocks = len(results)
-            
-            for rank, score, industry in results:
-                # 处理行业字段（可能是数组或字符串）
-                if isinstance(industry, list) and industry:
-                    industry = industry[0]
-                elif isinstance(industry, str) and industry.startswith('['):
-                    import ast
-                    try:
-                        industry_list = ast.literal_eval(industry)
-                        industry = industry_list[0] if industry_list else '未知'
-                    except:
-                        industry = industry.strip('[]').strip("'\"")
-                elif not industry:
-                    industry = '未知'
-                
-                # B方案：基于排名的加权
-                weight_b = 1.0 / (rank ** k)
-                
-                # C方案：基于总分的加权
-                weight_c = float(score) if score else 0.0
-                
-                # 累加
-                industry_data[industry]['count'] += 1
-                industry_data[industry]['total_heat_rank'] += weight_b
-                industry_data[industry]['total_score'] += weight_c
-            
-            # 4. 计算平均值并构建结果
-            stats = []
-            for industry, data in industry_data.items():
-                count = data['count']
-                percentage = round(count / total_stocks * 100, 2)
-                
-                stats.append(IndustryStatWeighted(
-                    industry=industry,
-                    count=count,
-                    percentage=percentage,
-                    total_heat_rank=data['total_heat_rank'],
-                    avg_heat_rank=data['total_heat_rank'] / count,
-                    total_score=data['total_score'],
-                    avg_score=data['total_score'] / count
+        # 1. 从内存缓存获取日期
+        from ..services.memory_cache import memory_cache
+        
+        if date:
+            target_date = datetime.strptime(date, '%Y%m%d').date()
+        else:
+            target_date = memory_cache.get_latest_date()
+        
+        if not target_date:
+            raise HTTPException(status_code=404, detail="没有可用数据")
+        
+        date_str = target_date.strftime('%Y%m%d')
+        
+        # 2. 从内存缓存获取该日期的所有股票数据
+        all_stocks = memory_cache.get_daily_data_by_date(target_date)
+        
+        if not all_stocks:
+            raise HTTPException(status_code=404, detail="该日期没有数据")
+        
+        # 3. 批量获取股票信息
+        stock_codes = [s.stock_code for s in all_stocks]
+        stocks_info = memory_cache.get_stocks_batch(stock_codes)
+        
+        # 4. 构建结果（rank, score, industry）
+        results = []
+        for stock_data in all_stocks:
+            stock_info = stocks_info.get(stock_data.stock_code)
+            if stock_info and stock_info.industry:
+                results.append((
+                    stock_data.rank,
+                    stock_data.total_score,
+                    stock_info.industry
                 ))
+        
+        if not results:
+            raise HTTPException(status_code=404, detail="该日期没有数据")
+        
+        # 5. 一次遍历，计算所有4个指标
+        industry_data = defaultdict(lambda: {
+            'count': 0,
+            'total_heat_rank': 0.0,
+            'total_score': 0.0
+        })
+        
+        total_stocks = len(results)
+        
+        for rank, score, industry in results:
+            # 处理行业字段（可能是数组或字符串）
+            if isinstance(industry, list) and industry:
+                industry = industry[0]
+            elif isinstance(industry, str) and industry.startswith('['):
+                import ast
+                try:
+                    industry_list = ast.literal_eval(industry)
+                    industry = industry_list[0] if industry_list else '未知'
+                except:
+                    industry = industry.strip('[]').strip("'\"")
+            elif not industry:
+                industry = '未知'
             
-            # 5. 根据指定的metric排序
-            if metric == 'B1':
-                stats.sort(key=lambda x: x.total_heat_rank, reverse=True)
-            elif metric == 'B2':
-                stats.sort(key=lambda x: x.avg_heat_rank, reverse=True)
-            elif metric == 'C1':
-                stats.sort(key=lambda x: x.total_score, reverse=True)
-            elif metric == 'C2':
-                stats.sort(key=lambda x: x.avg_score, reverse=True)
+            # B方案：基于排名的加权
+            weight_b = 1.0 / (rank ** k)
             
-            return IndustryStatsWeighted(
-                date=date_str,
-                total_stocks=total_stocks,
-                k_value=k,
-                metric_type=metric,
-                stats=stats
-            )
+            # C方案：基于总分的加权
+            weight_c = float(score) if score else 0.0
             
-        finally:
-            db.close()
+            # 累加
+            industry_data[industry]['count'] += 1
+            industry_data[industry]['total_heat_rank'] += weight_b
+            industry_data[industry]['total_score'] += weight_c
+        
+        # 6. 计算平均值并构建结果
+        stats = []
+        for industry, data in industry_data.items():
+            count = data['count']
+            percentage = round(count / total_stocks * 100, 2)
+            
+            stats.append(IndustryStatWeighted(
+                industry=industry,
+                count=count,
+                percentage=percentage,
+                total_heat_rank=data['total_heat_rank'],
+                avg_heat_rank=data['total_heat_rank'] / count,
+                total_score=data['total_score'],
+                avg_score=data['total_score'] / count
+            ))
+        
+        # 7. 根据指定的metric排序
+        if metric == 'B1':
+            stats.sort(key=lambda x: x.total_heat_rank, reverse=True)
+        elif metric == 'B2':
+            stats.sort(key=lambda x: x.avg_heat_rank, reverse=True)
+        elif metric == 'C1':
+            stats.sort(key=lambda x: x.total_score, reverse=True)
+        elif metric == 'C2':
+            stats.sort(key=lambda x: x.avg_score, reverse=True)
+        
+        return IndustryStatsWeighted(
+            date=date_str,
+            total_stocks=total_stocks,
+            k_value=k,
+            metric_type=metric,
+            stats=stats
+        )
             
     except HTTPException:
         raise

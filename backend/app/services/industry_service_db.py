@@ -70,15 +70,25 @@ class IndustryServiceDB:
         if not target_dates:
             return []
         
-        # 2. 从内存获取这些日期的TOP N股票
+        # 2. 从内存获取这些日期的TOP N股票（批量优化）
         industry_counts = defaultdict(int)
+        
+        # 收集所有需要查询的股票代码
+        all_stock_codes = set()
+        date_stocks_map = {}
         
         for date in target_dates:
             top_stocks = memory_cache.get_top_n_stocks(date, top_n)
-            
+            date_stocks_map[date] = top_stocks
+            all_stock_codes.update(stock.stock_code for stock in top_stocks)
+        
+        # 批量获取股票信息（一次性查询，避免循环）
+        stocks_info = memory_cache.get_stocks_batch(list(all_stock_codes))
+        
+        # 统计行业
+        for date, top_stocks in date_stocks_map.items():
             for stock_data in top_stocks:
-                # 获取股票信息
-                stock_info = memory_cache.get_stock_info(stock_data.stock_code)
+                stock_info = stocks_info.get(stock_data.stock_code)
                 if stock_info and stock_info.industry:
                     # 处理行业字段
                     industry = stock_info.industry

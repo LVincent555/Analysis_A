@@ -167,6 +167,10 @@ class MemoryCacheManager:
         """获取股票基础信息"""
         return self.stocks.get(stock_code)
     
+    def get_stocks_batch(self, stock_codes: List[str]) -> Dict[str, Stock]:
+        """批量获取股票信息（性能优化）"""
+        return {code: self.stocks[code] for code in stock_codes if code in self.stocks}
+    
     def get_all_stocks(self) -> Dict[str, Stock]:
         """获取所有股票"""
         return self.stocks
