@@ -33,7 +33,7 @@ async def get_industry_stats(period: int = 3, top_n: int = 20):
 @router.get("/industry/trend")
 async def get_industry_trend(period: int = 14, top_n: int = 100, date: str = None):
     """
-    获取行业趋势数据（多日期动态变化）
+    获取行业趋势数据（多日期动态变化）- 使用内存缓存优化
     
     Args:
         period: 分析周期（天数），默认14
@@ -44,87 +44,78 @@ async def get_industry_trend(period: int = 14, top_n: int = 100, date: str = Non
         行业趋势数据，包含每日的行业分布
     """
     try:
-        from ..database import SessionLocal
-        from ..db_models import DailyStockData, Stock
-        from sqlalchemy import desc
+        from datetime import datetime
         from collections import Counter
+        from ..services.memory_cache import memory_cache
         
-        db = SessionLocal()
-        try:
-            # 1. 获取最近N天的日期
-            from datetime import datetime
+        # 1. 从内存缓存获取日期范围
+        if date:
+            target_date = datetime.strptime(date, '%Y%m%d').date()
+        else:
+            target_date = memory_cache.get_latest_date()
+        
+        if not target_date:
+            return {"data": [], "industries": []}
+        
+        # 获取最近N天日期
+        all_dates = memory_cache.get_dates_range(period * 2)
+        target_dates = [d for d in all_dates if d <= target_date][:period]
+        
+        if not target_dates:
+            return {"data": [], "industries": []}
+        
+        # 2. 收集所有需要查询的股票代码
+        all_stock_codes = set()
+        date_stocks_map = {}
+        
+        for date_obj in target_dates:
+            top_stocks = memory_cache.get_top_n_stocks(date_obj, top_n)
+            date_stocks_map[date_obj] = top_stocks
+            all_stock_codes.update(stock.stock_code for stock in top_stocks)
+        
+        # 3. 批量获取股票信息
+        stocks_info = memory_cache.get_stocks_batch(list(all_stock_codes))
+        
+        # 4. 按日期统计行业分布
+        date_industry_map = {}
+        all_industries = set()
+        
+        for date_obj, top_stocks in date_stocks_map.items():
+            date_str = date_obj.strftime('%Y%m%d')
+            date_industry_map[date_str] = Counter()
             
-            # 如果指定date，从该日期往前推period天
-            if date:
-                target_date = datetime.strptime(date, '%Y%m%d').date()
-                dates = db.query(DailyStockData.date)\
-                    .distinct()\
-                    .filter(DailyStockData.date <= target_date)\
-                    .order_by(desc(DailyStockData.date))\
-                    .limit(period)\
-                    .all()
-            else:
-                dates = db.query(DailyStockData.date)\
-                    .distinct()\
-                    .order_by(desc(DailyStockData.date))\
-                    .limit(period)\
-                    .all()
-            
-            if not dates:
-                return {"data": [], "industries": []}
-            
-            target_dates = [d[0] for d in dates]
-            
-            # 2. 查询这些日期的TOP N股票
-            results = db.query(DailyStockData, Stock)\
-                .join(Stock, DailyStockData.stock_code == Stock.stock_code)\
-                .filter(DailyStockData.date.in_(target_dates))\
-                .filter(DailyStockData.rank <= top_n)\
-                .order_by(DailyStockData.date)\
-                .all()
-            
-            # 3. 按日期统计行业分布
-            date_industry_map = {}
-            all_industries = set()
-            
-            for daily_data, stock in results:
-                date_str = daily_data.date.strftime('%Y%m%d')
-                
-                # 处理行业字段
-                industry = stock.industry
-                if isinstance(industry, list) and industry:
-                    industry = industry[0]
-                elif isinstance(industry, str) and industry.startswith('['):
-                    import ast
-                    try:
-                        industry_list = ast.literal_eval(industry)
-                        industry = industry_list[0] if industry_list else '未知'
-                    except:
-                        industry = industry.strip('[]').strip("'\"")
-                elif not industry:
-                    industry = '未知'
-                
-                all_industries.add(industry)
-                
-                if date_str not in date_industry_map:
-                    date_industry_map[date_str] = Counter()
-                
-                date_industry_map[date_str][industry] += 1
-            
-            # 4. 构建返回数据（从旧到新排序）
-            data = []
-            for date_str in sorted(date_industry_map.keys()):
-                data.append({
-                    "date": date_str,
-                    "industry_counts": dict(date_industry_map[date_str])
-                })
-            
-            return {
-                "data": data,
-                "industries": sorted(list(all_industries))
-            }
-        finally:
-            db.close()
+            for stock_data in top_stocks:
+                stock_info = stocks_info.get(stock_data.stock_code)
+                if stock_info and stock_info.industry:
+                    # 处理行业字段
+                    industry = stock_info.industry
+                    if isinstance(industry, list) and industry:
+                        industry = industry[0]
+                    elif isinstance(industry, str) and industry.startswith('['):
+                        import ast
+                        try:
+                            industry_list = ast.literal_eval(industry)
+                            industry = industry_list[0] if industry_list else '未知'
+                        except:
+                            industry = industry.strip('[]').strip("'\"")
+                    else:
+                        industry = industry if industry else '未知'
+                    
+                    all_industries.add(industry)
+                    date_industry_map[date_str][industry] += 1
+        
+        # 5. 构建返回数据（从旧到新排序）
+        data = []
+        for date_str in sorted(date_industry_map.keys()):
+            data.append({
+                "date": date_str,
+                "industry_counts": dict(date_industry_map[date_str])
+            })
+        
+        return {
+            "data": data,
+            "industries": sorted(list(all_industries))
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

@@ -95,89 +95,70 @@ async def get_sector_trend(
         }
     """
     try:
-        from ..database import SessionLocal
-        from ..db_models import SectorDailyData, Sector
-        from sqlalchemy import desc
-        from datetime import datetime, timedelta
+        from datetime import datetime
         from collections import defaultdict
+        from ..services.memory_cache import memory_cache
         
-        db = SessionLocal()
-        try:
-            # 1. 获取日期范围
-            if date:
-                end_date = datetime.strptime(date, '%Y%m%d').date()
-            else:
-                latest = db.query(SectorDailyData.date)\
-                    .order_by(desc(SectorDailyData.date))\
-                    .first()
-                if not latest:
-                    raise HTTPException(404, "没有可用数据")
-                end_date = latest[0]
+        # 1. 从内存缓存获取日期范围
+        if date:
+            end_date = datetime.strptime(date, '%Y%m%d').date()
+        else:
+            end_date = memory_cache.get_sector_latest_date()
+        
+        if not end_date:
+            raise HTTPException(404, "没有可用数据")
+        
+        # 获取最近N天的日期
+        all_dates = memory_cache.get_sector_dates_range(days * 2)
+        dates = [d for d in all_dates if d <= end_date][:days]
+        
+        if not dates:
+            raise HTTPException(404, "没有足够的历史数据")
+        
+        dates.reverse()  # 按时间正序
+        
+        # 2. 从内存缓存获取最新日期的前N个板块
+        latest_date = dates[-1]
+        top_sectors_data = memory_cache.get_top_n_sectors(latest_date, limit)
+        
+        if not top_sectors_data:
+            raise HTTPException(404, "没有板块数据")
+        
+        # 获取板块ID列表
+        sector_ids = [s.sector_id for s in top_sectors_data]
+        
+        # 3. 从内存缓存获取这些板块在所有日期的数据
+        sector_dict = defaultdict(lambda: {'ranks': [], 'scores': []})
+        
+        for sector_id in sector_ids:
+            history_data = memory_cache.get_sector_history(sector_id, dates)
             
-            # 获取最近N天的日期
-            dates_query = db.query(SectorDailyData.date)\
-                .distinct()\
-                .filter(SectorDailyData.date <= end_date)\
-                .order_by(desc(SectorDailyData.date))\
-                .limit(days)\
-                .all()
-            
-            if not dates_query:
-                raise HTTPException(404, "没有足够的历史数据")
-            
-            dates = [d[0] for d in dates_query]
-            dates.reverse()  # 按时间正序
-            
-            # 2. 获取最新日期的前N个板块
-            latest_date = dates[-1]
-            top_sectors = db.query(Sector.sector_name)\
-                .join(SectorDailyData, SectorDailyData.sector_id == Sector.id)\
-                .filter(SectorDailyData.date == latest_date)\
-                .order_by(SectorDailyData.rank)\
-                .limit(limit)\
-                .all()
-            
-            sector_names = [s[0] for s in top_sectors]
-            
-            # 3. 查询这些板块在所有日期的数据
-            sector_data_list = db.query(
-                Sector.sector_name,
-                SectorDailyData.date,
-                SectorDailyData.rank,
-                SectorDailyData.total_score
-            ).join(SectorDailyData, SectorDailyData.sector_id == Sector.id)\
-             .filter(Sector.sector_name.in_(sector_names))\
-             .filter(SectorDailyData.date.in_(dates))\
-             .all()
-            
-            # 4. 组织数据
-            sector_dict = defaultdict(lambda: {'ranks': [], 'scores': []})
-            
-            for name, date, rank, score in sector_data_list:
-                sector_dict[name]['name'] = name
-                date_str = date.strftime('%Y%m%d')
-                date_index = dates.index(date) if date in dates else -1
-                if date_index >= 0:
-                    # 确保数组长度
-                    while len(sector_dict[name]['ranks']) <= date_index:
-                        sector_dict[name]['ranks'].append(None)
-                        sector_dict[name]['scores'].append(None)
-                    
-                    sector_dict[name]['ranks'][date_index] = rank
-                    sector_dict[name]['scores'][date_index] = float(score) if score else None
-            
-            # 5. 转换为列表
-            sectors = []
-            for name in sector_names:
-                if name in sector_dict:
-                    sectors.append(sector_dict[name])
-            
-            return {
-                "dates": [d.strftime('%Y%m%d') for d in dates],
-                "sectors": sectors
-            }
-        finally:
-            db.close()
+            if history_data:
+                # 使用第一条数据获取板块名称
+                sector_name = history_data[0].sector_name if hasattr(history_data[0], 'sector_name') else str(sector_id)
+                sector_dict[sector_id]['name'] = sector_name
+                
+                # 初始化数组
+                sector_dict[sector_id]['ranks'] = [None] * len(dates)
+                sector_dict[sector_id]['scores'] = [None] * len(dates)
+                
+                # 填充数据
+                for data in history_data:
+                    if data.date in dates:
+                        date_index = dates.index(data.date)
+                        sector_dict[sector_id]['ranks'][date_index] = data.rank
+                        sector_dict[sector_id]['scores'][date_index] = float(data.total_score) if data.total_score else None
+        
+        # 4. 转换为列表（按原始排序）
+        sectors = []
+        for sector_id in sector_ids:
+            if sector_id in sector_dict:
+                sectors.append(sector_dict[sector_id])
+        
+        return {
+            "dates": [d.strftime('%Y%m%d') for d in dates],
+            "sectors": sectors
+        }
     except HTTPException:
         raise
     except Exception as e:
@@ -210,107 +191,84 @@ async def get_sector_rank_changes(
         }
     """
     try:
-        from ..database import SessionLocal
-        from ..db_models import SectorDailyData, Sector
-        from sqlalchemy import desc
         from datetime import datetime
+        from ..services.memory_cache import memory_cache
         
-        db = SessionLocal()
-        try:
-            # 1. 获取当前日期
-            if date:
-                current_date = datetime.strptime(date, '%Y%m%d').date()
+        # 1. 从内存缓存获取当前日期
+        if date:
+            current_date = datetime.strptime(date, '%Y%m%d').date()
+        else:
+            current_date = memory_cache.get_sector_latest_date()
+        
+        if not current_date:
+            raise HTTPException(404, "没有可用数据")
+        
+        # 2. 获取对比日期
+        all_dates = memory_cache.get_sector_dates_range(compare_days + 1)
+        available_dates = [d for d in all_dates if d < current_date]
+        
+        if not available_dates:
+            raise HTTPException(404, "没有足够的历史数据")
+        
+        compare_date = available_dates[min(compare_days - 1, len(available_dates) - 1)]
+        
+        # 3. 从内存缓存获取当前日期的数据
+        current_data_list = memory_cache.get_sector_daily_data_by_date(current_date)
+        
+        # 4. 从内存缓存获取对比日期的数据
+        compare_data_list = memory_cache.get_sector_daily_data_by_date(compare_date)
+        
+        # 构建对比字典 {sector_id: rank}
+        compare_dict = {data.sector_id: data.rank for data in compare_data_list}
+        
+        # 5. 计算变化
+        statistics = {
+            'new_entries': 0,
+            'rank_up': 0,
+            'rank_down': 0,
+            'rank_same': 0
+        }
+        
+        sectors = []
+        for data in current_data_list:
+            previous_rank = compare_dict.get(data.sector_id)
+            
+            if previous_rank is None:
+                rank_change = None
+                is_new = True
+                statistics['new_entries'] += 1
             else:
-                latest = db.query(SectorDailyData.date)\
-                    .order_by(desc(SectorDailyData.date))\
-                    .first()
-                if not latest:
-                    raise HTTPException(404, "没有可用数据")
-                current_date = latest[0]
-            
-            # 2. 获取对比日期
-            available_dates = db.query(SectorDailyData.date)\
-                .distinct()\
-                .filter(SectorDailyData.date < current_date)\
-                .order_by(desc(SectorDailyData.date))\
-                .limit(compare_days)\
-                .all()
-            
-            if not available_dates:
-                raise HTTPException(404, "没有足够的历史数据")
-            
-            compare_date = available_dates[-1][0]
-            
-            # 3. 查询当前日期的数据
-            current_data = db.query(
-                Sector.sector_name,
-                SectorDailyData.rank,
-                SectorDailyData.total_score,
-                SectorDailyData.price_change,
-                SectorDailyData.volume_days
-            ).join(SectorDailyData, SectorDailyData.sector_id == Sector.id)\
-             .filter(SectorDailyData.date == current_date)\
-             .all()
-            
-            # 4. 查询对比日期的数据
-            compare_data = db.query(
-                Sector.sector_name,
-                SectorDailyData.rank
-            ).join(SectorDailyData, SectorDailyData.sector_id == Sector.id)\
-             .filter(SectorDailyData.date == compare_date)\
-             .all()
-            
-            # 构建对比字典
-            compare_dict = {name: rank for name, rank in compare_data}
-            
-            # 5. 计算变化
-            statistics = {
-                'new_entries': 0,
-                'rank_up': 0,
-                'rank_down': 0,
-                'rank_same': 0
-            }
-            
-            sectors = []
-            for name, rank, score, price_change, volume_days in current_data:
-                previous_rank = compare_dict.get(name)
-                
-                if previous_rank is None:
-                    rank_change = None
-                    is_new = True
-                    statistics['new_entries'] += 1
+                rank_change = previous_rank - data.rank  # 正数=上升
+                is_new = False
+                if rank_change > 0:
+                    statistics['rank_up'] += 1
+                elif rank_change < 0:
+                    statistics['rank_down'] += 1
                 else:
-                    rank_change = previous_rank - rank  # 正数=上升
-                    is_new = False
-                    if rank_change > 0:
-                        statistics['rank_up'] += 1
-                    elif rank_change < 0:
-                        statistics['rank_down'] += 1
-                    else:
-                        statistics['rank_same'] += 1
-                
-                sectors.append({
-                    'name': name,
-                    'current_rank': rank,
-                    'previous_rank': previous_rank,
-                    'rank_change': rank_change,
-                    'is_new': is_new,
-                    'total_score': float(score) if score else None,
-                    'price_change': float(price_change) if price_change else None,
-                    'volume_days': float(volume_days) if volume_days else None
-                })
+                    statistics['rank_same'] += 1
             
-            # 按当前排名排序
-            sectors.sort(key=lambda x: x['current_rank'])
+            sector_name = data.sector_name if hasattr(data, 'sector_name') else str(data.sector_id)
             
-            return {
-                'date': current_date.strftime('%Y%m%d'),
-                'compare_date': compare_date.strftime('%Y%m%d'),
-                'statistics': statistics,
-                'sectors': sectors
-            }
-        finally:
-            db.close()
+            sectors.append({
+                'name': sector_name,
+                'current_rank': data.rank,
+                'previous_rank': previous_rank,
+                'rank_change': rank_change,
+                'is_new': is_new,
+                'total_score': float(data.total_score) if data.total_score else None,
+                'price_change': float(data.price_change) if data.price_change else None,
+                'volume_days': float(data.volume_days) if data.volume_days else None
+            })
+        
+        # 按当前排名排序
+        sectors.sort(key=lambda x: x['current_rank'])
+        
+        return {
+            'date': current_date.strftime('%Y%m%d'),
+            'compare_date': compare_date.strftime('%Y%m%d'),
+            'statistics': statistics,
+            'sectors': sectors
+        }
     except HTTPException:
         raise
     except Exception as e:
