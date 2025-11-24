@@ -4,7 +4,8 @@
 from .stock import (
     StockInfo, StockHistory, DateRankInfo,
     RankJumpStock, RankJumpResult,
-    SteadyRiseStock, SteadyRiseResult
+    SteadyRiseStock, SteadyRiseResult,
+    StockDailyFull, StockFullHistory
 )
 from .industry import (
     IndustryStats, IndustryTrend, IndustryStat, IndustryDateData,
@@ -25,6 +26,8 @@ __all__ = [
     "RankJumpResult",
     "SteadyRiseStock",
     "SteadyRiseResult",
+    "StockDailyFull",
+    "StockFullHistory",
     "IndustryStats",
     "IndustryTrend",
     "IndustryStat",

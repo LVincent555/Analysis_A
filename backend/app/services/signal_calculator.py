@@ -110,7 +110,11 @@ class SignalCalculator:
             hot_signal = self._check_hot_list(current_data.rank)
         
         if hot_signal:
-            signals.append(hot_signal['label'])
+            # 添加所有热点标签（如果有labels数组），否则只添加主标签
+            if 'labels' in hot_signal and hot_signal['labels']:
+                signals.extend(hot_signal['labels'])
+            else:
+                signals.append(hot_signal['label'])
             signal_score += hot_signal['score']
         
         # 2. 排名跳变榜信号
@@ -217,12 +221,25 @@ class SignalCalculator:
         try:
             # 从缓存查询排名、次数和档位统计
             result = HotSpotsCache.get_rank(stock_code, date_str)
-            logger.debug(f"🔍 热点信号查询: {stock_code}, date={date_str}, result={result}")
+            
+            # 详细日志
+            if stock_code == '603890':
+                logger.info(f"🔍 [603890春秋电子] 热点信号查询:")
+                logger.info(f"   date={date_str}")
+                logger.info(f"   result={result}")
             
             if not result:
+                if stock_code == '603890':
+                    logger.warning(f"❌ [603890春秋电子] 不在热点榜缓存中")
                 return None
             
             rank, hit_count, tier_counts = result
+            
+            if stock_code == '603890':
+                logger.info(f"📊 [603890春秋电子] 热点榜数据:")
+                logger.info(f"   rank={rank}")
+                logger.info(f"   hit_count={hit_count}")
+                logger.info(f"   tier_counts={tier_counts}")
             
             # 选择倍数（v1原版 vs v2新版）
             if self.thresholds.hot_list_version == "v1":
@@ -250,7 +267,7 @@ class SignalCalculator:
                     3000: 0.5   # 12.5%
                 }
             
-            # 📊 新逻辑：只显示最新一天排名所在档位的统计
+            # 📊 新逻辑：根据排名确定档位，如果该档位次数<2，则向上查找更大档位
             # 确定最新排名所属档位
             tiers = [100, 200, 400, 600, 800, 1000, 2000, 3000]
             current_tier = None
@@ -259,28 +276,54 @@ class SignalCalculator:
                     current_tier = tier
                     break
             
+            if stock_code == '603890':
+                logger.info(f"🎯 [603890春秋电子] 档位判断:")
+                logger.info(f"   rank={rank}")
+                logger.info(f"   current_tier={current_tier}")
+            
             if not current_tier:
                 # 排名超过3000，不显示热点信号
-                logger.debug(f"股票 {stock_code} 排名 {rank} 超过TOP3000，不生成热点信号")
+                if stock_code == '603890':
+                    logger.warning(f"❌ [603890春秋电子] 排名 {rank} 超过TOP3000")
                 return None
             
-            # 获取该档位的出现次数
-            hit_count_in_tier = tier_counts.get(current_tier, 0)
+            # 从当前档位开始，收集所有满足>=2次的档位
+            # 获取当前及更大的档位
+            available_tiers = [t for t in tiers if t >= current_tier]
             
-            # 至少出现2次才显示
-            if hit_count_in_tier < 2:
-                logger.debug(f"股票 {stock_code} 在档位TOP{current_tier}只出现{hit_count_in_tier}次，不生成热点信号")
+            # 收集所有满足条件的档位和标签
+            valid_tiers = []
+            labels_list = []
+            
+            for tier in available_tiers:
+                count = tier_counts.get(tier, 0)
+                if count >= 2:
+                    valid_tiers.append(tier)
+                    labels_list.append(f"TOP{tier}·{count}次")
+            
+            if stock_code == '603890':
+                logger.info(f"📈 [603890春秋电子] 档位选择:")
+                logger.info(f"   available_tiers={available_tiers}")
+                logger.info(f"   valid_tiers={valid_tiers}")
+                logger.info(f"   labels_list={labels_list}")
+            
+            # 如果没有任何档位满足>=2次，则不显示热点信号
+            if not valid_tiers:
+                if stock_code == '603890':
+                    logger.warning(f"❌ [603890春秋电子] 所有档位都不满足>=2次条件")
                 return None
             
-            # 生成标签：只显示当前档位
-            label = f"TOP{current_tier}·{hit_count_in_tier}次"
-            main_tier = current_tier
+            # 生成标签：显示所有满足条件的档位
+            # 主标签使用最小档位（用于前端主显示）
+            main_tier = valid_tiers[0]  # 最小的档位
+            main_label = labels_list[0]  # 主标签
+            hit_count_in_tier = tier_counts.get(main_tier, 0)
             
-            # 使用主档位计算分数
-            # 如果main_tier为None（理论上不会发生），使用默认值
-            if not main_tier:
-                logger.warning(f"股票 {stock_code} main_tier为None，使用默认值3000")
-                main_tier = 3000
+            if stock_code == '603890':
+                logger.info(f"🏷️ [603890春秋电子] 标签生成:")
+                logger.info(f"   main_label={main_label}")
+                logger.info(f"   all_labels={labels_list}")
+                logger.info(f"   main_tier={main_tier} (用于计算分数)")
             
             # 调试日志
             if stock_code in ['000839', '600624']:
@@ -299,19 +342,24 @@ class SignalCalculator:
             elif hit_count_in_tier >= 8:
                 score *= 1.05   # 一般热点（阈值提高到8次）
             
-            if label:
+            if main_label:
                 result = {
-                    'label': label,  # 主标签（当前档位）
-                    'labels': [label],  # 标签列表（只包含当前档位）
+                    'label': main_label,  # 主标签（最小档位）
+                    'labels': labels_list,  # 标签列表（所有满足条件的档位）
                     'score': score,
                     'rank': rank,
-                    'hit_count': hit_count_in_tier,  # 当前档位的出现次数
-                    'main_tier': main_tier,  # 主档位
+                    'hit_count': hit_count_in_tier,  # 主档位的出现次数
+                    'main_tier': main_tier,  # 主档位（用于计算分数）
                     'tier_counts': tier_counts  # 各档位统计
                 }
                 # 调试日志
-                if stock_code == '600239':
-                    logger.info(f"🏷️ [600239云南城投] 信号生成: label={label}, main_tier={main_tier}, hit_count={hit_count_in_tier}")
+                if stock_code in ['600239', '603890']:
+                    logger.info(f"✅ [{stock_code}] 信号生成成功:")
+                    logger.info(f"   main_label={main_label}")
+                    logger.info(f"   all_labels={labels_list}")
+                    logger.info(f"   score={score:.4f}")
+                    logger.info(f"   main_tier={main_tier}")
+                    logger.info(f"   hit_count={hit_count_in_tier}")
                 return result
             
             return None

@@ -221,7 +221,8 @@ class HotSpotsCache:
             for stock in stocks:
                 rank = stock["rank"]
                 hit_count = stock["hit_count"]
-                stock["rank_label"] = cls._get_rank_label(rank, hit_count)
+                tier_counts = stock["tier_counts"]
+                stock["rank_label"] = cls._get_rank_label(rank, hit_count, tier_counts)
             
             # 存入缓存
             cls._cache[date] = {
@@ -275,33 +276,42 @@ class HotSpotsCache:
             logger.debug(f"清理旧缓存: {date}")
     
     @classmethod
-    def _get_rank_label(cls, rank: int, hit_count: int) -> str:
-        """根据排名和出现次数返回标签
+    def _get_rank_label(cls, rank: int, hit_count: int, tier_counts: dict) -> str:
+        """根据排名和各档位出现次数返回标签（与signal_calculator逻辑一致）
         
         Args:
             rank: 排名（1-3000）
-            hit_count: 14天内出现次数（2-14）
+            hit_count: 14天内总出现次数（2-14）
+            tier_counts: 各档位出现次数字典 {100: x, 200: y, ...}
             
         Returns:
-            热点榜TOP100·12次 | 热点榜TOP200·8次 | ...
+            TOP600·3次 | TOP800·4次 | ...
+            
+        逻辑：
+        1. 根据rank确定基础档位
+        2. 如果该档位出现次数<2，向上查找更大档位
+        3. 返回第一个满足>=2次的档位标签
         """
-        # 使用中点符号·连接，更简洁美观
-        if rank <= 100:
-            return f"TOP100·{hit_count}次"
-        elif rank <= 200:
-            return f"TOP200·{hit_count}次"
-        elif rank <= 400:
-            return f"TOP400·{hit_count}次"
-        elif rank <= 600:
-            return f"TOP600·{hit_count}次"
-        elif rank <= 800:
-            return f"TOP800·{hit_count}次"
-        elif rank <= 1000:
-            return f"TOP1000·{hit_count}次"
-        elif rank <= 2000:
-            return f"TOP2000·{hit_count}次"
-        elif rank <= 3000:
-            return f"TOP3000·{hit_count}次"
+        # 确定基础档位
+        tiers = [100, 200, 400, 600, 800, 1000, 2000, 3000]
+        current_tier = None
+        for tier in tiers:
+            if rank <= tier:
+                current_tier = tier
+                break
+        
+        if not current_tier:
+            return ""
+        
+        # 从当前档位开始，找第一个满足>=2次的档位
+        available_tiers = [t for t in tiers if t >= current_tier]
+        
+        for tier in available_tiers:
+            count = tier_counts.get(tier, 0)
+            if count >= 2:
+                return f"TOP{tier}·{count}次"
+        
+        # 如果都不满足，返回空字符串
         return ""
     
     @classmethod

@@ -4,10 +4,6 @@
 """
 from typing import List, Dict, Optional
 from datetime import datetime, date
-from sqlalchemy import desc, func
-from sqlalchemy.orm import Session
-from ..database import SessionLocal
-from ..db_models import Sector, SectorDailyData
 from ..models import SectorRankingResult, SectorInfo, SectorDetail
 from ..utils.ttl_cache import TTLCache
 from .memory_cache import memory_cache
@@ -22,10 +18,6 @@ class SectorServiceDB:
     def __init__(self):
         """初始化计算结果缓存"""
         self.cache = TTLCache(default_ttl_seconds=1800)  # 30分钟TTL缓存
-    
-    def get_db(self):
-        """获取数据库会话"""
-        return SessionLocal()
     
     def get_available_dates(self) -> List[str]:
         """
@@ -42,64 +34,46 @@ class SectorServiceDB:
         limit: int = 100
     ) -> SectorRankingResult:
         """
-        获取板块排名
-        
-        Args:
-            target_date: 指定日期 (YYYYMMDD格式)，不传则使用最新日期
-            limit: 返回的板块数量
-        
-        Returns:
-            板块排名结果
+        获取板块排名（从内存缓存）
         """
-        db = self.get_db()
-        try:
-            # 确定查询日期
-            if target_date:
+        # 确定查询日期
+        if target_date:
+            try:
                 query_date = datetime.strptime(target_date, '%Y%m%d').date()
-            else:
-                latest_date = db.query(func.max(SectorDailyData.date)).scalar()
-                if not latest_date:
-                    return SectorRankingResult(
-                        date='',
-                        sectors=[],
-                        total_count=0
-                    )
-                query_date = latest_date
+            except ValueError:
+                logger.error(f"无效的日期格式: {target_date}")
+                return SectorRankingResult(date='', sectors=[], total_count=0)
+        else:
+            query_date = memory_cache.get_sector_latest_date()
+            if not query_date:
+                return SectorRankingResult(date='', sectors=[], total_count=0)
+        
+        # 从内存获取数据
+        daily_data_list = memory_cache.get_top_n_sectors(query_date, limit)
+        total_count = len(memory_cache.get_sector_daily_data_by_date(query_date))
+        
+        sectors = []
+        for daily_data in daily_data_list:
+            # 从内存缓存获取板块名称
+            sector_info = memory_cache.get_sector_info(daily_data.sector_id)
+            sector_name = sector_info.sector_name if sector_info else str(daily_data.sector_id)
             
-            # 查询该日期的板块数据
-            query = db.query(
-                SectorDailyData,
-                Sector.sector_name
-            ).join(Sector, SectorDailyData.sector_id == Sector.id)\
-             .filter(SectorDailyData.date == query_date)\
-             .order_by(SectorDailyData.rank)\
-             .limit(limit)
-            
-            sectors = []
-            for daily_data, sector_name in query.all():
-                sector_info = SectorInfo(
-                    name=sector_name,
-                    rank=daily_data.rank,
-                    total_score=float(daily_data.total_score) if daily_data.total_score else None,
-                    price_change=float(daily_data.price_change) if daily_data.price_change else None,
-                    turnover_rate=float(daily_data.turnover_rate_percent) if daily_data.turnover_rate_percent else None,
-                    volume=daily_data.volume,
-                    volatility=float(daily_data.volatility) if daily_data.volatility else None
-                )
-                sectors.append(sector_info)
-            
-            total_count = db.query(func.count(SectorDailyData.id))\
-                .filter(SectorDailyData.date == query_date)\
-                .scalar()
-            
-            return SectorRankingResult(
-                date=query_date.strftime('%Y%m%d'),
-                sectors=sectors,
-                total_count=total_count or 0
+            info = SectorInfo(
+                name=sector_name,
+                rank=daily_data.rank,
+                total_score=float(daily_data.total_score) if daily_data.total_score else None,
+                price_change=float(daily_data.price_change) if daily_data.price_change else None,
+                turnover_rate=float(daily_data.turnover_rate_percent) if daily_data.turnover_rate_percent else None,
+                volume=daily_data.volume,
+                volatility=float(daily_data.volatility) if daily_data.volatility else None
             )
-            
-        finally:
-            db.close()
+            sectors.append(info)
+        
+        return SectorRankingResult(
+            date=query_date.strftime('%Y%m%d'),
+            sectors=sectors,
+            total_count=total_count
+        )
     
     def get_sector_detail(
         self,
@@ -108,73 +82,65 @@ class SectorServiceDB:
         target_date: Optional[str] = None
     ) -> Optional[SectorDetail]:
         """
-        获取板块详细信息和历史数据
-        
-        Args:
-            sector_name: 板块名称
-            days: 返回的历史天数
-            target_date: 指定日期 (YYYYMMDD格式)，不传则使用最新日期
-        
-        Returns:
-            板块详细信息
+        获取板块详细信息和历史数据（从内存缓存）
         """
-        db = self.get_db()
-        try:
-            # 查找板块
-            sector = db.query(Sector).filter(
-                Sector.sector_name == sector_name
-            ).first()
-            
-            if not sector:
-                logger.warning(f"板块不存在: {sector_name}")
-                return None
-            
-            # 查询历史数据
-            if target_date:
+        # 1. 查找板块ID
+        target_sector = None
+        for sector in memory_cache.sectors.values():
+            if sector.sector_name == sector_name:
+                target_sector = sector
+                break
+        
+        if not target_sector:
+            logger.warning(f"板块不存在: {sector_name}")
+            return None
+        
+        # 2. 确定日期范围
+        if target_date:
+            try:
                 target_date_obj = datetime.strptime(target_date, '%Y%m%d').date()
-                history_query = db.query(SectorDailyData)\
-                    .filter(SectorDailyData.sector_id == sector.id)\
-                    .filter(SectorDailyData.date <= target_date_obj)\
-                    .order_by(desc(SectorDailyData.date))\
-                    .limit(days)
-            else:
-                history_query = db.query(SectorDailyData)\
-                    .filter(SectorDailyData.sector_id == sector.id)\
-                    .order_by(desc(SectorDailyData.date))\
-                    .limit(days)
-            
-            history_data = history_query.all()
-            
-            if not history_data:
+            except ValueError:
                 return None
+        else:
+            target_date_obj = memory_cache.get_sector_latest_date()
             
-            # 构建历史记录
-            history = []
-            for data in reversed(history_data):  # 从旧到新排序
-                record = {
-                    'date': data.date.strftime('%Y%m%d'),
-                    'rank': data.rank,
-                    'total_score': float(data.total_score) if data.total_score else None,
-                    'price_change': float(data.price_change) if data.price_change else None,
-                    'turnover_rate': float(data.turnover_rate_percent) if data.turnover_rate_percent else None,
-                    'volume': data.volume,
-                    'volatility': float(data.volatility) if data.volatility else None,
-                    'close_price': float(data.close_price) if data.close_price else None
-                }
-                history.append(record)
+        if not target_date_obj:
+            return None
             
-            return SectorDetail(
-                name=sector.sector_name,
-                history=history,
-                days_count=len(history)
-            )
-            
-        finally:
-            db.close()
+        # 获取最近N天日期
+        all_dates = memory_cache.sector_dates
+        target_dates = [d for d in all_dates if d <= target_date_obj][:days]
+        
+        # 3. 获取历史数据
+        history_data = memory_cache.get_sector_history(target_sector.id, target_dates)
+        
+        if not history_data:
+            return None
+        
+        # 构建历史记录
+        history = []
+        for data in reversed(history_data):  # 从旧到新排序
+            record = {
+                'date': data.date.strftime('%Y%m%d'),
+                'rank': data.rank,
+                'total_score': float(data.total_score) if data.total_score else None,
+                'price_change': float(data.price_change) if data.price_change else None,
+                'turnover_rate': float(data.turnover_rate_percent) if data.turnover_rate_percent else None,
+                'volume': data.volume,
+                'volatility': float(data.volatility) if data.volatility else None,
+                'close_price': float(data.close_price) if data.close_price else None
+            }
+            history.append(record)
+        
+        return SectorDetail(
+            name=target_sector.sector_name,
+            history=history,
+            days_count=len(history)
+        )
     
     def search_sectors(self, keyword: str) -> List[str]:
         """
-        搜索板块
+        搜索板块（从内存缓存）
         
         Args:
             keyword: 搜索关键词
@@ -182,18 +148,16 @@ class SectorServiceDB:
         Returns:
             匹配的板块名称列表
         """
-        db = self.get_db()
-        try:
-            search_pattern = f'%{keyword}%'
-            sectors = db.query(Sector.sector_name)\
-                .filter(Sector.sector_name.like(search_pattern))\
-                .limit(20)\
-                .all()
-            
-            return [s[0] for s in sectors]
-            
-        finally:
-            db.close()
+        search_pattern = keyword.lower()
+        results = []
+        
+        for sector in memory_cache.sectors.values():
+            if search_pattern in sector.sector_name.lower():
+                results.append(sector.sector_name)
+                if len(results) >= 20:
+                    break
+                    
+        return results
 
 
 # 创建全局实例

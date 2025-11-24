@@ -2,15 +2,35 @@
 股票查询相关API路由
 """
 from fastapi import APIRouter, HTTPException, Query
-from typing import Optional
+from typing import Optional, List
 from ..services.stock_service_db import stock_service_db
 from ..services.signal_calculator import SignalThresholds
-from ..models import StockHistory
+from ..models import StockHistory, StockFullHistory
 
 router = APIRouter(prefix="/api", tags=["stock"])
 
 # 使用数据库服务
 stock_service = stock_service_db
+
+
+@router.get("/stock/search", response_model=List[StockFullHistory])
+async def search_stock_full(
+    q: str = Query(..., min_length=1, description="股票代码或名称（模糊匹配）"),
+    limit: int = Query(5, ge=1, le=20, description="返回的最大匹配数量")
+):
+    """
+    搜索股票并返回全量历史数据
+    
+    - 返回包含所有83个技术指标的完整数据
+    - 支持代码或名称模糊搜索
+    - 默认返回匹配度最高的前5个
+    """
+    try:
+        results = stock_service.search_stock_full(q, limit)
+        # 如果没有结果，返回空列表而不是404，符合搜索API惯例
+        return results
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/stock/{stock_code}", response_model=StockHistory)

@@ -1,13 +1,18 @@
 """
 全量内存缓存管理器
-启动时一次性加载所有数据到内存，后续操作都走内存
+一次性加载所有数据到内存，避免频繁数据库查询
+使用Numpy数组优化存储，减少内存占用
 """
 import logging
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, TYPE_CHECKING
 from datetime import date
 from collections import defaultdict
 from ..database import SessionLocal
 from ..db_models import Stock, DailyStockData
+from .numpy_cache import numpy_stock_cache
+
+if TYPE_CHECKING:
+    from ..db_models import Sector
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +45,9 @@ class MemoryCacheManager:
         self.dates: List[date] = []
         
         # === 板块数据缓存 ===
+        # 板块基础信息缓存 {sector_id: Sector对象}
+        self.sectors: Dict[int, Sector] = {}
+        
         # 板块每日数据缓存
         self.sector_daily_data_by_date: Dict[date, List[DailyStockData]] = defaultdict(list)  # {date: [SectorDailyData对象列表]}
         self.sector_daily_data_by_name: Dict[str, Dict[date, DailyStockData]] = defaultdict(dict)  # {sector_name: {date: SectorDailyData对象}}
@@ -51,11 +59,14 @@ class MemoryCacheManager:
         logger.info("✅ MemoryCacheManager 初始化完成（尚未加载数据）")
     
     def load_all_data(self):
-        """一次性加载所有数据到内存"""
-        logger.info("🔄 开始全量加载数据到内存...")
+        """一次性加载数据到内存（限制最近30天）"""
+        logger.info("🔄 开始加载数据到内存...")
         
         db = SessionLocal()
         try:
+            from sqlalchemy import func
+            from datetime import timedelta
+            
             # 1. 加载所有股票基础信息
             logger.info("  1/3 加载股票基础信息...")
             stocks = db.query(Stock).all()
@@ -63,9 +74,17 @@ class MemoryCacheManager:
                 self.stocks[stock.stock_code] = stock
             logger.info(f"  ✅ 加载了 {len(self.stocks)} 只股票")
             
-            # 2. 加载所有每日数据（一次性查询）
-            logger.info("  2/3 加载所有每日数据...")
-            daily_data_list = db.query(DailyStockData).all()
+            # 2. 只加载最近30天的每日数据（性能优化）
+            logger.info("  2/3 加载最近30天每日数据...")
+            latest_date = db.query(func.max(DailyStockData.date)).scalar()
+            if latest_date:
+                cutoff_date = latest_date - timedelta(days=30)
+                logger.info(f"  ⚡ 只加载 {cutoff_date} 至 {latest_date} 的数据")
+                daily_data_list = db.query(DailyStockData).filter(
+                    DailyStockData.date >= cutoff_date
+                ).all()
+            else:
+                daily_data_list = []
             
             # 构建内存索引
             date_set = set()
@@ -84,14 +103,36 @@ class MemoryCacheManager:
             self.dates = sorted(list(date_set), reverse=True)
             logger.info(f"  ✅ 共 {len(self.dates)} 个交易日")
             
+            # 3.5 构建Numpy优化数组（性能优化）
+            logger.info("  3.5/5 构建Numpy优化数组...")
+            numpy_stock_cache.build_from_data(daily_data_list)
+            usage = numpy_stock_cache.get_memory_usage()
+            logger.info(f"  ✅ Numpy缓存: {usage['total_mb']:.2f} MB ({usage['n_records']} 条记录)")
+            
             # 4. 对每个日期的数据按rank排序
             for date_key in self.daily_data_by_date:
                 self.daily_data_by_date[date_key].sort(key=lambda x: x.rank)
             
-            # 4. 加载板块数据
+            # 5. 加载板块数据
             logger.info("  4/5 加载板块数据...")
-            from ..db_models import SectorDailyData
-            sector_data_list = db.query(SectorDailyData).all()
+            from ..db_models import SectorDailyData, Sector
+            
+            # 4.1 加载板块基础信息
+            sectors = db.query(Sector).all()
+            for sector in sectors:
+                self.sectors[sector.id] = sector
+            logger.info(f"  ✅ 加载了 {len(self.sectors)} 个板块基础信息")
+            
+            # 4.2 只加载最近30天的板块每日数据（性能优化）
+            sector_latest_date = db.query(func.max(SectorDailyData.date)).scalar()
+            if sector_latest_date:
+                sector_cutoff_date = sector_latest_date - timedelta(days=30)
+                logger.info(f"  ⚡ 只加载 {sector_cutoff_date} 至 {sector_latest_date} 的板块数据")
+                sector_data_list = db.query(SectorDailyData).filter(
+                    SectorDailyData.date >= sector_cutoff_date
+                ).all()
+            else:
+                sector_data_list = []
             
             # 构建板块索引
             sector_date_set = set()
@@ -181,6 +222,10 @@ class MemoryCacheManager:
     
     # === 板块数据查询方法 ===
     
+    def get_sector_info(self, sector_id: int) -> Optional["Sector"]:
+        """获取板块基础信息"""
+        return self.sectors.get(sector_id)
+
     def get_sector_available_dates(self) -> List[str]:
         """获取所有板块可用日期"""
         return [d.strftime('%Y%m%d') for d in self.sector_dates]

@@ -8,7 +8,7 @@ import logging
 
 from ..database import SessionLocal
 from ..db_models import Stock, DailyStockData
-from ..models.stock import StockHistory
+from ..models.stock import StockHistory, StockFullHistory, StockDailyFull
 from ..utils.ttl_cache import TTLCache
 from .memory_cache import memory_cache
 from sqlalchemy import desc, or_
@@ -26,6 +26,187 @@ class StockServiceDB:
     def get_db(self):
         """获取数据库会话"""
         return SessionLocal()
+
+    def _convert_to_daily_full(self, data: DailyStockData) -> StockDailyFull:
+        """将DailyStockData转换为StockDailyFull"""
+        # 使用字典推导式快速转换，注意处理DECIMAL转float
+        def to_float(val):
+            return float(val) if val is not None else None
+            
+        def to_int(val):
+            return int(val) if val is not None else None
+
+        return StockDailyFull(
+            date=data.date.strftime('%Y%m%d'),
+            rank=data.rank,
+            
+            # 基础价格
+            open_price=to_float(data.open_price),
+            high_price=to_float(data.high_price),
+            low_price=to_float(data.low_price),
+            close_price=to_float(data.close_price),
+            price_change=to_float(data.price_change),
+            total_score=to_float(data.total_score),
+            
+            # 成交量
+            volume=data.volume,
+            turnover_rate_percent=to_float(data.turnover_rate_percent),
+            volume_days=to_float(data.volume_days),
+            avg_volume_ratio_50=to_float(data.avg_volume_ratio_50),
+            volume_days_volume=to_float(data.volume_days_volume),
+            avg_volume_ratio_50_volume=to_float(data.avg_volume_ratio_50_volume),
+            obv=data.obv,
+            obv_consec=data.obv_consec,
+            obv_2=data.obv_2,
+            
+            # 波动率
+            volatility=to_float(data.volatility),
+            volatile_consec=data.volatile_consec,
+            beta=to_float(data.beta),
+            beta_consec=data.beta_consec,
+            correlation=to_float(data.correlation),
+            
+            # 市场
+            market_cap_billions=to_float(data.market_cap_billions),
+            jump=to_float(data.jump),
+            
+            # 趋势
+            long_term=to_float(data.long_term),
+            short_term=data.short_term,
+            overbought=data.overbought,
+            oversold=data.oversold,
+            
+            # MACD
+            macd_signal=to_float(data.macd_signal),
+            dif_dem=to_float(data.dif_dem),
+            macd_consec=data.macd_consec,
+            dif_0=to_float(data.dif_0),
+            macdcons_consec=data.macdcons_consec,
+            dem_0=to_float(data.dem_0),
+            demcons_consec=data.demcons_consec,
+            histgram=to_float(data.histgram),
+            dif=to_float(data.dif),
+            dem=to_float(data.dem),
+            
+            # LON
+            lon_lonma=to_float(data.lon_lonma),
+            lon_consec=data.lon_consec,
+            lon_0=to_float(data.lon_0),
+            loncons_consec=data.loncons_consec,
+            lonma_0=to_float(data.lonma_0),
+            lonmacons_consec=data.lonmacons_consec,
+            lon_lonma_diff=to_float(data.lon_lonma_diff),
+            lon=to_float(data.lon),
+            lonma=to_float(data.lonma),
+            
+            # KDJ
+            slowkdj_signal=to_float(data.slowkdj_signal),
+            k_kdj=to_float(data.k_kdj),
+            slowkdj_consec=data.slowkdj_consec,
+            slowk=to_float(data.slowk),
+            
+            # DMA
+            dma=to_float(data.dma),
+            dma_consec=data.dma_consec,
+            
+            # DMI
+            pdi_adx=to_float(data.pdi_adx),
+            dmiadx_consec=data.dmiadx_consec,
+            pdi_ndi=to_float(data.pdi_ndi),
+            dmi_consec=data.dmi_consec,
+            adx=to_float(data.adx),
+            plus_di=to_float(data.plus_di),
+            
+            # RSI
+            rsi=to_float(data.rsi),
+            rsi_consec=data.rsi_consec,
+            rsi_2=to_float(data.rsi_2),
+            
+            # CCI
+            cci_neg_90=to_float(data.cci_neg_90),
+            cci_lower_consec=data.cci_lower_consec,
+            cci_pos_90=to_float(data.cci_pos_90),
+            cci_upper_consec=data.cci_upper_consec,
+            cci_neg_90_2=to_float(data.cci_neg_90_2),
+            cci_pos_90_2=to_float(data.cci_pos_90_2),
+            
+            # BOLL
+            bands_lower=to_float(data.bands_lower),
+            bands_lower_consec=data.bands_lower_consec,
+            bands_middle=to_float(data.bands_middle),
+            bands_middle_consec=data.bands_middle_consec,
+            bands_upper=to_float(data.bands_upper),
+            bands_upper_consec=data.bands_upper_consec,
+            lower_band=to_float(data.lower_band),
+            middle_band=to_float(data.middle_band),
+            upper_band=to_float(data.upper_band),
+            
+            # 其他
+            lst_close=to_float(data.lst_close),
+            code2=data.code2,
+            name2=data.name2,
+            zhangdiefu2=to_float(data.zhangdiefu2),
+            volume_consec2=to_float(data.volume_consec2),
+            volume_50_consec2=to_float(data.volume_50_consec2)
+        )
+
+    def search_stock_full(self, keyword: str, limit: int = 5) -> list[StockFullHistory]:
+        """
+        搜索股票并返回全量历史数据
+        
+        Args:
+            keyword: 搜索关键词（代码或名称）
+            limit: 返回的最大股票数量（防止数据量过大）
+            
+        Returns:
+            List[StockFullHistory]
+        """
+        keyword_lower = keyword.lower()
+        matched_stocks = []
+        
+        # 1. 搜索匹配的股票
+        # 先尝试精确匹配
+        all_stocks = memory_cache.get_all_stocks()
+        if keyword in all_stocks:
+            matched_stocks.append(all_stocks[keyword])
+        
+        # 如果没找到或者需要更多，进行模糊匹配
+        if len(matched_stocks) < limit:
+            for code, stock in all_stocks.items():
+                if code == keyword: # 已经添加过了
+                    continue
+                    
+                if keyword_lower in code.lower() or (stock.stock_name and keyword_lower in stock.stock_name.lower()):
+                    matched_stocks.append(stock)
+                    if len(matched_stocks) >= limit:
+                        break
+        
+        if not matched_stocks:
+            return []
+            
+        # 2. 获取全量历史数据
+        results = []
+        for stock in matched_stocks:
+            # 获取该股票的所有历史数据（按日期降序）
+            daily_data_map = memory_cache.daily_data_by_stock.get(stock.stock_code, {})
+            if not daily_data_map:
+                continue
+                
+            # 排序数据（最新日期在前）
+            sorted_data = sorted(daily_data_map.values(), key=lambda x: x.date, reverse=True)
+            
+            # 转换为全量模型
+            full_daily_list = [self._convert_to_daily_full(data) for data in sorted_data]
+            
+            results.append(StockFullHistory(
+                code=stock.stock_code,
+                name=stock.stock_name,
+                industry=stock.industry or '未知',
+                total_count=len(full_daily_list),
+                daily_data=full_daily_list
+            ))
+            
+        return results
     
     def search_stock(self, keyword: str, target_date: Optional[str] = None, signal_thresholds=None) -> Optional[StockHistory]:
         """

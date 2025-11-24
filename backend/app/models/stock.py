@@ -133,3 +133,128 @@ class SteadyRiseResult(BaseModel):
     std_improvement: Optional[float] = None  # 提升幅度标准差
     sigma_range: Optional[List[float]] = None  # ±1σ范围 [下限, 上限]
     sigma_stocks: Optional[List[SteadyRiseStock]] = None  # ±1σ范围内的股票
+
+
+class StockDailyFull(BaseModel):
+    """每日全量数据（包含所有83个指标）"""
+    date: str
+    rank: int
+    
+    # 基础价格数据
+    open_price: Optional[float] = None
+    high_price: Optional[float] = None
+    low_price: Optional[float] = None
+    close_price: Optional[float] = None
+    price_change: Optional[float] = None
+    total_score: Optional[float] = None
+    
+    # 成交量相关
+    volume: Optional[int] = None
+    turnover_rate_percent: Optional[float] = None
+    volume_days: Optional[float] = None
+    avg_volume_ratio_50: Optional[float] = None
+    volume_days_volume: Optional[float] = None
+    avg_volume_ratio_50_volume: Optional[float] = None
+    obv: Optional[int] = None
+    obv_consec: Optional[int] = None
+    obv_2: Optional[int] = None
+    
+    # 波动率相关
+    volatility: Optional[float] = None
+    volatile_consec: Optional[int] = None
+    beta: Optional[float] = None
+    beta_consec: Optional[int] = None
+    correlation: Optional[float] = None
+    
+    # 市场数据
+    market_cap_billions: Optional[float] = None
+    jump: Optional[float] = None
+    
+    # 趋势指标
+    long_term: Optional[float] = None
+    short_term: Optional[int] = None
+    overbought: Optional[int] = None
+    oversold: Optional[int] = None
+    
+    # MACD系列
+    macd_signal: Optional[float] = None
+    dif_dem: Optional[float] = None
+    macd_consec: Optional[int] = None
+    dif_0: Optional[float] = None
+    macdcons_consec: Optional[int] = None
+    dem_0: Optional[float] = None
+    demcons_consec: Optional[int] = None
+    histgram: Optional[float] = None
+    dif: Optional[float] = None
+    dem: Optional[float] = None
+    
+    # LON系列
+    lon_lonma: Optional[float] = None
+    lon_consec: Optional[int] = None
+    lon_0: Optional[float] = None
+    loncons_consec: Optional[int] = None
+    lonma_0: Optional[float] = None
+    lonmacons_consec: Optional[int] = None
+    lon_lonma_diff: Optional[float] = None
+    lon: Optional[float] = None
+    lonma: Optional[float] = None
+    
+    # KDJ系列
+    slowkdj_signal: Optional[float] = None
+    k_kdj: Optional[float] = None
+    slowkdj_consec: Optional[int] = None
+    slowk: Optional[float] = None
+    
+    # DMA
+    dma: Optional[float] = None
+    dma_consec: Optional[int] = None
+    
+    # DMI
+    pdi_adx: Optional[float] = None
+    dmiadx_consec: Optional[int] = None
+    pdi_ndi: Optional[float] = None
+    dmi_consec: Optional[int] = None
+    adx: Optional[float] = None
+    plus_di: Optional[float] = None
+    
+    # RSI
+    rsi: Optional[float] = None
+    rsi_consec: Optional[int] = None
+    rsi_2: Optional[float] = None
+    
+    # CCI
+    cci_neg_90: Optional[float] = None
+    cci_lower_consec: Optional[int] = None
+    cci_pos_90: Optional[float] = None
+    cci_upper_consec: Optional[int] = None
+    cci_neg_90_2: Optional[float] = None
+    cci_pos_90_2: Optional[float] = None
+    
+    # BOLL
+    bands_lower: Optional[float] = None
+    bands_lower_consec: Optional[int] = None
+    bands_middle: Optional[float] = None
+    bands_middle_consec: Optional[int] = None
+    bands_upper: Optional[float] = None
+    bands_upper_consec: Optional[int] = None
+    lower_band: Optional[float] = None
+    middle_band: Optional[float] = None
+    upper_band: Optional[float] = None
+    
+    # 其他
+    lst_close: Optional[float] = None
+    code2: Optional[str] = None
+    name2: Optional[str] = None
+    zhangdiefu2: Optional[float] = None
+    volume_consec2: Optional[float] = None
+    volume_50_consec2: Optional[float] = None
+
+
+class StockFullHistory(BaseModel):
+    """股票全量历史数据"""
+    code: str
+    name: str
+    industry: str
+    total_count: int
+    daily_data: List[StockDailyFull]
+

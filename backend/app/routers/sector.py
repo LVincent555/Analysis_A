@@ -134,8 +134,9 @@ async def get_sector_trend(
             history_data = memory_cache.get_sector_history(sector_id, dates)
             
             if history_data:
-                # 使用第一条数据获取板块名称
-                sector_name = history_data[0].sector_name if hasattr(history_data[0], 'sector_name') else str(sector_id)
+                # 从内存缓存获取板块基础信息
+                sector_info = memory_cache.get_sector_info(sector_id)
+                sector_name = sector_info.sector_name if sector_info else str(sector_id)
                 sector_dict[sector_id]['name'] = sector_name
                 
                 # 初始化数组
@@ -247,7 +248,9 @@ async def get_sector_rank_changes(
                 else:
                     statistics['rank_same'] += 1
             
-            sector_name = data.sector_name if hasattr(data, 'sector_name') else str(data.sector_id)
+            # 从内存缓存获取板块名称
+            sector_info = memory_cache.get_sector_info(data.sector_id)
+            sector_name = sector_info.sector_name if sector_info else str(data.sector_id)
             
             sectors.append({
                 'name': sector_name,
