@@ -33,7 +33,7 @@ async def get_industry_stats(period: int = 3, top_n: int = 20):
 @router.get("/industry/trend")
 async def get_industry_trend(period: int = 14, top_n: int = 100, date: str = None):
     """
-    获取行业趋势数据（多日期动态变化）- 使用内存缓存优化
+    获取行业趋势数据（多日期动态变化）- 使用内存缓存优化 + TTL缓存
     
     Args:
         period: 分析周期（天数），默认14
@@ -47,6 +47,13 @@ async def get_industry_trend(period: int = 14, top_n: int = 100, date: str = Non
         from datetime import datetime
         from collections import Counter
         from ..services.memory_cache import memory_cache
+        from ..services.ttl_cache import ttl_cache
+        
+        # 🔥 优化：添加TTL缓存，避免重复计算
+        cache_key = f"industry_trend_{period}_{top_n}_{date or 'latest'}"
+        cached_result = ttl_cache.get(cache_key)
+        if cached_result is not None:
+            return cached_result
         
         # 1. 从内存缓存获取日期范围
         if date:
@@ -112,10 +119,15 @@ async def get_industry_trend(period: int = 14, top_n: int = 100, date: str = Non
                 "industry_counts": dict(date_industry_map[date_str])
             })
         
-        return {
+        result = {
             "data": data,
             "industries": sorted(list(all_industries))
         }
+        
+        # 🔥 优化：缓存结果，TTL=300秒（5分钟）
+        ttl_cache.set(cache_key, result, ttl=300)
+        
+        return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

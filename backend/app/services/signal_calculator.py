@@ -84,7 +84,8 @@ class SignalCalculator:
         stock_code: str,
         current_date: date,
         current_data: DailyStockData,
-        history_days: int = 7
+        history_days: int = 7,
+        simplify_hot_labels: bool = False  # 🔥 新增：是否简化热点标签（行业板块用）
     ) -> Dict:
         """
         计算股票的多榜单信号
@@ -110,11 +111,16 @@ class SignalCalculator:
             hot_signal = self._check_hot_list(current_data.rank)
         
         if hot_signal:
-            # 添加所有热点标签（如果有labels数组），否则只添加主标签
-            if 'labels' in hot_signal and hot_signal['labels']:
-                signals.extend(hot_signal['labels'])
-            else:
+            # 🔥 修复：根据simplify_hot_labels参数决定添加主标签还是所有标签
+            if simplify_hot_labels:
+                # 行业板块模式：只添加主标签，避免信号污染
                 signals.append(hot_signal['label'])
+            else:
+                # 个股查询模式：添加所有热点标签，完整展示（用户设计要求）
+                if 'labels' in hot_signal and hot_signal['labels']:
+                    signals.extend(hot_signal['labels'])
+                else:
+                    signals.append(hot_signal['label'])
             signal_score += hot_signal['score']
         
         # 2. 排名跳变榜信号

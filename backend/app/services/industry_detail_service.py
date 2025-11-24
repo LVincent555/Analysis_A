@@ -141,7 +141,8 @@ class IndustryDetailService:
                     stock_code=stock_info.stock_code,
                     current_date=query_date,
                     current_data=stock_data,
-                    history_days=7
+                    history_days=7,
+                    simplify_hot_labels=True  # 🔥 行业板块：简化热点标签，避免信号污染
                 )
                 # 填充信号数据
                 stock_signal.signals = signal_data['signals']
