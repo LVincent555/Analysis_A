@@ -260,38 +260,42 @@ export default function IndustryWeightedModule({ selectedDate, onNavigate }) {
       
       {/* 数据展示 */}
       {!loading && data && data.stats && (
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center space-x-2">
-              <BarChart3 className="h-5 w-5 text-green-600" />
-              <h3 className="text-lg font-bold text-gray-900">
+        <div className="bg-white rounded-lg shadow-md p-4 md:p-6 mb-6">
+          {/* 标题区域 - 移动端垂直布局 */}
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-4 gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <BarChart3 className="h-5 w-5 text-green-600 flex-shrink-0" />
+              <h3 className="text-base md:text-lg font-bold text-gray-900">
                 行业热度排名（{getMetricName()}）
               </h3>
-              <span className="text-sm text-gray-500">(前30个行业)</span>
-              <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">
+              <span className="text-xs md:text-sm text-gray-500">(前30个行业)</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 text-xs md:text-sm text-gray-600">
+              <span className="bg-blue-50 text-blue-600 px-2 py-1 rounded">
                 💡 点击柱状图查看板块详情
               </span>
-            </div>
-            <div className="text-sm text-gray-600">
-              共 {data.total_stocks} 只股票，{data.stats.length} 个行业 · {formatDate(data.date)}
+              <span>
+                共 {data.total_stocks} 只股票，{data.stats.length} 个行业 · {formatDate(data.date)}
+              </span>
               {(metric === 'B1' || metric === 'B2') && (
-                <span className="ml-2 text-indigo-600 font-medium">k={data.k_value.toFixed(3)}</span>
+                <span className="text-indigo-600 font-medium">k={data.k_value.toFixed(3)}</span>
               )}
             </div>
           </div>
           
-          {/* 条形图 */}
-          <ResponsiveContainer width="100%" height={800}>
-            <BarChart data={data.stats.slice(0, 30)} layout="vertical" margin={{ left: 120, right: 50 }}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis type="number" label={{ value: getMetricName(), position: 'bottom' }} />
-              <YAxis 
-                type="category" 
-                dataKey="industry" 
-                width={110}
-                tick={{ fontSize: 11 }}
-                interval={0}
-              />
+          {/* 条形图 - 移动端优化 */}
+          <div className="h-[600px] md:h-[800px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={data.stats.slice(0, 30)} layout="vertical" margin={{ left: 5, right: 5, top: 5, bottom: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis type="number" tick={{ fontSize: 10 }} />
+                <YAxis 
+                  type="category" 
+                  dataKey="industry" 
+                  width={55}
+                  tick={{ fontSize: 11 }}
+                  interval={0}
+                />
               <Tooltip 
                 formatter={(value) => [parseFloat(value).toFixed(2), getMetricName()]}
               />
@@ -311,7 +315,8 @@ export default function IndustryWeightedModule({ selectedDate, onNavigate }) {
                 ))}
               </Bar>
             </BarChart>
-          </ResponsiveContainer>
+            </ResponsiveContainer>
+          </div>
           
           {/* 详细数据表格 */}
           <div className="mt-6 overflow-x-auto">
