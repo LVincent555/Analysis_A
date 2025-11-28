@@ -199,6 +199,86 @@ class MemoryCacheManager:
         stock_data = self.daily_data_by_stock.get(stock_code, {})
         return [stock_data[d] for d in dates if d in stock_data]
     
+    def get_stock_data_for_strategy(self, stock_code: str, target_date: date = None, lookback_days: int = 30) -> Optional[dict]:
+        """
+        获取股票策略分析所需的数据
+        
+        Args:
+            stock_code: 股票代码
+            target_date: 目标日期，默认最新日期
+            lookback_days: 回溯天数
+            
+        Returns:
+            包含closes, highs, lows, opens, volumes, turnovers, ranks的字典，或None
+        """
+        # 获取股票基础信息
+        stock_info = self.get_stock_info(stock_code)
+        if not stock_info:
+            return None
+        
+        # 确定目标日期
+        if target_date is None:
+            target_date = self.get_latest_date()
+        if not target_date:
+            return None
+        
+        # 获取该股票的所有可用数据
+        stock_daily = self.daily_data_by_stock.get(stock_code, {})
+        if not stock_daily:
+            return None
+        
+        # 筛选目标日期之前的数据，按日期排序
+        available_dates = sorted([d for d in stock_daily.keys() if d <= target_date])
+        if len(available_dates) < 5:
+            return None
+        
+        # 取最近N天
+        target_dates = available_dates[-lookback_days:] if len(available_dates) > lookback_days else available_dates
+        
+        # 收集数据
+        closes, highs, lows, opens = [], [], [], []
+        volumes, turnovers, ranks, bbis = [], [], [], []
+        
+        for d in target_dates:
+            data = stock_daily[d]
+            closes.append(float(data.close_price) if data.close_price else 0)
+            highs.append(float(data.high_price) if data.high_price else 0)
+            lows.append(float(data.low_price) if data.low_price else 0)
+            opens.append(float(data.open_price) if data.open_price else 0)
+            volumes.append(float(data.volume) if data.volume else 0)
+            turnovers.append(float(data.turnover_rate_percent) if data.turnover_rate_percent else 0)
+            ranks.append(int(data.rank) if data.rank else 0)
+            # BBI用middle_band(布林中轨)代替
+            bbis.append(float(data.middle_band) if hasattr(data, 'middle_band') and data.middle_band else 0)
+        
+        return {
+            'stock_code': stock_code,
+            'stock_name': stock_info.stock_name,
+            'signal_date': target_dates[-1].strftime('%Y-%m-%d'),
+            'closes': closes,
+            'highs': highs,
+            'lows': lows,
+            'opens': opens,
+            'volumes': volumes,
+            'turnovers': turnovers,
+            'ranks': ranks if any(ranks) else None,
+            'bbis': bbis,
+            'dates': target_dates,
+        }
+    
+    def get_all_stocks_for_strategy(self, target_date: date = None, lookback_days: int = 30) -> List[dict]:
+        """
+        获取所有股票的策略分析数据
+        
+        用于批量扫描策略信号
+        """
+        results = []
+        for stock_code in self.stocks.keys():
+            data = self.get_stock_data_for_strategy(stock_code, target_date, lookback_days)
+            if data:
+                results.append(data)
+        return results
+    
     def get_top_n_stocks(self, target_date: date, max_count: int) -> List[DailyStockData]:
         """获取指定日期的TOP N股票"""
         all_data = self.daily_data_by_date.get(target_date, [])

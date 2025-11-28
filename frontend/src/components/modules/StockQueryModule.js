@@ -9,7 +9,7 @@ import { API_BASE_URL } from '../../constants/config';
 import { formatDate } from '../../utils';
 import { useSignalConfig } from '../../contexts/SignalConfigContext';
 
-export default function StockQueryModule({ stockCode, queryTrigger, selectedDate }) {
+export default function StockQueryModule({ stockCode, setStockCode, onSearch, queryTrigger, selectedDate }) {
   // 使用全局信号配置
   const { signalThresholds } = useSignalConfig();
   
@@ -23,6 +23,13 @@ export default function StockQueryModule({ stockCode, queryTrigger, selectedDate
     avg_volume_ratio_50: true,
     volatility: true
   });
+
+  // 处理搜索提交
+  const handleSearch = () => {
+    if (onSearch) {
+      onSearch();
+    }
+  };
 
   // 查询股票 - 监听queryTrigger变化
   useEffect(() => {
@@ -67,40 +74,62 @@ export default function StockQueryModule({ stockCode, queryTrigger, selectedDate
     if (queryTrigger > 0) {
       handleStockQuery();
     }
-  }, [queryTrigger, stockCode, signalThresholds.hotListMode, signalThresholds.hotListVersion, signalThresholds.hotListTop, signalThresholds.rankJumpMin, signalThresholds.steadyRiseDays, signalThresholds.priceSurgeMin, signalThresholds.volumeSurgeMin, signalThresholds.volatilitySurgeMin]); // 添加所有阈值依赖
+  }, [queryTrigger, stockCode, signalThresholds, selectedDate]); 
 
   return (
-    <>
-      {/* 查询提示 - 当没有查询结果时显示 */}
-      {!stockHistory && !stockLoading && (
-        <div className="bg-white rounded-lg shadow-md p-12 text-center mb-6">
-          <Search className="mx-auto h-16 w-16 text-gray-400 mb-4" />
-          <h3 className="text-xl font-bold text-gray-900 mb-2">股票历史数据查询</h3>
-          <p className="text-gray-600 mb-4">请在左侧输入股票代码进行查询</p>
-          <p className="text-sm text-gray-500">查看个股的历史排名、技术指标及变化趋势</p>
+    <div className="max-w-5xl mx-auto p-4 md:p-6">
+      {/* 顶部搜索区 */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6 text-center">
+        <Search className="mx-auto h-12 w-12 text-purple-500 mb-4" />
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">股票历史查询</h2>
+        <p className="text-gray-500 mb-6 max-w-md mx-auto">
+          输入股票代码（如 600519）查看其历史排名、技术指标变化及多维度信号分析
+        </p>
+        
+        <div className="flex flex-col sm:flex-row max-w-lg mx-auto gap-3">
+          <div className="relative flex-1">
+            <input
+              type="text"
+              value={stockCode}
+              onChange={(e) => setStockCode && setStockCode(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+              placeholder="输入股票代码..."
+              className="w-full pl-4 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent shadow-sm text-lg"
+            />
+          </div>
+          <button
+            onClick={handleSearch}
+            disabled={stockLoading}
+            className="px-8 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-colors shadow-sm disabled:opacity-70 flex items-center justify-center gap-2"
+          >
+            {stockLoading ? <RefreshCw className="animate-spin h-5 w-5" /> : <Search className="h-5 w-5" />}
+            <span>查询</span>
+          </button>
         </div>
-      )}
+      </div>
 
       {/* 加载状态 */}
       {stockLoading && (
-        <div className="bg-white rounded-lg shadow-md p-12 text-center mb-6">
-          <RefreshCw className="mx-auto h-12 w-12 text-purple-600 animate-spin mb-4" />
-          <p className="text-gray-600 text-lg">正在查询股票数据...</p>
+        <div className="bg-white rounded-xl shadow-sm p-12 text-center mb-6 animate-pulse">
+          <div className="mx-auto h-12 w-12 bg-purple-100 rounded-full flex items-center justify-center mb-4">
+            <RefreshCw className="h-6 w-6 text-purple-600 animate-spin" />
+          </div>
+          <p className="text-gray-600 text-lg font-medium">正在挖掘数据宝藏...</p>
+          <p className="text-sm text-gray-400 mt-2">正在分析排名趋势与技术指标</p>
         </div>
       )}
 
       {/* 错误提示 */}
       {stockError && !stockLoading && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-          <p className="text-red-800 font-medium">错误: {stockError}</p>
+        <div className="bg-red-50 border border-red-200 rounded-xl p-6 mb-6 text-center">
+          <p className="text-red-800 font-medium text-lg">查询出错</p>
+          <p className="text-red-600 mt-1">{stockError}</p>
         </div>
       )}
 
       {/* 查询结果 */}
       {stockHistory && !stockLoading && (
-        <div className="space-y-6 mb-6">
-          {/* 本地配置已删除，使用全局配置 */}
-          
+        <div className="space-y-6 animate-fadeIn">
           {/* Stock Info Card */}
           <div className="bg-white rounded-lg shadow-md p-6">
             <div className="flex items-center justify-between mb-4">
@@ -478,6 +507,6 @@ export default function StockQueryModule({ stockCode, queryTrigger, selectedDate
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 }

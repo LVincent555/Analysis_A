@@ -45,16 +45,24 @@ class StockInfo(BaseModel):
         # 添加date_rank_info（如果存在）
         if self.date_rank_info is not None:
             result["date_rank_info"] = [
-                {"date": info.date, "rank": info.rank} 
+                {
+                    "date": info.date, 
+                    "rank": info.rank,
+                    "price_change": info.price_change,
+                    "turnover_rate": info.turnover_rate,
+                    "volatility": info.volatility
+                } 
                 for info in self.date_rank_info
             ]
             
-            # 添加最新一天的涨跌幅（从最后一个date_rank_info中获取）
+            # 添加最新一天的涨跌幅和波动率（从最后一个date_rank_info中获取）
             if len(self.date_rank_info) > 0:
                 latest_info = self.date_rank_info[-1]
                 result["price_change"] = latest_info.price_change
+                result["volatility"] = latest_info.volatility
         else:
             result["price_change"] = None
+            result["volatility"] = None
         
         return result
 

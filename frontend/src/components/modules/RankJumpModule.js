@@ -197,6 +197,7 @@ export default function RankJumpModule({ jumpBoardType, jumpThreshold, selectedD
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">排名跳变</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">涨跌幅</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">换手率</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">波动率</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
@@ -239,6 +240,19 @@ export default function RankJumpModule({ jumpBoardType, jumpThreshold, selectedD
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                           {stock.turnover_rate?.toFixed(2)}%
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          {stock.volatility !== null && stock.volatility !== undefined ? (
+                            <span className={`text-sm font-medium ${
+                              stock.volatility > 5 ? 'text-orange-600' : 
+                              stock.volatility > 3 ? 'text-yellow-600' : 
+                              'text-gray-600'
+                            }`}>
+                              {stock.volatility.toFixed(2)}%
+                            </span>
+                          ) : (
+                            <span className="text-sm text-gray-400">-</span>
+                          )}
                         </td>
                       </tr>
                     ));

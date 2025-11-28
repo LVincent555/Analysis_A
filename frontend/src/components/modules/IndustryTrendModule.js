@@ -132,40 +132,42 @@ export default function IndustryTrendModule({ topNLimit, selectedDate, onNavigat
               共 {topNIndustry.total_stocks} 只股票，{topNIndustry.stats.length} 个行业 · {formatDate(topNIndustry.date)}
             </div>
           </div>
-          <ResponsiveContainer width="100%" height={800}>
-            <BarChart data={topNIndustry.stats.slice(0, 30)} layout="vertical" margin={{ left: 120, right: 50 }}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis type="number" label={{ value: '股票数量', position: 'bottom' }} />
-              <YAxis 
-                type="category" 
-                dataKey="industry" 
-                width={110}
-                tick={{ fontSize: 11 }}
-                interval={0}
-              />
-              <Tooltip 
-                formatter={(value, name, props) => [`${value}个 (${props.payload.percentage}%)`, '股票数量']} 
-              />
-              <Bar 
-                dataKey="count" 
-                fill="#10b981" 
-                label={{ position: 'right', fontSize: 11, fill: '#666' }}
-                onClick={(data) => {
-                  if (data && data.industry) {
-                    handleIndustryClick(data.industry);
-                  }
-                }}
-                cursor="pointer"
-              >
-                {topNIndustry.stats.slice(0, 30).map((entry, index) => (
-                  <Cell 
-                    key={`cell-${index}`} 
-                    fill={COLORS[index % COLORS.length]}
-                  />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+          <div className="h-[400px] md:h-[800px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={topNIndustry.stats.slice(0, 30)} layout="vertical" margin={{ left: 80, right: 30 }}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis type="number" label={{ value: '股票数量', position: 'bottom' }} />
+                <YAxis 
+                  type="category" 
+                  dataKey="industry" 
+                  width={80}
+                  tick={{ fontSize: 10 }}
+                  interval={0}
+                />
+                <Tooltip 
+                  formatter={(value, name, props) => [`${value}个 (${props.payload.percentage}%)`, '股票数量']} 
+                />
+                <Bar 
+                  dataKey="count" 
+                  fill="#10b981" 
+                  label={{ position: 'right', fontSize: 10, fill: '#666' }}
+                  onClick={(data) => {
+                    if (data && data.industry) {
+                      handleIndustryClick(data.industry);
+                    }
+                  }}
+                  cursor="pointer"
+                >
+                  {topNIndustry.stats.slice(0, 30).map((entry, index) => (
+                    <Cell 
+                      key={`cell-${index}`} 
+                      fill={COLORS[index % COLORS.length]}
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         </div>
       )}
 
@@ -334,80 +336,84 @@ export default function IndustryTrendModule({ topNLimit, selectedDate, onNavigat
             <p className="text-xs text-gray-500 mb-4">
               💡 提示：点击图例可切换显示/隐藏行业，鼠标悬停查看详细数据
             </p>
-            <ResponsiveContainer width="100%" height={500}>
-              {trendChartType === 'line' ? (
-                <LineChart 
-                  data={industryTrend.data} 
-                  margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-                  onMouseLeave={() => setHighlightedIndustry(null)}
-                >
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis 
-                    dataKey="date" 
-                    tickFormatter={(value) => `${value.slice(4,6)}/${value.slice(6,8)}`}
-                  />
-                  <YAxis label={{ value: '股票数量', angle: -90, position: 'insideLeft' }} />
-                  <Tooltip content={<CustomTooltip />} />
-                  <RechartsLegend content={renderLegend} />
-                  {topNIndustries.map((industry, index) => {
-                    const isHidden = hiddenIndustries.includes(industry);
-                    const isHighlighted = highlightedIndustry === industry;
-                    const isDimmed = highlightedIndustry && !isHighlighted;
-                    
-                    return (
-                      <Line
-                        key={industry}
-                        type="monotone"
-                        dataKey={(data) => data.industry_counts[industry] || 0}
-                        name={industry}
-                        stroke={COLORS[index % COLORS.length]}
-                        strokeWidth={isHighlighted ? 4 : 2.5}
-                        strokeOpacity={isHidden ? 0 : (isDimmed ? 0.2 : 1)}
-                        dot={{ r: isHighlighted ? 5 : 4 }}
-                        activeDot={{ r: 7 }}
-                        hide={isHidden}
-                      />
-                    );
-                  })}
-                </LineChart>
-              ) : (
-                <AreaChart 
-                  data={industryTrend.data} 
-                  margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-                  onMouseLeave={() => setHighlightedIndustry(null)}
-                >
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis 
-                    dataKey="date" 
-                    tickFormatter={(value) => `${value.slice(4,6)}/${value.slice(6,8)}`}
-                  />
-                  <YAxis label={{ value: '股票数量', angle: -90, position: 'insideLeft' }} />
-                  <Tooltip content={<CustomTooltip />} />
-                  <RechartsLegend content={renderLegend} />
-                  {topNIndustries.map((industry, index) => {
-                    const isHidden = hiddenIndustries.includes(industry);
-                    const isHighlighted = highlightedIndustry === industry;
-                    const isDimmed = highlightedIndustry && !isHighlighted;
-                    
-                    return (
-                      <Area
-                        key={industry}
-                        type="monotone"
-                        dataKey={(data) => data.industry_counts[industry] || 0}
-                        name={industry}
-                        stackId="1"
-                        stroke={COLORS[index % COLORS.length]}
-                        fill={COLORS[index % COLORS.length]}
-                        fillOpacity={isHidden ? 0 : (isDimmed ? 0.15 : (isHighlighted ? 0.8 : 0.6))}
-                        strokeOpacity={isHidden ? 0 : (isDimmed ? 0.2 : 1)}
-                        strokeWidth={isHighlighted ? 2.5 : 1}
-                        hide={isHidden}
-                      />
-                    );
-                  })}
-                </AreaChart>
-              )}
-            </ResponsiveContainer>
+            <div className="h-[300px] md:h-[500px]">
+              <ResponsiveContainer width="100%" height="100%">
+                {trendChartType === 'line' ? (
+                  <LineChart 
+                    data={industryTrend.data} 
+                    margin={{ top: 5, right: 10, left: 0, bottom: 5 }}
+                    onMouseLeave={() => setHighlightedIndustry(null)}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis 
+                      dataKey="date" 
+                      tickFormatter={(value) => `${value.slice(4,6)}/${value.slice(6,8)}`}
+                      tick={{ fontSize: 10 }}
+                    />
+                    <YAxis label={{ value: '数量', angle: -90, position: 'insideLeft', fontSize: 10 }} tick={{ fontSize: 10 }} width={40} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <RechartsLegend content={renderLegend} wrapperStyle={{ paddingTop: '10px' }} />
+                    {topNIndustries.map((industry, index) => {
+                      const isHidden = hiddenIndustries.includes(industry);
+                      const isHighlighted = highlightedIndustry === industry;
+                      const isDimmed = highlightedIndustry && !isHighlighted;
+                      
+                      return (
+                        <Line
+                          key={industry}
+                          type="monotone"
+                          dataKey={(data) => data.industry_counts[industry] || 0}
+                          name={industry}
+                          stroke={COLORS[index % COLORS.length]}
+                          strokeWidth={isHighlighted ? 4 : 2.5}
+                          strokeOpacity={isHidden ? 0 : (isDimmed ? 0.2 : 1)}
+                          dot={{ r: isHighlighted ? 5 : 4 }}
+                          activeDot={{ r: 7 }}
+                          hide={isHidden}
+                        />
+                      );
+                    })}
+                  </LineChart>
+                ) : (
+                  <AreaChart 
+                    data={industryTrend.data} 
+                    margin={{ top: 5, right: 10, left: 0, bottom: 5 }}
+                    onMouseLeave={() => setHighlightedIndustry(null)}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis 
+                      dataKey="date" 
+                      tickFormatter={(value) => `${value.slice(4,6)}/${value.slice(6,8)}`}
+                      tick={{ fontSize: 10 }}
+                    />
+                    <YAxis label={{ value: '数量', angle: -90, position: 'insideLeft', fontSize: 10 }} tick={{ fontSize: 10 }} width={40} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <RechartsLegend content={renderLegend} wrapperStyle={{ paddingTop: '10px' }} />
+                    {topNIndustries.map((industry, index) => {
+                      const isHidden = hiddenIndustries.includes(industry);
+                      const isHighlighted = highlightedIndustry === industry;
+                      const isDimmed = highlightedIndustry && !isHighlighted;
+                      
+                      return (
+                        <Area
+                          key={industry}
+                          type="monotone"
+                          dataKey={(data) => data.industry_counts[industry] || 0}
+                          name={industry}
+                          stackId="1"
+                          stroke={COLORS[index % COLORS.length]}
+                          fill={COLORS[index % COLORS.length]}
+                          fillOpacity={isHidden ? 0 : (isDimmed ? 0.15 : (isHighlighted ? 0.8 : 0.6))}
+                          strokeOpacity={isHidden ? 0 : (isDimmed ? 0.2 : 1)}
+                          strokeWidth={isHighlighted ? 2.5 : 1}
+                          hide={isHidden}
+                        />
+                      );
+                    })}
+                  </AreaChart>
+                )}
+              </ResponsiveContainer>
+            </div>
           </div>
         );
       })()}

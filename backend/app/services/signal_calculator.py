@@ -65,6 +65,7 @@ class SignalWeights:
     STEADY_RISE_WEIGHT = 0.15       # 🥉 T3: 稳步上升 15%
     PRICE_SURGE_WEIGHT = 0.10       # 🎖️ T4: 涨幅榜 10%
     VOLUME_SURGE_WEIGHT = 0.10      # 🎖️ T4: 成交量榜 10%
+    NEEDLE_UNDER_20_WEIGHT = 0.20   # 🎯 T2: 单针下二十 20%（策略信号）
 
 
 class SignalCalculator:
@@ -153,7 +154,13 @@ class SignalCalculator:
             signals.append(volatility_signal['label'])
             signal_score += volatility_signal['score']
         
-        # 7. 历史信号追踪（过去7天）
+        # 7. 单针下二十信号（新增策略信号）
+        needle_signal = self._check_needle_under_20(stock_code, current_date)
+        if needle_signal:
+            signals.append(needle_signal['label'])
+            signal_score += needle_signal['score']
+        
+        # 8. 历史信号追踪（过去7天）
         signal_history = self._get_signal_history(
             stock_code, current_date, history_days
         )
@@ -167,6 +174,7 @@ class SignalCalculator:
             logger.info(f"   涨幅榜: {price_signal['score'] if price_signal else 0:.4f}")
             logger.info(f"   成交量榜: {volume_signal['score'] if volume_signal else 0:.4f}")
             logger.info(f"   波动率: {volatility_signal['score'] if volatility_signal else 0:.4f}")
+            logger.info(f"   单针下二十: {needle_signal['score'] if needle_signal else 0:.4f}")
             logger.info(f"   总分: {signal_score:.4f} → 最终: {min(signal_score, 1.0):.4f}")
         
         return {
@@ -181,6 +189,8 @@ class SignalCalculator:
             'in_price_surge': price_signal is not None,
             'in_volume_surge': volume_signal is not None,
             'in_volatility_surge': volatility_signal is not None,
+            'in_needle_under_20': needle_signal is not None,
+            'needle_pattern': needle_signal.get('pattern') if needle_signal else None,
             'signal_history': signal_history
         }
     
@@ -604,3 +614,76 @@ class SignalCalculator:
             'steady_rise': steady_rise_history,
             'dates': date_strs
         }
+    
+    def _check_needle_under_20(self, stock_code: str, current_date: date) -> Optional[Dict]:
+        """
+        检查单针下二十信号
+        
+        Args:
+            stock_code: 股票代码
+            current_date: 当前日期
+            
+        Returns:
+            信号字典或None
+        """
+        try:
+            from .strategies.needle_under_20 import NeedleUnder20Strategy
+            
+            # 获取历史数据（需要30天数据计算位置指标）
+            all_dates = memory_cache.get_dates_range(35)
+            target_dates = [d for d in all_dates if d <= current_date][:30]
+            
+            if len(target_dates) < 10:
+                return None
+            
+            # 收集数据
+            closes, highs, lows, opens = [], [], [], []
+            volumes, turnovers, ranks = [], [], []
+            
+            for d in sorted(target_dates):
+                daily_data = memory_cache.get_daily_data_by_stock(stock_code, d)
+                if daily_data:
+                    closes.append(float(daily_data.close))
+                    highs.append(float(daily_data.high))
+                    lows.append(float(daily_data.low))
+                    opens.append(float(daily_data.open))
+                    volumes.append(float(daily_data.volume) if daily_data.volume else 0)
+                    turnovers.append(float(daily_data.turnover_rate) if daily_data.turnover_rate else 0)
+                    ranks.append(int(daily_data.rank) if daily_data.rank else 0)
+            
+            if len(closes) < 10:
+                return None
+            
+            # 获取股票名称
+            stock_info = memory_cache.get_stock_info(stock_code)
+            stock_name = stock_info.stock_name if stock_info else ''
+            
+            # 分析
+            strategy = NeedleUnder20Strategy()
+            result = strategy.analyze(
+                stock_code=stock_code,
+                stock_name=stock_name,
+                signal_date=current_date.strftime('%Y-%m-%d'),
+                closes=closes,
+                highs=highs,
+                lows=lows,
+                opens=opens,
+                volumes=volumes,
+                turnovers=turnovers,
+                ranks=ranks if any(ranks) else None
+            )
+            
+            # 检查是否触发信号
+            if result.is_triggered and result.signal_level in ['strong', 'normal']:
+                return {
+                    'label': '单针下二十',
+                    'score': SignalWeights.NEEDLE_UNDER_20_WEIGHT * (result.total_score / 100),
+                    'pattern': result.pattern_name,
+                    'total_score': result.total_score
+                }
+            
+            return None
+            
+        except Exception as e:
+            logger.debug(f"单针下二十信号计算失败 [{stock_code}]: {e}")
+            return None

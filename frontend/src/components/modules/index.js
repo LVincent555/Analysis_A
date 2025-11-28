@@ -10,3 +10,4 @@ export { default as SectorTrendModule } from './SectorTrendModule';  // 新增�
 export { default as RankJumpModule } from './RankJumpModule';
 export { default as SteadyRiseModule } from './SteadyRiseModule';
 export { default as SectorModule } from './SectorModule';  // 已整合到SectorTrendModule，保留以防兼容性
+export { default as NeedleUnder20Module } from './NeedleUnder20Module';  // 新增：单针下二十策略模块

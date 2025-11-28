@@ -10,7 +10,7 @@ import { formatDate } from '../../utils';
 import SearchBar from '../common/SearchBar';
 import HighlightText from '../common/HighlightText';
 
-export default function HotSpotsModule({ boardType, selectedPeriod, topN, selectedDate }) {
+export default function HotSpotsModule({ boardType, selectedPeriod, topN, selectedDate, refreshTrigger }) {
   const [analysisData, setAnalysisData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -33,6 +33,9 @@ export default function HotSpotsModule({ boardType, selectedPeriod, topN, select
         if (selectedDate) {
           url += `&date=${selectedDate}`;
         }
+        // 加上时间戳防止缓存
+        url += `&_t=${Date.now()}`;
+        
         const response = await axios.get(url);
         setAnalysisData(response.data);
       } catch (err) {
@@ -48,7 +51,7 @@ export default function HotSpotsModule({ boardType, selectedPeriod, topN, select
     };
 
     fetchData();
-  }, [selectedPeriod, boardType, topN, selectedDate]);
+  }, [selectedPeriod, boardType, topN, selectedDate, refreshTrigger]);
 
   // 获取前1000名行业数据
   useEffect(() => {
@@ -229,100 +232,185 @@ export default function HotSpotsModule({ boardType, selectedPeriod, topN, select
             </div>
           </div>
 
-          {/* Table */}
+          {/* Table View (Desktop) */}
           {analysisData.stocks && Array.isArray(analysisData.stocks) && analysisData.stocks.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      排名
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      股票代码
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      股票名称
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      行业
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      命中次数
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      最新排名
-                    </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      涨跌幅
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      出现日期及排名
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {paginatedStocks.map((stock, index) => (
-                    <tr
-                      key={stock.stock_code}
-                      className="hover:bg-gray-50 transition-colors"
-                    >
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        {stock.fixed_rank}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-sm font-semibold text-indigo-600">
-                          <HighlightText text={stock.stock_code} highlight={searchQuery} />
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-sm font-medium text-gray-900">
+            <>
+              {/* Desktop Table View */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        序号
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        股票代码
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        股票名称
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        行业
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        命中次数
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        最新排名
+                      </th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        涨跌幅
+                      </th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        波动率
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        出现日期及排名
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {paginatedStocks.map((stock, index) => (
+                      <tr
+                        key={stock.stock_code}
+                        className="hover:bg-gray-50 transition-colors"
+                      >
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                          {stock.fixed_rank}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="text-sm font-semibold text-indigo-600">
+                            <HighlightText text={stock.stock_code} highlight={searchQuery} />
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="text-sm font-medium text-gray-900">
+                            <HighlightText text={stock?.stock_name || stock?.name || '-'} highlight={searchQuery} />
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="text-xs text-gray-600 bg-purple-50 px-2 py-1 rounded">
+                            {stock.industry}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            {stock.appearances} 次
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                            第 {stock.latest_rank} 名
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right">
+                          {stock.price_change !== null && stock.price_change !== undefined ? (
+                            <span className={`text-sm font-medium ${
+                              stock.price_change > 0 ? 'text-red-600' : 
+                              stock.price_change < 0 ? 'text-green-600' : 
+                              'text-gray-600'
+                            }`}>
+                              {stock.price_change > 0 ? '+' : ''}{stock.price_change.toFixed(2)}%
+                            </span>
+                          ) : (
+                            <span className="text-sm text-gray-400">-</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right">
+                          {stock.volatility !== null && stock.volatility !== undefined ? (
+                            <span className={`text-sm font-medium ${
+                              stock.volatility > 5 ? 'text-orange-600' : 
+                              stock.volatility > 3 ? 'text-yellow-600' : 
+                              'text-gray-600'
+                            }`}>
+                              {stock.volatility.toFixed(2)}%
+                            </span>
+                          ) : (
+                            <span className="text-sm text-gray-400">-</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-600">
+                          {stock.date_rank_info && Array.isArray(stock.date_rank_info) && stock.date_rank_info.length > 0
+                            ? stock.date_rank_info.map((info, idx) => (
+                                <div key={idx} className="text-xs">
+                                  {formatDate(info.date)}(第{info.rank}名)
+                                </div>
+                              ))
+                            : '-'
+                          }
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Mobile Card View */}
+              <div className="md:hidden space-y-4 p-4 bg-gray-50">
+                {paginatedStocks.map((stock, index) => (
+                  <div key={stock.stock_code} className="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
+                    <div className="flex justify-between items-start mb-2">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-lg font-bold text-gray-900">
                           <HighlightText text={stock?.stock_name || stock?.name || '-'} highlight={searchQuery} />
                         </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-xs text-gray-600 bg-purple-50 px-2 py-1 rounded">
-                          {stock.industry}
+                        <span className="text-xs font-mono text-gray-500">
+                          <HighlightText text={stock.stock_code} highlight={searchQuery} />
                         </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                          {stock.appearances} 次
+                      </div>
+                      <div className="flex flex-col items-end">
+                         {stock.price_change !== null && stock.price_change !== undefined ? (
+                            <span className={`text-sm font-bold ${
+                              stock.price_change > 0 ? 'text-red-600' : 
+                              stock.price_change < 0 ? 'text-green-600' : 
+                              'text-gray-600'
+                            }`}>
+                              {stock.price_change > 0 ? '+' : ''}{stock.price_change.toFixed(2)}%
+                            </span>
+                          ) : null}
+                          <span className="text-xs text-gray-400 mt-1">最新排名 #{stock.latest_rank}</span>
+                      </div>
+                    </div>
+                    
+                    <div className="flex flex-wrap gap-2 mb-3">
+                      <span className="text-xs text-gray-600 bg-purple-50 px-2 py-1 rounded">
+                        {stock.industry}
+                      </span>
+                      <span className="text-xs font-medium bg-green-100 text-green-800 px-2 py-1 rounded-full">
+                        命中 {stock.appearances} 次
+                      </span>
+                      <span className="text-xs font-medium bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                         最新第 {stock.latest_rank} 名
+                      </span>
+                      {stock.volatility !== null && stock.volatility !== undefined && (
+                        <span className={`text-xs font-medium px-2 py-1 rounded-full ${
+                          stock.volatility > 5 ? 'bg-orange-100 text-orange-700' : 
+                          stock.volatility > 3 ? 'bg-yellow-100 text-yellow-700' : 
+                          'bg-gray-100 text-gray-600'
+                        }`}>
+                          波动 {stock.volatility.toFixed(1)}%
                         </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                          第 {stock.latest_rank} 名
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">
-                        {stock.price_change !== null && stock.price_change !== undefined ? (
-                          <span className={`text-sm font-medium ${
-                            stock.price_change > 0 ? 'text-red-600' : 
-                            stock.price_change < 0 ? 'text-green-600' : 
-                            'text-gray-600'
-                          }`}>
-                            {stock.price_change > 0 ? '+' : ''}{stock.price_change.toFixed(2)}%
-                          </span>
-                        ) : (
-                          <span className="text-sm text-gray-400">-</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-600">
-                        {stock.date_rank_info && Array.isArray(stock.date_rank_info) && stock.date_rank_info.length > 0
-                          ? stock.date_rank_info.map((info, idx) => (
-                              <div key={idx} className="text-xs">
-                                {formatDate(info.date)}(第{info.rank}名)
-                              </div>
-                            ))
-                          : '-'
+                      )}
+                    </div>
+                    
+                    <div className="mt-3 pt-3 border-t border-gray-100">
+                      <p className="text-xs text-gray-500 mb-1">历史排名:</p>
+                      <div className="flex flex-wrap gap-2">
+                         {stock.date_rank_info && Array.isArray(stock.date_rank_info) && stock.date_rank_info.slice(0, 4).map((info, idx) => (
+                            <span key={idx} className="text-xs text-gray-600 bg-gray-50 px-1.5 py-0.5 rounded border border-gray-200">
+                              {formatDate(info.date).slice(5)}: #{info.rank}
+                            </span>
+                          ))
                         }
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                        {(stock.date_rank_info?.length || 0) > 4 && (
+                          <span className="text-xs text-gray-400">...</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
           ) : (
             <div className="px-6 py-12 text-center text-gray-500">
               {searchQuery ? (

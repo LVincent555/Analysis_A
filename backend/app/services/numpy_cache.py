@@ -252,6 +252,64 @@ class NumpyStockCache:
             'n_records': len(self.data_array),
             'initialized': True
         }
+    
+    def get_market_volatility_summary(self, days: int = 3) -> Dict:
+        """
+        获取市场波动率汇总数据（最近N天）
+        
+        Args:
+            days: 返回最近N天的数据
+            
+        Returns:
+            包含每天平均波动率的字典
+        """
+        if not self._initialized or self.data_array is None:
+            return {'error': 'Cache not initialized'}
+        
+        # 获取最近N天的日期索引
+        sorted_dates = sorted(self.date_to_idx.items(), key=lambda x: x[0], reverse=True)
+        recent_dates = sorted_dates[:days]
+        
+        result = {
+            'days': [],
+            'trend': 'flat',
+            'stock_count': len(self.stock_code_to_idx)
+        }
+        
+        volatility_values = []
+        
+        for dt, date_idx in recent_dates:
+            # 找到该日期的所有数据
+            mask = self.data_array['date_idx'] == date_idx
+            date_data = self.data_array[mask]
+            
+            # 过滤掉波动率为0或异常值的数据
+            valid_volatility = date_data['volatility']
+            valid_volatility = valid_volatility[(valid_volatility > 0) & (valid_volatility < 100)]
+            
+            if len(valid_volatility) > 0:
+                avg_volatility = float(np.mean(valid_volatility))
+                volatility_values.append(avg_volatility)
+                result['days'].append({
+                    'date': dt.strftime('%Y%m%d'),
+                    'avg_volatility': round(avg_volatility, 4),
+                    'stock_count': len(valid_volatility)
+                })
+        
+        # 计算趋势
+        if len(volatility_values) >= 2:
+            if volatility_values[0] > volatility_values[1] * 1.05:
+                result['trend'] = 'up'
+            elif volatility_values[0] < volatility_values[1] * 0.95:
+                result['trend'] = 'down'
+            else:
+                result['trend'] = 'flat'
+        
+        # 添加当前值（最新一天）
+        if volatility_values:
+            result['current'] = round(volatility_values[0], 4)
+        
+        return result
 
 
 # 创建全局实例

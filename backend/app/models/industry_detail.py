@@ -18,6 +18,7 @@ class StockSignalInfo(BaseModel):
     turnover_rate_percent: Optional[float] = Field(None, description="换手率 %")
     volume_days: Optional[float] = Field(None, description="放量天数")
     market_cap_billions: Optional[float] = Field(None, description="总市值(亿)")
+    volatility: Optional[float] = Field(None, description="波动率 %")
     
     # 多榜单信号
     signals: List[str] = Field(default_factory=list, description="信号标签列表")

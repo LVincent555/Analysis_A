@@ -12,6 +12,7 @@ from .config import PROJECT_NAME, VERSION, ALLOWED_ORIGINS
 from .routers import analysis_router, stock_router, industry_router, rank_jump_router, steady_rise_router, sector_router
 from .routers.cache_mgmt import router as cache_mgmt_router
 from .routers.industry_detail import router as industry_detail_router
+from .routers.strategies import router as strategies_router
 from .core import preload_cache, run_startup_checks
 
 # 配置日志
@@ -98,6 +99,7 @@ app.include_router(rank_jump_router)
 app.include_router(steady_rise_router)
 app.include_router(sector_router)
 app.include_router(cache_mgmt_router)  # 缓存管理API
+app.include_router(strategies_router)  # 策略模块（单针下二十等）
 
 
 @app.get("/")

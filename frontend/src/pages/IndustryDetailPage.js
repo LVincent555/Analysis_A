@@ -23,6 +23,7 @@ export default function IndustryDetailPage({ industryName, selectedDate, onBack 
   
   // 标签页状态
   const [activeTab, setActiveTab] = useState('stocks'); // stocks | trend | compare
+  const [isExplanationExpanded, setIsExplanationExpanded] = useState(false); // 说明是否展开
   
   // 数据状态
   const [loading, setLoading] = useState(true);
@@ -319,54 +320,65 @@ export default function IndustryDetailPage({ industryName, selectedDate, onBack 
               
               {/* 4维指标详细说明 */}
               <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-4 mb-3 border border-indigo-200">
-                <h4 className="text-sm font-bold text-indigo-900 mb-3 flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4" />
-                  📊 4维指标说明
+                <h4 
+                  className="text-sm font-bold text-indigo-900 flex items-center justify-between cursor-pointer"
+                  onClick={() => setIsExplanationExpanded(!isExplanationExpanded)}
+                >
+                  <div className="flex items-center gap-2">
+                    <TrendingUp className="h-4 w-4" />
+                    📊 4维指标说明
+                  </div>
+                  <span className="text-xs text-indigo-600 font-normal">
+                    {isExplanationExpanded ? '收起' : '展开'}
+                  </span>
                 </h4>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
-                  <div className="bg-white rounded p-3 border border-blue-200">
-                    <div className="font-bold text-blue-900 mb-1 flex items-center justify-between">
-                      <span>B1 - 加权总分</span>
-                      <span className="text-lg">{detailData.B1.toFixed(2)}</span>
+                
+                {isExplanationExpanded && (
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs mt-3 animate-fadeIn">
+                    <div className="bg-white rounded p-3 border border-blue-200">
+                      <div className="font-bold text-blue-900 mb-1 flex items-center justify-between">
+                        <span>B1 - 加权总分</span>
+                        <span className="text-lg">{detailData.B1.toFixed(2)}</span>
+                      </div>
+                      <p className="text-blue-700 leading-relaxed">
+                        基于排名的加权累加分数。排名越靠前权重越高{detailData.k_value ? `（k=${detailData.k_value.toFixed(3)}）` : ''}。
+                        <strong className="block mt-1">用途：看哪个板块精英多、当前最火</strong>
+                      </p>
                     </div>
-                    <p className="text-blue-700 leading-relaxed">
-                      基于排名的加权累加分数。排名越靠前权重越高{detailData.k_value ? `（k=${detailData.k_value.toFixed(3)}）` : ''}。
-                      <strong className="block mt-1">用途：看哪个板块精英多、当前最火</strong>
-                    </p>
-                  </div>
-                  <div className="bg-white rounded p-3 border border-green-200">
-                    <div className="font-bold text-green-900 mb-1 flex items-center justify-between">
-                      <span>B2 - 加权涨跌幅</span>
-                      <span className={`text-lg ${detailData.B2 >= 0 ? 'text-red-600' : 'text-green-600'}`}>
-                        {detailData.B2 >= 0 ? '+' : ''}{detailData.B2.toFixed(2)}%
-                      </span>
+                    <div className="bg-white rounded p-3 border border-green-200">
+                      <div className="font-bold text-green-900 mb-1 flex items-center justify-between">
+                        <span>B2 - 加权涨跌幅</span>
+                        <span className={`text-lg ${detailData.B2 >= 0 ? 'text-red-600' : 'text-green-600'}`}>
+                          {detailData.B2 >= 0 ? '+' : ''}{detailData.B2.toFixed(2)}%
+                        </span>
+                      </div>
+                      <p className="text-green-700 leading-relaxed">
+                        成分股涨跌幅加权平均，权重基于排名。反映板块整体涨跌趋势。
+                        <strong className="block mt-1">用途：看板块当前热度和资金流向</strong>
+                      </p>
                     </div>
-                    <p className="text-green-700 leading-relaxed">
-                      成分股涨跌幅加权平均，权重基于排名。反映板块整体涨跌趋势。
-                      <strong className="block mt-1">用途：看板块当前热度和资金流向</strong>
-                    </p>
-                  </div>
-                  <div className="bg-white rounded p-3 border border-purple-200">
-                    <div className="font-bold text-purple-900 mb-1 flex items-center justify-between">
-                      <span>C1 - 加权换手率</span>
-                      <span className="text-lg">{detailData.C1.toFixed(2)}%</span>
+                    <div className="bg-white rounded p-3 border border-purple-200">
+                      <div className="font-bold text-purple-900 mb-1 flex items-center justify-between">
+                        <span>C1 - 加权换手率</span>
+                        <span className="text-lg">{detailData.C1.toFixed(2)}%</span>
+                      </div>
+                      <p className="text-purple-700 leading-relaxed">
+                        成分股换手率加权平均，权重基于排名。反映板块交易活跃度。
+                        <strong className="block mt-1">用途：看板块是否有资金关注</strong>
+                      </p>
                     </div>
-                    <p className="text-purple-700 leading-relaxed">
-                      成分股换手率加权平均，权重基于排名。反映板块交易活跃度。
-                      <strong className="block mt-1">用途：看板块是否有资金关注</strong>
-                    </p>
-                  </div>
-                  <div className="bg-white rounded p-3 border border-orange-200">
-                    <div className="font-bold text-orange-900 mb-1 flex items-center justify-between">
-                      <span>C2 - 加权放量</span>
-                      <span className="text-lg">{detailData.C2.toFixed(2)}</span>
+                    <div className="bg-white rounded p-3 border border-orange-200">
+                      <div className="font-bold text-orange-900 mb-1 flex items-center justify-between">
+                        <span>C2 - 加权放量</span>
+                        <span className="text-lg">{detailData.C2.toFixed(2)}</span>
+                      </div>
+                      <p className="text-orange-700 leading-relaxed">
+                        成分股放量指标加权平均。数值越大表示成交量相对历史越大。
+                        <strong className="block mt-1">用途：看板块是否有异动放量</strong>
+                      </p>
                     </div>
-                    <p className="text-orange-700 leading-relaxed">
-                      成分股放量指标加权平均。数值越大表示成交量相对历史越大。
-                      <strong className="block mt-1">用途：看板块是否有异动放量</strong>
-                    </p>
                   </div>
-                </div>
+                )}
               </div>
             </>
           )}
@@ -529,6 +541,7 @@ export default function IndustryDetailPage({ industryName, selectedDate, onBack 
                       <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 uppercase">综合评分</th>
                       <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 uppercase">涨跌幅</th>
                       <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 uppercase">换手率</th>
+                      <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 uppercase">波动率</th>
                       <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 uppercase">市场排名</th>
                     </tr>
                   </thead>
@@ -587,6 +600,19 @@ export default function IndustryDetailPage({ industryName, selectedDate, onBack 
                           {stock.turnover_rate_percent !== null ? (
                             <span className="text-sm text-gray-700">
                               {stock.turnover_rate_percent.toFixed(2)}%
+                            </span>
+                          ) : (
+                            <span className="text-sm text-gray-400">-</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          {stock.volatility !== null && stock.volatility !== undefined ? (
+                            <span className={`text-sm font-medium ${
+                              stock.volatility > 5 ? 'text-orange-600' : 
+                              stock.volatility > 3 ? 'text-yellow-600' : 
+                              'text-gray-600'
+                            }`}>
+                              {stock.volatility.toFixed(2)}%
                             </span>
                           ) : (
                             <span className="text-sm text-gray-400">-</span>

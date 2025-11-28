@@ -133,6 +133,7 @@ class IndustryDetailService:
                 turnover_rate_percent=float(stock_data.turnover_rate_percent) if stock_data.turnover_rate_percent else None,
                 volume_days=float(stock_data.volume_days) if stock_data.volume_days else None,
                 market_cap_billions=float(stock_data.market_cap_billions) if stock_data.market_cap_billions else None,
+                volatility=float(stock_data.volatility) if stock_data.volatility else None,
             )
             
             # 计算信号（Phase 2）

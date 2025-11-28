@@ -198,6 +198,7 @@ export default function SteadyRiseModule({ risePeriod, riseBoardType, minRankImp
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">最新排名</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">总提升</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">日均提升</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">波动率</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">排名历史</th>
                     </tr>
                   </thead>
@@ -236,6 +237,19 @@ export default function SteadyRiseModule({ risePeriod, riseBoardType, minRankImp
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                           +{stock.avg_daily_improvement.toFixed(1)}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          {stock.volatility !== null && stock.volatility !== undefined ? (
+                            <span className={`text-sm font-medium ${
+                              stock.volatility > 5 ? 'text-orange-600' : 
+                              stock.volatility > 3 ? 'text-yellow-600' : 
+                              'text-gray-600'
+                            }`}>
+                              {stock.volatility.toFixed(2)}%
+                            </span>
+                          ) : (
+                            <span className="text-sm text-gray-400">-</span>
+                          )}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-600">
                           {stock.rank_history.join(' → ')}

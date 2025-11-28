@@ -4,6 +4,7 @@
 from fastapi import APIRouter, HTTPException
 from ..services.analysis_service_db import analysis_service_db
 from ..services.hot_spots_cache import HotSpotsCache
+from ..services.numpy_cache import numpy_stock_cache
 from ..models import AnalysisResult, AvailableDates
 
 router = APIRouter(prefix="/api", tags=["analysis"])
@@ -119,4 +120,41 @@ async def get_hot_spots_full(date: str = None):
         import logging
         logger = logging.getLogger(__name__)
         logger.error(f"获取热点榜数据失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/market/volatility-summary")
+async def get_market_volatility_summary(days: int = 3):
+    """
+    获取市场波动率汇总数据
+    
+    返回最近N天的全市场平均波动率，用于顶栏展示
+    
+    Args:
+        days: 返回最近N天的数据，默认3天
+    
+    Returns:
+        {
+            "current": 2.35,
+            "days": [
+                {"date": "20251127", "avg_volatility": 2.35, "stock_count": 5000},
+                {"date": "20251126", "avg_volatility": 2.42, "stock_count": 5000},
+                {"date": "20251125", "avg_volatility": 2.18, "stock_count": 5000}
+            ],
+            "trend": "down",  // up/down/flat
+            "stock_count": 5435
+        }
+    """
+    try:
+        result = numpy_stock_cache.get_market_volatility_summary(days=days)
+        
+        if 'error' in result:
+            raise HTTPException(status_code=500, detail=result['error'])
+        
+        return result
+        
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"获取市场波动率数据失败: {e}")
         raise HTTPException(status_code=500, detail=str(e))

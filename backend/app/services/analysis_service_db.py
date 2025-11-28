@@ -162,6 +162,7 @@ class AnalysisServiceDB:
                     'rank': stock_data.rank,
                     'price_change': float(stock_data.price_change) if stock_data.price_change else None,
                     'turnover_rate': float(stock_data.turnover_rate_percent) if stock_data.turnover_rate_percent else None,
+                    'volatility': float(stock_data.volatility) if stock_data.volatility else None,
                 })
         
         # 4. 构建结果列表
