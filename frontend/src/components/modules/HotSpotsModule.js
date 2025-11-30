@@ -2,13 +2,14 @@
  * 最新热点分析模块 - 完整版
  */
 import React, { useState, useEffect, useMemo } from 'react';
-import { TrendingUp, RefreshCw, Calendar, BarChart3, ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react';
+import { TrendingUp, RefreshCw, Calendar, BarChart3, ChevronLeft, ChevronRight, AlertCircle, Info } from 'lucide-react';
 import axios from 'axios';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { API_BASE_URL, COLORS } from '../../constants';
 import { formatDate } from '../../utils';
 import SearchBar from '../common/SearchBar';
 import HighlightText from '../common/HighlightText';
+import StockDetailPopup from '../common/StockDetailPopup';
 
 export default function HotSpotsModule({ boardType, selectedPeriod, topN, selectedDate, refreshTrigger }) {
   const [analysisData, setAnalysisData] = useState(null);
@@ -19,6 +20,9 @@ export default function HotSpotsModule({ boardType, selectedPeriod, topN, select
   const [top1000Industry, setTop1000Industry] = useState(null);
   const [sortBy, setSortBy] = useState('hit_count'); // 'hit_count', 'rank', 'price_change'
   const [searchQuery, setSearchQuery] = useState(''); // 搜索关键词
+  
+  // 详情弹窗状态
+  const [detailPopup, setDetailPopup] = useState({ isOpen: false, stockCode: null, stockName: null });
 
   // 获取分析数据
   useEffect(() => {
@@ -267,6 +271,9 @@ export default function HotSpotsModule({ boardType, selectedPeriod, topN, select
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         出现日期及排名
                       </th>
+                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        操作
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
@@ -338,6 +345,15 @@ export default function HotSpotsModule({ boardType, selectedPeriod, topN, select
                               ))
                             : '-'
                           }
+                        </td>
+                        <td className="px-4 py-4 text-center">
+                          <button
+                            onClick={() => setDetailPopup({ isOpen: true, stockCode: stock.stock_code, stockName: stock.stock_name || stock.name })}
+                            className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
+                            title="查看详情"
+                          >
+                            <Info className="h-4 w-4" />
+                          </button>
                         </td>
                       </tr>
                     ))}
@@ -519,6 +535,15 @@ export default function HotSpotsModule({ boardType, selectedPeriod, topN, select
           <p className="text-gray-600 text-lg">正在分析数据...</p>
         </div>
       )}
+
+      {/* 股票详情弹窗 */}
+      <StockDetailPopup
+        stockCode={detailPopup.stockCode}
+        stockName={detailPopup.stockName}
+        isOpen={detailPopup.isOpen}
+        onClose={() => setDetailPopup({ isOpen: false, stockCode: null, stockName: null })}
+        selectedDate={selectedDate}
+      />
     </>
   );
 }

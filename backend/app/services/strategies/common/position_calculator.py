@@ -1,11 +1,11 @@
 """
-位置指标计算器 - 原神启动指标
+位置指标计算器 - 原神启动指标（对齐同花顺）
 Position Calculator - Multi-period Position Indicator
 
-公式：位置指标(N) = 100 × (C - LLV(L,N)) / (HHV(C,N) - LLV(L,N))
+公式：位置指标(N) = 100 × (C - LLV(L,N)) / (HHV(H,N) - LLV(L,N))
 - C: 当前收盘价
 - LLV(L,N): N日内最低价的最低值
-- HHV(C,N): N日内收盘价的最高值（注意：是收盘价不是最高价！）
+- HHV(H,N): N日内最高价的最高值
 
 四条线：
 - 短期（白线）：N1 = 3天（默认）
@@ -64,37 +64,38 @@ class PositionCalculator:
         period: int
     ) -> float:
         """
-        计算单个周期的位置指标
+        计算单个周期的位置指标（对齐同花顺）
         
-        公式：100 × (C - LLV(L,N)) / (HHV(C,N) - LLV(L,N))
-        - HHV(C,N): N日内收盘价的最高值
+        公式：100 × (C - LLV(L,N)) / (HHV(H,N) - LLV(L,N))
+        - HHV(H,N): N日内最高价的最高值
         - LLV(L,N): N日内最低价的最低值
         
         Args:
             closes: 收盘价序列（最新的在最后）
-            highs: 最高价序列（未使用，保留接口兼容）
+            highs: 最高价序列
             lows: 最低价序列
             period: 计算周期
             
         Returns:
             位置指标值 (0-100)
         """
-        if len(closes) < period or len(lows) < period:
+        if len(closes) < period or len(lows) < period or len(highs) < period:
             return 50.0  # 数据不足时返回中间值
         
         # 取最近 period 天的数据
         recent_closes = closes[-period:]
+        recent_highs = highs[-period:]
         recent_lows = lows[-period:]
         
         current_close = recent_closes[-1]
-        period_high_close = max(recent_closes)  # HHV(C,N) - 收盘价最高值
-        period_low = min(recent_lows)           # LLV(L,N) - 最低价最低值
+        period_high = max(recent_highs)  # HHV(H,N) - 最高价的最高值
+        period_low = min(recent_lows)    # LLV(L,N) - 最低价的最低值
         
         # 避免除零
-        if period_high_close == period_low:
+        if period_high == period_low:
             return 50.0
         
-        position = 100 * (current_close - period_low) / (period_high_close - period_low)
+        position = 100 * (current_close - period_low) / (period_high - period_low)
         
         # 限制在 0-100 范围内
         return max(0.0, min(100.0, position))

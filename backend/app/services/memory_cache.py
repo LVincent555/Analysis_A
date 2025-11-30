@@ -237,7 +237,7 @@ class MemoryCacheManager:
         
         # 收集数据
         closes, highs, lows, opens = [], [], [], []
-        volumes, turnovers, ranks, bbis = [], [], [], []
+        volumes, turnovers, ranks, bbis, price_changes = [], [], [], [], []
         
         for d in target_dates:
             data = stock_daily[d]
@@ -250,6 +250,8 @@ class MemoryCacheManager:
             ranks.append(int(data.rank) if data.rank else 0)
             # BBI用middle_band(布林中轨)代替
             bbis.append(float(data.middle_band) if hasattr(data, 'middle_band') and data.middle_band else 0)
+            # 当天涨跌幅
+            price_changes.append(float(data.price_change) if hasattr(data, 'price_change') and data.price_change else 0)
         
         return {
             'stock_code': stock_code,
@@ -264,6 +266,7 @@ class MemoryCacheManager:
             'ranks': ranks if any(ranks) else None,
             'bbis': bbis,
             'dates': target_dates,
+            'price_changes': price_changes,  # 每天涨跌幅
         }
     
     def get_all_stocks_for_strategy(self, target_date: date = None, lookback_days: int = 30) -> List[dict]:

@@ -2,10 +2,11 @@
  * 排名跳变分析模块 - 完整版
  */
 import React, { useState, useEffect, useMemo } from 'react';
-import { RefreshCw, TrendingUp, ChevronDown, ChevronUp, Filter, Search, X } from 'lucide-react';
+import { RefreshCw, TrendingUp, ChevronDown, ChevronUp, Filter, Search, X, Info } from 'lucide-react';
 import axios from 'axios';
 import { API_BASE_URL } from '../../constants/config';
 import { formatDate } from '../../utils';
+import StockDetailPopup from '../common/StockDetailPopup';
 
 const sigmaMultipliers = [1.0, 0.75, 0.5, 0.3, 0.15];
 
@@ -17,6 +18,7 @@ export default function RankJumpModule({ jumpBoardType, jumpThreshold, selectedD
   const [jumpShowSigma, setJumpShowSigma] = useState(false);
   const [jumpSigmaMultiplier, setJumpSigmaMultiplier] = useState(1.0);
   const [searchQuery, setSearchQuery] = useState('');
+  const [detailPopup, setDetailPopup] = useState({ isOpen: false, stockCode: null, stockName: null });
 
   // 获取排名跳变数据
   useEffect(() => {
@@ -198,6 +200,7 @@ export default function RankJumpModule({ jumpBoardType, jumpThreshold, selectedD
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">涨跌幅</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">换手率</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">波动率</th>
+                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-700 uppercase tracking-wider">操作</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
@@ -254,6 +257,15 @@ export default function RankJumpModule({ jumpBoardType, jumpThreshold, selectedD
                             <span className="text-sm text-gray-400">-</span>
                           )}
                         </td>
+                        <td className="px-4 py-3 text-center">
+                          <button
+                            onClick={() => setDetailPopup({ isOpen: true, stockCode: stock.code, stockName: stock.name })}
+                            className="p-1.5 text-orange-600 hover:bg-orange-50 rounded transition-colors"
+                            title="查看详情"
+                          >
+                            <Info className="h-4 w-4" />
+                          </button>
+                        </td>
                       </tr>
                     ));
                     })()}
@@ -269,6 +281,15 @@ export default function RankJumpModule({ jumpBoardType, jumpThreshold, selectedD
           )}
         </>
       )}
+      
+      {/* 股票详情弹窗 */}
+      <StockDetailPopup
+        stockCode={detailPopup.stockCode}
+        stockName={detailPopup.stockName}
+        isOpen={detailPopup.isOpen}
+        onClose={() => setDetailPopup({ isOpen: false, stockCode: null, stockName: null })}
+        selectedDate={selectedDate}
+      />
     </div>
   );
 }

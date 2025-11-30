@@ -28,7 +28,7 @@ const SIGNAL_LEVEL_CONFIG = {
   weak: { name: '弱', color: 'text-gray-600', bg: 'bg-gray-100', icon: Zap },
 };
 
-function NeedleUnder20Module({ selectedDate, days = 2, minScore = 0 }) {
+function NeedleUnder20Module({ selectedDate, days = 5, minScore = 0 }) {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -40,9 +40,14 @@ function NeedleUnder20Module({ selectedDate, days = 2, minScore = 0 }) {
   // 参数状态
   const [analysisDays, setAnalysisDays] = useState(days);
   const [scoreThreshold, setScoreThreshold] = useState(minScore);
-  const [positionThreshold, setPositionThreshold] = useState(20); // 短期位置阈值
   const [bbiFilter, setBbiFilter] = useState(true); // BBI破位筛选
-  const [maxDropPct, setMaxDropPct] = useState(null); // 股价跌幅阈值
+  const [maxDropPct, setMaxDropPct] = useState(null); // 股价跌幅阈值，默认不限
+  const [longPeriod, setLongPeriod] = useState(10); // 计算周期：10天或21天
+  
+  // 数据充足信息
+  const [dataDays, setDataDays] = useState(0);
+  const [requiredDays, setRequiredDays] = useState(0);
+  const [dataSufficient, setDataSufficient] = useState(true);
 
   // 获取数据
   const fetchData = useCallback(async () => {
@@ -53,8 +58,8 @@ function NeedleUnder20Module({ selectedDate, days = 2, minScore = 0 }) {
       const params = new URLSearchParams({
         days: analysisDays,
         min_score: scoreThreshold,
-        position_threshold: positionThreshold,
         bbi_filter: bbiFilter,
+        long_period: longPeriod,
       });
       
       if (selectedDate) {
@@ -74,6 +79,9 @@ function NeedleUnder20Module({ selectedDate, days = 2, minScore = 0 }) {
       setData(response.data.data || []);
       setIndustryDistribution(response.data.industry_distribution || {});
       setDateRange(response.data.date_range || []);
+      setDataDays(response.data.data_days || 0);
+      setRequiredDays(response.data.required_days || 0);
+      setDataSufficient(response.data.data_sufficient !== false);
     } catch (err) {
       console.error('获取单针下二十数据失败:', err);
       setError(err.response?.data?.detail || '获取数据失败');
@@ -81,7 +89,7 @@ function NeedleUnder20Module({ selectedDate, days = 2, minScore = 0 }) {
     } finally {
       setLoading(false);
     }
-  }, [selectedDate, analysisDays, scoreThreshold, selectedPattern, positionThreshold, bbiFilter, maxDropPct]);
+  }, [selectedDate, analysisDays, scoreThreshold, selectedPattern, bbiFilter, maxDropPct, longPeriod]);
 
   useEffect(() => {
     fetchData();
@@ -247,26 +255,6 @@ function NeedleUnder20Module({ selectedDate, days = 2, minScore = 0 }) {
             </div>
           </div>
 
-          {/* 位置阈值 */}
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-600">短期位置≤:</span>
-            <div className="flex gap-1">
-              {[20, 30, 40, 50, 60].map(p => (
-                <button
-                  key={p}
-                  onClick={() => setPositionThreshold(p)}
-                  className={`px-3 py-1 text-sm rounded transition-colors ${
-                    positionThreshold === p
-                      ? 'bg-purple-600 text-white'
-                      : 'bg-white text-gray-700 hover:bg-gray-100 border'
-                  }`}
-                >
-                  {p}
-                </button>
-              ))}
-            </div>
-          </div>
-
           {/* 评分阈值 */}
           <div className="flex items-center gap-2">
             <span className="text-sm text-gray-600">最低评分:</span>
@@ -312,14 +300,14 @@ function NeedleUnder20Module({ selectedDate, days = 2, minScore = 0 }) {
                 空中加油
               </button>
               <button
-                onClick={() => setSelectedPattern('double_bottom')}
+                onClick={() => setSelectedPattern('bottom_volume')}
                 className={`px-3 py-1 text-sm rounded transition-colors ${
-                  selectedPattern === 'double_bottom'
+                  selectedPattern === 'bottom_volume'
                     ? 'bg-blue-600 text-white'
                     : 'bg-white text-gray-700 hover:bg-gray-100 border'
                 }`}
               >
-                双底共振
+                底部放量
               </button>
             </div>
           </div>
@@ -355,7 +343,7 @@ function NeedleUnder20Module({ selectedDate, days = 2, minScore = 0 }) {
           <div className="flex items-center gap-2">
             <span className="text-sm text-gray-600">跌幅≤:</span>
             <div className="flex gap-1">
-              {[null, 5, 6, 8, 10].map(p => (
+              {[null, 1, 3, 5, 6, 8, 10].map(p => (
                 <button
                   key={p ?? 'all'}
                   onClick={() => setMaxDropPct(p)}
@@ -368,6 +356,37 @@ function NeedleUnder20Module({ selectedDate, days = 2, minScore = 0 }) {
                   {p === null ? '不限' : `${p}%`}
                 </button>
               ))}
+            </div>
+          </div>
+
+          {/* 计算周期 */}
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-600">周期:</span>
+            <div className="flex gap-1">
+              <button
+                onClick={() => setLongPeriod(10)}
+                className={`px-3 py-1 text-sm rounded transition-colors ${
+                  longPeriod === 10
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-white text-gray-700 hover:bg-gray-100 border'
+                }`}
+              >
+                10天
+              </button>
+              <button
+                onClick={() => setLongPeriod(21)}
+                className={`px-3 py-1 text-sm rounded transition-colors ${
+                  longPeriod === 21
+                    ? 'bg-purple-600 text-white'
+                    : dataDays < 28
+                      ? 'bg-gray-100 text-gray-400 border cursor-not-allowed'
+                      : 'bg-white text-gray-700 hover:bg-gray-100 border'
+                }`}
+                disabled={dataDays < 28}
+                title={dataDays < 28 ? `需要28天数据，当前${dataDays}天` : '对齐同花顺'}
+              >
+                21天
+              </button>
             </div>
           </div>
 
@@ -387,7 +406,7 @@ function NeedleUnder20Module({ selectedDate, days = 2, minScore = 0 }) {
         </div>
 
         {/* 统计信息 */}
-        <div className="mt-3 flex items-center gap-4 text-sm">
+        <div className="mt-3 flex items-center gap-4 text-sm flex-wrap">
           <span className="text-gray-600">
             共找到 <span className="font-bold text-rose-600">{filteredData.length}</span> 只股票
           </span>
@@ -396,6 +415,14 @@ function NeedleUnder20Module({ selectedDate, days = 2, minScore = 0 }) {
               分析日期: {dateRange.join(' ~ ')}
             </span>
           )}
+          {/* 数据状态提示 */}
+          <span className={`px-2 py-0.5 rounded text-xs ${
+            dataDays >= 28 
+              ? 'bg-green-100 text-green-700' 
+              : 'bg-yellow-100 text-yellow-700'
+          }`}>
+            数据{dataDays}天 {dataDays >= 28 ? '✓ 可用21天周期' : `(需28天才能用21天周期)`}
+          </span>
         </div>
       </div>
 
