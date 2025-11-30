@@ -106,17 +106,19 @@ class RankJumpServiceDB:
                 Stock.stock_name, 
                 Stock.industry,
                 DailyStockData.price_change,
-                DailyStockData.turnover_rate_percent
+                DailyStockData.turnover_rate_percent,
+                DailyStockData.volatility
             ).join(Stock, DailyStockData.stock_code == Stock.stock_code)\
              .filter(DailyStockData.date == date1)
             
-            for code, rank, name, industry, price_change, turnover_rate in query1.all():
+            for code, rank, name, industry, price_change, turnover_rate, volatility in query1.all():
                 day1_data[code] = {
                     'rank': rank, 
                     'name': name, 
                     'industry': industry or '未知',
                     'price_change': float(price_change) if price_change else None,
-                    'turnover_rate': float(turnover_rate) if turnover_rate else None
+                    'turnover_rate': float(turnover_rate) if turnover_rate else None,
+                    'volatility': float(volatility) if volatility else None
                 }
             
             day2_data = {}
@@ -148,7 +150,8 @@ class RankJumpServiceDB:
                             latest_date=date1_str,
                             previous_date=date2_str,
                             price_change=info['price_change'],
-                            turnover_rate=info['turnover_rate']
+                            turnover_rate=info['turnover_rate'],
+                            volatility=info['volatility']
                         ))
             
             if not jump_stocks:

@@ -85,27 +85,37 @@ class SteadyRiseServiceDB:
             target_dates.reverse()  # 从旧到新排序
             date_strs = [d.strftime('%Y%m%d') for d in target_dates]
             
-            # 2. 简单SQL：查询这些日期的所有数据
+            # 2. 简单SQL：查询这些日期的所有数据（包含技术指标）
             query = db.query(
                 DailyStockData.stock_code,
                 DailyStockData.date,
                 DailyStockData.rank,
                 Stock.stock_name,
-                Stock.industry
+                Stock.industry,
+                DailyStockData.price_change,
+                DailyStockData.turnover_rate_percent,
+                DailyStockData.volatility
             ).join(Stock, DailyStockData.stock_code == Stock.stock_code)\
              .filter(DailyStockData.date.in_(target_dates))\
              .order_by(DailyStockData.stock_code, DailyStockData.date)
             
             # 3. 后端计算：按股票分组
             stock_data = {}  # {stock_code: [(date, rank), ...]}
-            for code, date, rank, name, industry in query.all():
+            for code, date, rank, name, industry, price_change, turnover_rate, volatility in query.all():
                 if code not in stock_data:
                     stock_data[code] = {
                         'name': name,
                         'industry': industry or '未知',
-                        'ranks': []
+                        'ranks': [],
+                        'latest_indicators': {}  # 最新一天的技术指标
                     }
                 stock_data[code]['ranks'].append((date, rank))
+                # 保存最新一天的技术指标
+                stock_data[code]['latest_indicators'] = {
+                    'price_change': float(price_change) if price_change else None,
+                    'turnover_rate': float(turnover_rate) if turnover_rate else None,
+                    'volatility': float(volatility) if volatility else None
+                }
             
             # 4. 后端计算：找出稳步上升的股票
             steady_stocks = []
@@ -139,6 +149,7 @@ class SteadyRiseServiceDB:
                         date_list = [r[0].strftime('%Y%m%d') for r in ranks]
                         avg_improvement = total_improvement / (period - 1) if period > 1 else total_improvement
                         
+                        indicators = info.get('latest_indicators', {})
                         steady_stocks.append(SteadyRiseStock(
                             code=code,
                             name=info['name'],
@@ -148,7 +159,10 @@ class SteadyRiseServiceDB:
                             total_improvement=total_improvement,
                             avg_daily_improvement=round(avg_improvement, 2),
                             rank_history=rank_history,
-                            dates=date_list
+                            dates=date_list,
+                            price_change=indicators.get('price_change'),
+                            turnover_rate=indicators.get('turnover_rate'),
+                            volatility=indicators.get('volatility')
                         ))
             
             if not steady_stocks:
