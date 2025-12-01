@@ -7,3 +7,8 @@ pydantic>=2.0.0
 sqlalchemy>=2.0.0
 psycopg2-binary>=2.9.0
 python-dotenv>=1.0.0
+
+# v0.4.0 新增：认证和加密
+python-jose[cryptography]>=3.3.0
+bcrypt>=4.1.0
+cryptography>=41.0.0

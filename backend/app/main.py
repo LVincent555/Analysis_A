@@ -8,11 +8,15 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-from .config import PROJECT_NAME, VERSION, ALLOWED_ORIGINS
+from .config import PROJECT_NAME, VERSION, ALLOWED_ORIGINS, API_REQUIRE_AUTH, ENABLE_DOCS
 from .routers import analysis_router, stock_router, industry_router, rank_jump_router, steady_rise_router, sector_router
+from .middleware import AuthMiddleware
 from .routers.cache_mgmt import router as cache_mgmt_router
 from .routers.industry_detail import router as industry_detail_router
 from .routers.strategies import router as strategies_router
+from .routers.auth import router as auth_router
+from .routers.secure import router as secure_router
+from .routers.sync import router as sync_router
 from .core import preload_cache, run_startup_checks
 
 # 配置日志
@@ -44,12 +48,21 @@ async def lifespan(app: FastAPI):
 
 
 # 创建FastAPI应用
+# 根据 ENABLE_DOCS 配置决定是否启用 Swagger/OpenAPI 文档
+# 本地开发：ENABLE_DOCS=true python -m uvicorn app.main:app --reload
 app = FastAPI(
     title=PROJECT_NAME,
     version=VERSION,
     description="A股数据分析系统API",
-    lifespan=lifespan
+    lifespan=lifespan,
+    # 生产环境禁用文档
+    docs_url="/docs" if ENABLE_DOCS else None,
+    redoc_url="/redoc" if ENABLE_DOCS else None,
+    openapi_url="/openapi.json" if ENABLE_DOCS else None
 )
+
+# 日志记录文档状态
+logger.info(f"API文档状态: {'启用' if ENABLE_DOCS else '禁用'} (设置 ENABLE_DOCS=true 启用)")
 
 # 添加请求日志中间件
 @app.middleware("http")
@@ -90,6 +103,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# 添加认证中间件（根据配置决定是否强制认证）
+app.add_middleware(AuthMiddleware)
+logger.info(f"🔐 API认证模式: {'强制认证' if API_REQUIRE_AUTH else '开放访问'}")
+
 # 注册路由
 app.include_router(analysis_router)
 app.include_router(stock_router)
@@ -100,6 +117,9 @@ app.include_router(steady_rise_router)
 app.include_router(sector_router)
 app.include_router(cache_mgmt_router)  # 缓存管理API
 app.include_router(strategies_router)  # 策略模块（单针下二十等）
+app.include_router(auth_router)  # 认证模块（登录/注册）
+app.include_router(secure_router)  # 加密网关（统一加密入口）
+app.include_router(sync_router)  # 数据同步（离线功能）
 
 
 @app.get("/")

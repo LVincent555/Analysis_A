@@ -2,7 +2,7 @@
 SQLAlchemy ORM 数据库模型
 对应 version1.sql 的表结构
 """
-from sqlalchemy import Column, String, Integer, BigInteger, Date, DECIMAL, TIMESTAMP, ForeignKey, Index
+from sqlalchemy import Column, String, Integer, BigInteger, Date, DECIMAL, TIMESTAMP, ForeignKey, Index, Boolean, Text
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from .database import Base
@@ -260,3 +260,81 @@ class SectorDailyData(Base):
     
     def __repr__(self):
         return f"<SectorDailyData(sector_id={self.sector_id}, date={self.date}, rank={self.rank})>"
+
+
+class User(Base):
+    """
+    用户表
+    存储用户认证信息和配置
+    """
+    __tablename__ = "users"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True, comment="用户ID")
+    username = Column(String(50), unique=True, nullable=False, index=True, comment="用户名")
+    password_hash = Column(String(255), nullable=False, comment="密码哈希(bcrypt)")
+    user_key_encrypted = Column(Text, nullable=False, comment="用户密钥(主密钥加密)")
+    
+    # 用户信息
+    role = Column(String(20), default='user', comment="角色: admin/user")
+    is_active = Column(Boolean, default=True, comment="是否启用")
+    
+    # 时间戳
+    created_at = Column(TIMESTAMP, default=datetime.utcnow, comment="创建时间")
+    last_login = Column(TIMESTAMP, nullable=True, comment="最后登录时间")
+    
+    # 设备和离线配置
+    allowed_devices = Column(Integer, default=3, comment="允许同时登录设备数")
+    offline_enabled = Column(Boolean, default=True, comment="是否允许离线使用")
+    offline_days = Column(Integer, default=7, comment="离线数据保留天数")
+    
+    # 关系
+    sessions = relationship("UserSession", back_populates="user", cascade="all, delete-orphan")
+    
+    def __repr__(self):
+        return f"<User(id={self.id}, username={self.username}, role={self.role})>"
+    
+    def to_dict(self):
+        """转换为字典（不包含敏感信息）"""
+        return {
+            "id": self.id,
+            "username": self.username,
+            "role": self.role,
+            "is_active": self.is_active,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "last_login": self.last_login.isoformat() if self.last_login else None,
+            "offline_enabled": self.offline_enabled,
+            "offline_days": self.offline_days
+        }
+
+
+class UserSession(Base):
+    """
+    用户会话表
+    管理多设备登录和会话密钥
+    """
+    __tablename__ = "user_sessions"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    device_id = Column(String(100), nullable=False, comment="设备唯一标识")
+    device_name = Column(String(100), nullable=True, comment="设备名称")
+    
+    # 会话信息
+    session_key_encrypted = Column(Text, nullable=False, comment="会话密钥(用户密钥加密)")
+    refresh_token = Column(String(500), nullable=True, comment="刷新令牌")
+    
+    # 时间
+    created_at = Column(TIMESTAMP, default=datetime.utcnow)
+    expires_at = Column(TIMESTAMP, nullable=False, comment="过期时间")
+    last_active = Column(TIMESTAMP, default=datetime.utcnow, comment="最后活跃时间")
+    
+    # 关系
+    user = relationship("User", back_populates="sessions")
+    
+    # 唯一约束：同一用户同一设备只能有一个会话
+    __table_args__ = (
+        Index('idx_user_device_unique', 'user_id', 'device_id', unique=True),
+    )
+    
+    def __repr__(self):
+        return f"<UserSession(user_id={self.user_id}, device={self.device_id})>"

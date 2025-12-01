@@ -32,11 +32,11 @@ echo "▶ 启动后端服务..."
 cd "$PROJECT_DIR/backend"
 
 if [ "$MODE" = "prod" ]; then
-    # 生产模式：不使用--reload
+    # 生产模式：不使用--reload，禁用API文档
     nohup python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 > "$PROJECT_DIR/logs/backend.log" 2>&1 &
 else
-    # 开发模式：使用--reload自动重载
-    nohup python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload > "$PROJECT_DIR/logs/backend.log" 2>&1 &
+    # 开发模式：使用--reload自动重载，启用API文档
+    ENABLE_DOCS=true nohup python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload > "$PROJECT_DIR/logs/backend.log" 2>&1 &
 fi
 
 BACKEND_PID=$!
@@ -107,8 +107,8 @@ if [ "$MODE" = "prod" ]; then
     echo ""
     echo "🌐 访问方式:"
     echo "  • 后端API:  http://60.205.251.109:8000"
-    echo "  • API文档:  http://60.205.251.109:8000/docs"
     echo "  • 前端: 需要配置Nginx"
+    echo "  ℹ️  生产环境已禁用API文档"
     echo ""
     echo "📝 Nginx配置示例:"
     echo "  server {"
@@ -124,7 +124,7 @@ else
     echo ""
     echo "🌐 访问地址:"
     echo "  • 后端API:  http://60.205.251.109:8000"
-    echo "  • API文档:  http://60.205.251.109:8000/docs"
+    echo "  • API文档:  http://60.205.251.109:8000/docs (开发模式)"
     echo "  • 前端应用: http://60.205.251.109:3000"
     echo ""
     echo "💡 提示: 前端通过proxy连接后端"

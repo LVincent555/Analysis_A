@@ -92,3 +92,6 @@ logs/
 .pids/
 *.pid
 service_config.json
+
+# v0.4.0 敏感文件 - 包含密码，绝不提交
+docs/client/默认账户信息.md

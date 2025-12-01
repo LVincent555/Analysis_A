@@ -13,10 +13,19 @@ DATA_DIR = BASE_DIR.parent / "data"
 # API配置
 API_V1_PREFIX = "/api"
 PROJECT_NAME = "股票分析系统"
-VERSION = "0.2.6"  # 全局信号配置系统
+VERSION = "0.4.0"  # 桌面客户端 + 加密通信系统
 
 # 数据源配置
 USE_DATABASE = os.getenv("USE_DATABASE", "true").lower() == "true"  # 是否使用数据库
+
+# 安全配置
+# API_REQUIRE_AUTH: 是否要求所有API都需要认证（默认true，强制加密）
+# 设置为false可临时开放未加密API（用于调试或备用）
+API_REQUIRE_AUTH = os.getenv("API_REQUIRE_AUTH", "true").lower() == "true"
+
+# ENABLE_DOCS: 是否启用API文档（Swagger/OpenAPI）
+# 生产环境默认关闭，本地开发设置 ENABLE_DOCS=true 开启
+ENABLE_DOCS = os.getenv("ENABLE_DOCS", "false").lower() == "true"
 
 # CORS配置
 ALLOWED_ORIGINS = [

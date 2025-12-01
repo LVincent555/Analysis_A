@@ -1,5 +1,99 @@
 # 更新日志 (Changelog)
 
+## [v0.4.0] - 2025-12-01
+
+### 🔐 重大更新：桌面客户端 + 加密通信系统
+
+#### 🆕 新增功能
+
+**用户认证系统**
+- 新增 `users` 用户表，支持多用户管理
+- JWT Token 认证机制（24小时过期 + Refresh Token）
+- bcrypt 密码哈希存储
+- 用户会话管理，支持多设备登录限制
+
+**AES-256-GCM 加密通信**
+- 全链路数据加密（请求体 + 响应体）
+- API路径加密（统一入口 `/api/secure`）
+- 会话密钥机制，每次登录生成新密钥
+- 时间戳 + Nonce 防重放攻击
+
+**Electron 桌面客户端**
+- 新增 `frontend-client/` 目录
+- 复用现有 React 前端代码
+- 本地 SQLite 离线数据缓存
+- 支持 Windows 平台打包（.exe）
+
+**离线存储功能**
+- 本地 SQLite 数据库缓存
+- 增量数据同步机制
+- 离线模式自动切换
+- 可配置离线数据保留天数
+
+**自动更新功能**
+- electron-updater 集成
+- 检测新版本 + 下载 + 安装
+- 更新进度显示
+- 支持强制更新标记
+
+#### 📁 新增文件结构
+
+```
+backend/app/
+├── auth/                    # 认证模块
+│   ├── jwt_handler.py       # JWT处理
+│   ├── password.py          # 密码哈希
+│   └── dependencies.py      # 认证依赖
+├── crypto/                  # 加密模块
+│   └── aes_handler.py       # AES加解密
+├── routers/
+│   ├── auth.py              # 登录/注册API
+│   ├── secure.py            # 加密网关
+│   └── sync.py              # 数据同步API
+└── db_models.py             # 新增User表
+
+frontend-client/             # Electron客户端
+├── electron/
+│   ├── main.js              # 主进程
+│   ├── preload.js           # 预加载脚本
+│   ├── database.js          # 本地SQLite
+│   └── updater.js           # 自动更新
+└── src/
+    ├── pages/LoginPage.js   # 登录页面
+    ├── services/
+    │   ├── authService.js   # 认证服务
+    │   ├── cryptoService.js # 加密服务
+    │   └── syncService.js   # 同步服务
+    └── utils/crypto.js      # AES工具
+```
+
+#### 🔧 技术栈新增
+
+**后端依赖**
+- `python-jose[cryptography]` - JWT处理
+- `bcrypt` - 密码哈希
+- `cryptography` - AES加密
+
+**前端依赖**
+- `electron` - 桌面应用框架
+- `electron-builder` - 打包工具
+- `electron-updater` - 自动更新
+- `better-sqlite3` - 本地数据库
+- `crypto-js` - 前端加密
+
+#### 📚 文档
+
+- `docs/client/开发文档-客户端加密系统.md` - 完整架构设计
+- `docs/client/技术实现细节.md` - 代码实现参考
+- `docs/client/快速开始指南.md` - 开发启动指南
+
+#### ⚠️ 分支说明
+
+- `main` 分支：桌面客户端版本（v0.4.0+）
+- `web` 分支：原Web版本（v0.2.x，保留备用）
+
+---
+
 ## [v0.2.5] - 2025-11-08
 
 ### 🚀 重大性能优化
