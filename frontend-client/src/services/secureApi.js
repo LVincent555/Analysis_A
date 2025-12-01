@@ -104,10 +104,22 @@ class SecureApiService {
           if (!this.sessionExpiredTriggered) {
             this.sessionExpiredTriggered = true;
             console.log('触发会话过期事件');
+            // 同时使用 alert 和事件，确保用户能看到提示
+            alert('会话已过期，请重新登录');
             window.dispatchEvent(new CustomEvent('session-expired'));
           }
           throw new Error('会话已过期，请重新登录');
         }
+      }
+      
+      // 401错误但已重试过，直接提示
+      if (error.response?.status === 401 && retried) {
+        if (!this.sessionExpiredTriggered) {
+          this.sessionExpiredTriggered = true;
+          alert('会话已过期，请重新登录');
+          window.dispatchEvent(new CustomEvent('session-expired'));
+        }
+        throw new Error('会话已过期，请重新登录');
       }
 
       // 其他错误

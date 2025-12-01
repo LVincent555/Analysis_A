@@ -51,6 +51,85 @@ async def get_sector_ranking(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/sectors/raw-data")
+async def get_sector_raw_data(
+    date: str = Query(default=None, description="指定日期 (YYYYMMDD格式)"),
+    limit: int = Query(default=600, ge=10, le=1000, description="返回数量")
+):
+    """
+    获取当日板块原始数据（Excel 原始字段）
+    """
+    try:
+        from datetime import datetime
+        from ..services.memory_cache import memory_cache
+        from ..database import SessionLocal
+        from ..db_models import SectorDailyData, Sector
+        
+        # 获取日期
+        if date:
+            target_date = datetime.strptime(date, '%Y%m%d').date()
+        else:
+            target_date = memory_cache.get_sector_latest_date()
+        
+        if not target_date:
+            raise HTTPException(404, "没有可用数据")
+        
+        db = SessionLocal()
+        try:
+            # 查询原始数据
+            query = db.query(SectorDailyData, Sector.sector_name).join(
+                Sector, SectorDailyData.sector_id == Sector.id
+            ).filter(
+                SectorDailyData.date == target_date
+            ).order_by(SectorDailyData.rank).limit(limit)
+            
+            results = query.all()
+            
+            data = []
+            for row, sector_name in results:
+                item = {
+                    'name': sector_name,
+                    'rank': row.rank,
+                    'total_score': float(row.total_score) if row.total_score else None,
+                    'price_change': float(row.price_change) if row.price_change else None,
+                    'open_price': float(row.open_price) if row.open_price else None,
+                    'high_price': float(row.high_price) if row.high_price else None,
+                    'low_price': float(row.low_price) if row.low_price else None,
+                    'close_price': float(row.close_price) if row.close_price else None,
+                    'turnover_rate': float(row.turnover_rate_percent) if row.turnover_rate_percent else None,
+                    'volume_days': float(row.volume_days) if row.volume_days else None,
+                    'avg_volume_ratio_50': float(row.avg_volume_ratio_50) if row.avg_volume_ratio_50 else None,
+                    'volume': float(row.volume) if row.volume else None,
+                    'volatility': float(row.volatility) if row.volatility else None,
+                    'beta': float(row.beta) if row.beta else None,
+                    'correlation': float(row.correlation) if row.correlation else None,
+                    'long_term': row.long_term,
+                    'short_term': row.short_term,
+                    'overbought': row.overbought,
+                    'oversold': row.oversold,
+                    'macd_signal': row.macd_signal,
+                    'rsi': float(row.rsi) if row.rsi else None,
+                    'dif': float(row.dif) if row.dif else None,
+                    'dem': float(row.dem) if row.dem else None,
+                    'adx': float(row.adx) if row.adx else None,
+                    'slowk': float(row.slowk) if row.slowk else None,
+                }
+                data.append(item)
+            
+            return {
+                'date': target_date.strftime('%Y%m%d'),
+                'total_count': len(data),
+                'data': data
+            }
+        finally:
+            db.close()
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/sectors/search/{keyword}", response_model=List[str])
 async def search_sectors(keyword: str):
     """
@@ -204,13 +283,14 @@ async def get_sector_rank_changes(
         if not current_date:
             raise HTTPException(404, "没有可用数据")
         
-        # 2. 获取对比日期
-        all_dates = memory_cache.get_sector_dates_range(compare_days + 1)
+        # 2. 获取对比日期（从所有可用日期中找到比当前日期早的日期）
+        all_dates = memory_cache.sector_dates  # 所有日期（降序排列）
         available_dates = [d for d in all_dates if d < current_date]
         
         if not available_dates:
             raise HTTPException(404, "没有足够的历史数据")
         
+        # 找到第 compare_days 个早于当前日期的日期
         compare_date = available_dates[min(compare_days - 1, len(available_dates) - 1)]
         
         # 3. 从内存缓存获取当前日期的数据

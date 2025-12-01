@@ -37,6 +37,10 @@ export const useAppState = () => {
   const [stockLoading, setStockLoading] = useState(false);
   const [stockError, setStockError] = useState(null);
   const [queryTrigger, setQueryTrigger] = useState(0);
+  
+  // 2.1 板块查询状态
+  const [sectorName, setSectorName] = useState('');
+  const [sectorQueryTrigger, setSectorQueryTrigger] = useState(0);
 
   // 3. 排名跳变模块
   const [jumpBoardType, setJumpBoardType] = useState('main');
@@ -82,6 +86,12 @@ export const useAppState = () => {
     setStockError(null);
     setQueryTrigger(prev => prev + 1);
   }, [stockCode]);
+  
+  // 触发板块查询
+  const handleSectorQuery = useCallback(() => {
+    if (!sectorName.trim()) return;
+    setSectorQueryTrigger(prev => prev + 1);
+  }, [sectorName]);
 
   // 刷新数据
   const handleRefresh = useCallback(() => {
@@ -135,6 +145,13 @@ export const useAppState = () => {
       stockError, setStockError,
       queryTrigger,
       handleStockQuery
+    },
+    
+    // 板块查询模块
+    sectorQueryState: {
+      sectorName, setSectorName,
+      sectorQueryTrigger,
+      handleSectorQuery
     },
 
     // 排名跳变

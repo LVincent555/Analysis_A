@@ -110,9 +110,20 @@ class AESCrypto:
         Returns:
             Base64编码的加密字符串（包含nonce）
         """
+        from decimal import Decimal
+        from datetime import datetime, date
+        
+        # 自定义JSON编码器，处理Decimal和日期类型
+        def json_encoder(obj):
+            if isinstance(obj, Decimal):
+                return float(obj)
+            elif isinstance(obj, (datetime, date)):
+                return obj.isoformat()
+            raise TypeError(f'Object of type {type(obj).__name__} is not JSON serializable')
+        
         # 转换为JSON字符串
         if isinstance(data, dict):
-            plaintext = json.dumps(data, ensure_ascii=False)
+            plaintext = json.dumps(data, ensure_ascii=False, default=json_encoder)
         else:
             plaintext = str(data)
         

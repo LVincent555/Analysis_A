@@ -1,6 +1,6 @@
 {
   "name": "stock-analysis-client",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "A股分析系统桌面客户端",
   "private": true,
   "main": "electron/main.js",
@@ -58,7 +58,7 @@
   },
   "build": {
     "appId": "com.stockanalysis.client",
-    "productName": "A股分析系统",
+    "productName": "StockAnalysis",
     "extends": null,
     "directories": {
       "output": "dist"

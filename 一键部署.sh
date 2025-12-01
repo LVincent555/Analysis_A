@@ -139,34 +139,60 @@ fi
 echo ""
 
 # ============================================================
-# 步骤 4: 检查前端构建文件
+# 步骤 4: 部署客户端更新文件
 # ============================================================
 echo "============================================================"
-echo "🔍 步骤 4/8: 检查前端构建文件"
+echo "📦 步骤 4/8: 部署客户端更新文件"
 echo "============================================================"
 
-if [ ! -d "$PROJECT_DIR/frontend/build" ]; then
-    echo -e "${RED}✗ 错误: frontend/build 目录不存在！${NC}"
-    echo ""
-    echo "请在本地执行以下命令："
-    echo "  cd frontend"
-    echo "  npm run build"
-    echo "  git add frontend/build"
-    echo "  git commit -m 'build: 更新前端构建文件'"
-    echo "  git push"
-    exit 1
+# 客户端更新目录
+UPDATES_DIR="/var/www/stock-analysis/updates"
+CLIENT_DIST_DIR="$PROJECT_DIR/frontend-client/dist"
+
+# 确保更新目录存在
+mkdir -p "$UPDATES_DIR"
+
+# 检查是否有新的客户端构建文件
+if [ -d "$CLIENT_DIST_DIR" ]; then
+    # 检查 latest.yml 文件
+    if [ -f "$CLIENT_DIST_DIR/latest.yml" ]; then
+        echo "发现客户端更新文件，正在部署..."
+        
+        # 复制更新文件到服务目录
+        cp -f "$CLIENT_DIST_DIR/latest.yml" "$UPDATES_DIR/"
+        echo "  ✅ 已复制: latest.yml"
+        
+        # 复制所有 .exe 文件
+        for exe_file in "$CLIENT_DIST_DIR"/*.exe; do
+            if [ -f "$exe_file" ]; then
+                cp -f "$exe_file" "$UPDATES_DIR/"
+                echo "  ✅ 已复制: $(basename "$exe_file")"
+            fi
+        done
+        
+        # 复制 blockmap 文件（用于增量更新）
+        for blockmap_file in "$CLIENT_DIST_DIR"/*.blockmap; do
+            if [ -f "$blockmap_file" ]; then
+                cp -f "$blockmap_file" "$UPDATES_DIR/"
+                echo "  ✅ 已复制: $(basename "$blockmap_file")"
+            fi
+        done
+        
+        # 显示更新版本
+        UPDATE_VERSION=$(grep "version:" "$UPDATES_DIR/latest.yml" | head -1 | awk '{print $2}')
+        echo ""
+        echo "✅ 客户端更新文件部署完成"
+        echo "   版本: $UPDATE_VERSION"
+        echo "   目录: $UPDATES_DIR"
+    else
+        echo "ℹ️  未发现新的客户端构建 (latest.yml 不存在)"
+        echo "   如需更新客户端，请在本地执行:"
+        echo "   cd frontend-client && npm run build && npm run electron:build"
+    fi
+else
+    echo "ℹ️  客户端构建目录不存在，跳过客户端更新"
 fi
 
-BUILD_FILES=$(find "$PROJECT_DIR/frontend/build" -type f | wc -l)
-if [ "$BUILD_FILES" -lt 5 ]; then
-    echo -e "${RED}✗ 错误: 构建文件不完整！${NC}"
-    echo "文件数量: $BUILD_FILES (应该 > 5)"
-    exit 1
-fi
-
-echo "✅ 前端构建文件完整"
-echo "   文件数量: $BUILD_FILES"
-echo "   构建目录: $PROJECT_DIR/frontend/build"
 echo ""
 
 # ============================================================
@@ -331,12 +357,31 @@ if [ -f "/etc/nginx/sites-enabled/stock_analysis" ]; then
     else
         echo -e "  ${YELLOW}⚠️${NC} Nginx代理可能未工作，请检查配置"
     fi
+    
+    # 检查更新目录是否可访问
+    if curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/updates/latest.yml | grep -q "200\|404"; then
+        echo -e "  ${GREEN}✓${NC} 客户端更新目录可访问"
+    else
+        echo -e "  ${YELLOW}⚠️${NC} 客户端更新目录可能未配置"
+        echo "     请确保 Nginx 配置了 /updates/ 静态目录"
+    fi
 else
     echo -e "  ${YELLOW}⚠️${NC} Nginx配置未启用"
     echo ""
     echo "配置Nginx:"
     echo "  sudo nginx -t"
     echo "  sudo systemctl reload nginx"
+fi
+
+# 显示客户端更新状态
+echo ""
+echo "📱 客户端更新状态:"
+if [ -f "$UPDATES_DIR/latest.yml" ]; then
+    CLIENT_VERSION=$(grep "version:" "$UPDATES_DIR/latest.yml" | head -1 | awk '{print $2}')
+    echo -e "  ${GREEN}✓${NC} 当前客户端版本: $CLIENT_VERSION"
+    echo "     更新地址: http://60.205.251.109:8000/updates/"
+else
+    echo -e "  ${YELLOW}⚠️${NC} 暂无客户端更新文件"
 fi
 
 echo ""

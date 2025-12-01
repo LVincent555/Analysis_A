@@ -13,6 +13,72 @@ router = APIRouter(prefix="/api", tags=["stock"])
 stock_service = stock_service_db
 
 
+@router.get("/stocks/raw-data")
+async def get_stock_raw_data(
+    date: str = Query(default=None, description="指定日期 (YYYYMMDD格式)"),
+    limit: int = Query(default=5000, ge=10, le=10000, description="返回数量")
+):
+    """
+    获取当日股票原始排名数据
+    """
+    try:
+        from datetime import datetime
+        from ..services.memory_cache import memory_cache
+        from ..database import SessionLocal
+        from ..db_models import DailyStockData, Stock
+        
+        # 获取日期
+        if date:
+            target_date = datetime.strptime(date, '%Y%m%d').date()
+        else:
+            target_date = memory_cache.get_latest_date()
+        
+        if not target_date:
+            raise HTTPException(404, "没有可用数据")
+        
+        db = SessionLocal()
+        try:
+            # 查询原始数据
+            query = db.query(DailyStockData, Stock.stock_name, Stock.industry).join(
+                Stock, DailyStockData.stock_code == Stock.stock_code
+            ).filter(
+                DailyStockData.date == target_date
+            ).order_by(DailyStockData.rank).limit(limit)
+            
+            results = query.all()
+            
+            data = []
+            for row, stock_name, industry in results:
+                item = {
+                    'code': row.stock_code,
+                    'name': stock_name,
+                    'industry': industry,
+                    'rank': row.rank,
+                    'total_score': float(row.total_score) if row.total_score else None,
+                    'price_change': float(row.price_change) if row.price_change else None,
+                    'close_price': float(row.close_price) if row.close_price else None,
+                    'turnover_rate': float(row.turnover_rate_percent) if row.turnover_rate_percent else None,
+                    'volume_days': float(row.volume_days) if row.volume_days else None,
+                    'avg_volume_ratio_50': float(row.avg_volume_ratio_50) if row.avg_volume_ratio_50 else None,
+                    'volatility': float(row.volatility) if row.volatility else None,
+                    'market_cap': float(row.market_cap_billions) if row.market_cap_billions else None,
+                }
+                data.append(item)
+            
+            return {
+                'date': target_date.strftime('%Y%m%d'),
+                'total_count': len(data),
+                'data': data
+            }
+        finally:
+            db.close()
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/stock/search", response_model=List[StockFullHistory])
 async def search_stock_full(
     q: str = Query(..., min_length=1, description="股票代码或名称（模糊匹配）"),

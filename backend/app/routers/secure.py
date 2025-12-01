@@ -120,12 +120,16 @@ async def secure_gateway(
         
         return SecureResponse(data=encrypted_response)
         
-    except HTTPException:
+    except HTTPException as he:
+        logger.warning(f"加密网关HTTP错误: {he.status_code} - {he.detail}")
         raise
     except ValueError as e:
+        logger.error(f"加密网关解密失败: {str(e)}")
         raise HTTPException(400, f"解密失败: {str(e)}")
     except Exception as e:
-        logger.error(f"加密网关错误: {e}", exc_info=True)
+        import traceback
+        error_detail = traceback.format_exc()
+        logger.error(f"加密网关错误: {e}\n{error_detail}")
         raise HTTPException(500, f"处理失败: {str(e)}")
 
 
@@ -164,6 +168,10 @@ async def _call_internal_route(app, path: str, method: str, params: dict, body: 
         
         # 构建参数，并根据类型注解转换类型
         kwargs = {}
+        
+        # 注入 current_user（如果路由需要）
+        if 'current_user' in sig.parameters:
+            kwargs['current_user'] = user
         
         # 处理路径参数（需要URL解码）
         for key, value in path_params.items():
@@ -210,10 +218,15 @@ async def _call_internal_route(app, path: str, method: str, params: dict, body: 
         
         # 执行路由处理函数
         import asyncio
-        if asyncio.iscoroutinefunction(endpoint):
-            result = await endpoint(**kwargs)
-        else:
-            result = endpoint(**kwargs)
+        logger.debug(f"执行路由: {method} {path}, kwargs: {list(kwargs.keys())}")
+        try:
+            if asyncio.iscoroutinefunction(endpoint):
+                result = await endpoint(**kwargs)
+            else:
+                result = endpoint(**kwargs)
+        except Exception as route_error:
+            logger.error(f"路由执行失败 {method} {path}: {route_error}")
+            raise
         
         # 处理返回值
         if hasattr(result, 'dict'):
@@ -223,6 +236,7 @@ async def _call_internal_route(app, path: str, method: str, params: dict, body: 
         else:
             return result
     
+    logger.warning(f"路由未找到: {method} {path}")
     raise HTTPException(404, f"路由不存在: {method} {path}")
 
 

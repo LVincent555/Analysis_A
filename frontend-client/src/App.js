@@ -25,7 +25,10 @@ import {
   SteadyRiseModule,
   NeedleUnder20Module
 } from './components/modules';
+import SectorQueryModule from './components/modules/SectorQueryModule';
+import StockRankingModule from './components/modules/StockRankingModule';
 import IndustryDetailPage from './pages/IndustryDetailPage';
+import AdminPanel from './pages/AdminPanel';
 import { SignalConfigProvider, useSignalConfig } from './contexts/SignalConfigContext';
 import SignalConfigPanel from './components/SignalConfigPanel';
 import UpdateManager from './components/common/UpdateManager';
@@ -35,7 +38,7 @@ import SessionExpiredDialog from './components/common/SessionExpiredDialog';
 const ContentArea = ({ appState, openConfig }) => {
   const { 
     activeModule, selectedDate, 
-    hotSpotsState, queryState, rankJumpState, steadyRiseState, industryTrendState,
+    hotSpotsState, queryState, sectorQueryState, rankJumpState, steadyRiseState, industryTrendState,
     navigateToDetail
   } = appState;
 
@@ -65,6 +68,12 @@ const ContentArea = ({ appState, openConfig }) => {
             selectedDate={selectedDate}
           />
         );
+
+      case 'sector-query':
+        return <SectorQueryModule selectedDate={selectedDate} />;
+
+      case 'stock-ranking':
+        return <StockRankingModule selectedDate={selectedDate} />;
 
       case 'industry-query':
         return (
@@ -116,6 +125,9 @@ const ContentArea = ({ appState, openConfig }) => {
         return (
           <NeedleUnder20Module selectedDate={selectedDate} />
         );
+
+      case 'admin':
+        return <AdminPanel />;
 
       default:
         return (
@@ -175,7 +187,7 @@ function AppContent({ user, onLogout }) {
         onClose={() => appState.setIsDrawerOpen(false)}
       >
         <div className="p-4">
-          <Sidebar {...appState} />
+          <Sidebar {...appState} user={user} />
         </div>
       </Drawer>
 
@@ -184,7 +196,7 @@ function AppContent({ user, onLogout }) {
         <div className="flex flex-col lg:flex-row gap-6">
           {/* 左侧导航 (桌面端显示，移动端隐藏) */}
           <div className="hidden lg:block">
-            <Sidebar {...appState} />
+            <Sidebar {...appState} user={user} />
           </div>
 
           {/* 右侧功能区 */}

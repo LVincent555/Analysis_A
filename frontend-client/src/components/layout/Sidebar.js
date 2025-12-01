@@ -1,7 +1,8 @@
 import React from 'react';
 import { 
   BarChart2, Search, TrendingUp, TrendingDown, 
-  ChevronUp, ChevronDown, RefreshCw, Activity
+  ChevronUp, ChevronDown, RefreshCw, Activity,
+  Settings, Upload
 } from 'lucide-react';
 
 /**
@@ -19,8 +20,13 @@ const Sidebar = ({
   queryState,
   rankJumpState,
   steadyRiseState,
-  industryTrendState
+  industryTrendState,
+  
+  // 用户信息
+  user
 }) => {
+  // 判断是否是管理员
+  const isAdmin = user?.role === 'admin';
   
   // 辅助函数：渲染菜单项
   const MenuItem = ({ id, icon: Icon, label, children, colorClass = "indigo" }) => {
@@ -203,6 +209,30 @@ const Sidebar = ({
               }} 
               label="📊 板块查询" colorClass="purple"
             />
+
+            {/* 当日DC数据 */}
+            <button
+              onClick={() => setActiveModule('sector-query')}
+              className={`w-full text-left py-2 px-3 rounded text-sm font-medium transition-colors ${
+                activeModule === 'sector-query'
+                  ? 'bg-purple-100 text-purple-700'
+                  : 'text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              📋 当日DC数据
+            </button>
+
+            {/* 当日股票排名 */}
+            <button
+              onClick={() => setActiveModule('stock-ranking')}
+              className={`w-full text-left py-2 px-3 rounded text-sm font-medium transition-colors ${
+                activeModule === 'stock-ranking'
+                  ? 'bg-purple-100 text-purple-700'
+                  : 'text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              📈 当日股票排名
+            </button>
           </MenuItem>
 
           {/* 3. 行业趋势 */}
@@ -323,6 +353,31 @@ const Sidebar = ({
               </div>
             </button>
           </div>
+
+          {/* 7. 管理员面板 - 仅 admin 可见 */}
+          {isAdmin && (
+            <>
+              <div className="my-4 border-t border-gray-200"></div>
+              <div className="mb-2">
+                <button
+                  onClick={() => setActiveModule('admin')}
+                  className={`w-full flex items-center justify-between p-3 rounded-lg font-medium transition-all ${
+                    activeModule === 'admin'
+                      ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                      : 'text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <div className="flex items-center space-x-2">
+                    <Upload className="h-5 w-5 text-amber-500" />
+                    <span>数据管理</span>
+                  </div>
+                  <span className="text-xs bg-amber-100 text-amber-600 px-2 py-0.5 rounded-full">
+                    管理员
+                  </span>
+                </button>
+              </div>
+            </>
+          )}
 
         </nav>
       </div>

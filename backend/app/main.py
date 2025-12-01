@@ -7,6 +7,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
 
 from .config import PROJECT_NAME, VERSION, ALLOWED_ORIGINS, API_REQUIRE_AUTH, ENABLE_DOCS
 from .routers import analysis_router, stock_router, industry_router, rank_jump_router, steady_rise_router, sector_router
@@ -17,6 +19,7 @@ from .routers.strategies import router as strategies_router
 from .routers.auth import router as auth_router
 from .routers.secure import router as secure_router
 from .routers.sync import router as sync_router
+from .routers.admin import router as admin_router
 from .core import preload_cache, run_startup_checks
 
 # 配置日志
@@ -120,6 +123,7 @@ app.include_router(strategies_router)  # 策略模块（单针下二十等）
 app.include_router(auth_router)  # 认证模块（登录/注册）
 app.include_router(secure_router)  # 加密网关（统一加密入口）
 app.include_router(sync_router)  # 数据同步（离线功能）
+app.include_router(admin_router)  # 管理员模块（文件上传/导入）
 
 
 @app.get("/")
@@ -136,3 +140,10 @@ async def root():
 async def health_check():
     """健康检查"""
     return {"status": "healthy"}
+
+
+# 挂载客户端更新文件目录（用于 Electron 自动更新）
+UPDATES_DIR = Path("/var/www/stock-analysis/updates")
+if UPDATES_DIR.exists():
+    app.mount("/updates", StaticFiles(directory=str(UPDATES_DIR)), name="updates")
+    logger.info(f"📦 客户端更新目录已挂载: {UPDATES_DIR}")

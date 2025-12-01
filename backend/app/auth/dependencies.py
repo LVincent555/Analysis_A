@@ -8,7 +8,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..db_models import User
+from ..db_models import User, UserSession
 from .jwt_handler import verify_token
 
 # HTTP Bearer认证方案
@@ -117,13 +117,17 @@ async def get_current_user_optional(
 
 
 async def get_session_key(
-    user: User = Depends(get_current_user)
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ) -> bytes:
     """
     获取当前用户的会话密钥
     
+    如果内存中没有，尝试从数据库恢复（处理后端重启场景）
+    
     Args:
         user: 当前登录用户
+        db: 数据库会话
         
     Returns:
         会话密钥字节串
@@ -134,6 +138,10 @@ async def get_session_key(
     session_key = get_session_key_by_user_id(user.id)
     
     if not session_key:
+        # 尝试从数据库恢复会话密钥（处理后端重启的情况）
+        session_key = await restore_session_key_from_db(user.id, db)
+        
+    if not session_key:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="会话已过期，请重新登录",
@@ -141,6 +149,34 @@ async def get_session_key(
         )
     
     return session_key
+
+
+async def restore_session_key_from_db(user_id: int, db: Session) -> Optional[bytes]:
+    """
+    从数据库恢复用户会话密钥到内存
+    
+    当后端重启后，内存中的会话密钥丢失，需要从数据库恢复
+    """
+    from datetime import datetime
+    from ..crypto.aes_handler import get_master_crypto
+    
+    # 查找用户最近的有效会话
+    session = db.query(UserSession).filter(
+        UserSession.user_id == user_id,
+        UserSession.expires_at > datetime.utcnow()
+    ).order_by(UserSession.last_active.desc()).first()
+    
+    if not session or not session.session_key_encrypted:
+        return None
+    
+    try:
+        # 注意：session_key_encrypted 是用密码派生密钥加密的，无法直接解密
+        # 这里返回 None，让用户重新登录
+        # 如果想要支持自动恢复，需要改为用主密钥加密会话密钥
+        return None
+    except Exception as e:
+        print(f"恢复会话密钥失败: {e}")
+        return None
 
 
 async def require_admin(
