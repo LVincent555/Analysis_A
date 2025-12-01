@@ -72,7 +72,7 @@ function createWindow() {
   // 这样可以带上认证Token
 }
 
-/**
+/**9
  * 检查更新
  */
 function checkForUpdates() {
@@ -285,18 +285,31 @@ ipcMain.handle('db:isAvailable', () => {
 // ==================== 更新 IPC 处理器 ====================
 
 // 检查更新（带认证Token）
-ipcMain.handle('update:check', (event, token) => {
-  if (autoUpdater) {
-    // 设置认证头
+ipcMain.handle('update:check', async (event, token) => {
+  console.log('📥 收到更新检查请求');
+  
+  if (!autoUpdater) {
+    console.error('❌ autoUpdater 未初始化');
+    throw new Error('自动更新模块未加载');
+  }
+  
+  try {
+    // 设置认证头（实际上不需要了，/updates现在是公开的）
     if (token) {
       autoUpdater.requestHeaders = {
         'Authorization': `Bearer ${token}`
       };
-      console.log('已设置更新请求认证头');
+      console.log('✅ 已设置更新请求认证头');
     }
-    return autoUpdater.checkForUpdates();
+    
+    console.log('🔄 调用 autoUpdater.checkForUpdates()...');
+    const result = await autoUpdater.checkForUpdates();
+    console.log('📤 更新检查完成:', result);
+    return result;
+  } catch (err) {
+    console.error('❌ 更新检查失败:', err.message);
+    throw err;
   }
-  return Promise.resolve(null);
 });
 
 // 下载更新
