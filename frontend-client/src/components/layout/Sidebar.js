@@ -2,7 +2,7 @@ import React from 'react';
 import { 
   BarChart2, Search, TrendingUp, TrendingDown, 
   ChevronUp, ChevronDown, RefreshCw, Activity,
-  Settings, Upload
+  Settings, Upload, Users, Shield
 } from 'lucide-react';
 
 /**
@@ -354,27 +354,66 @@ const Sidebar = ({
             </button>
           </div>
 
-          {/* 7. 管理员面板 - 仅 admin 可见 */}
+          {/* 7. 系统管理 - 仅 admin 可见 */}
           {isAdmin && (
             <>
               <div className="my-4 border-t border-gray-200"></div>
               <div className="mb-2">
+                {/* 系统管理主菜单 */}
                 <button
-                  onClick={() => setActiveModule('admin')}
+                  onClick={() => toggleMenu('system-admin')}
                   className={`w-full flex items-center justify-between p-3 rounded-lg font-medium transition-all ${
-                    activeModule === 'admin'
+                    activeModule === 'admin' || activeModule === 'user-login-history'
                       ? 'bg-amber-50 text-amber-700 border border-amber-200'
                       : 'text-gray-700 hover:bg-gray-50'
                   }`}
                 >
                   <div className="flex items-center space-x-2">
-                    <Upload className="h-5 w-5 text-amber-500" />
-                    <span>数据管理</span>
+                    <Shield className="h-5 w-5 text-amber-500" />
+                    <span>系统管理</span>
                   </div>
-                  <span className="text-xs bg-amber-100 text-amber-600 px-2 py-0.5 rounded-full">
-                    管理员
-                  </span>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-xs bg-amber-100 text-amber-600 px-2 py-0.5 rounded-full">
+                      管理员
+                    </span>
+                    {expandedMenu === 'system-admin' ? (
+                      <ChevronUp className="h-4 w-4" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4" />
+                    )}
+                  </div>
                 </button>
+                
+                {/* 子菜单 */}
+                {expandedMenu === 'system-admin' && (
+                  <div className="mt-2 ml-4 space-y-1 border-l-2 border-amber-200 pl-3">
+                    {/* 数据管理 */}
+                    <button
+                      onClick={() => setActiveModule('admin')}
+                      className={`w-full text-left py-2 px-3 rounded text-sm font-medium transition-colors flex items-center space-x-2 ${
+                        activeModule === 'admin'
+                          ? 'bg-amber-100 text-amber-700'
+                          : 'text-gray-600 hover:bg-amber-50'
+                      }`}
+                    >
+                      <Upload className="h-4 w-4" />
+                      <span>数据管理</span>
+                    </button>
+                    
+                    {/* 用户登录记录 */}
+                    <button
+                      onClick={() => setActiveModule('user-login-history')}
+                      className={`w-full text-left py-2 px-3 rounded text-sm font-medium transition-colors flex items-center space-x-2 ${
+                        activeModule === 'user-login-history'
+                          ? 'bg-amber-100 text-amber-700'
+                          : 'text-gray-600 hover:bg-amber-50'
+                      }`}
+                    >
+                      <Users className="h-4 w-4" />
+                      <span>用户登录记录</span>
+                    </button>
+                  </div>
+                )}
               </div>
             </>
           )}
