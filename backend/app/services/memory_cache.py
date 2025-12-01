@@ -58,9 +58,27 @@ class MemoryCacheManager:
         self._initialized = True
         logger.info("✅ MemoryCacheManager 初始化完成（尚未加载数据）")
     
+    def clear_cache(self):
+        """清空所有缓存数据"""
+        logger.info("🧹 清空内存缓存...")
+        self.stocks.clear()
+        self.daily_data_by_date.clear()
+        self.daily_data_by_stock.clear()
+        self.dates.clear()
+        self.sectors.clear()
+        self.sector_daily_data_by_date.clear()
+        self.sector_daily_data_by_name.clear()
+        self.sector_dates.clear()
+        # 清空numpy缓存
+        numpy_stock_cache.clear()
+        logger.info("✅ 内存缓存已清空")
+    
     def load_all_data(self):
         """一次性加载数据到内存（限制最近30天）"""
         logger.info("🔄 开始加载数据到内存...")
+        
+        # 先清空旧数据，避免重复累加导致内存爆炸
+        self.clear_cache()
         
         db = SessionLocal()
         try:

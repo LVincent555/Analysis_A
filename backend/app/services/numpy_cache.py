@@ -31,6 +31,17 @@ class NumpyStockCache:
         
         self._initialized = False
     
+    def clear(self):
+        """清空numpy缓存"""
+        self.stock_code_to_idx.clear()
+        self.idx_to_stock_code.clear()
+        self.date_to_idx.clear()
+        self.idx_to_date.clear()
+        self.data_array = None
+        self.index_map.clear()
+        self._initialized = False
+        logger.info("✅ Numpy缓存已清空")
+    
     def build_from_data(self, daily_data_list: List):
         """
         从DailyStockData列表构建numpy数组
