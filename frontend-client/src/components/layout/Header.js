@@ -254,75 +254,89 @@ const Header = ({
             )}
           </div>
 
-          {/* 用户信息和登出 */}
+          {/* 用户信息区域 */}
           {user && (
-            <div className="flex items-center gap-3 ml-4 pl-4 border-l border-slate-200">
-              {/* 检查更新按钮 */}
-              {updateStatus === 'idle' && (
-                <button
-                  onClick={handleCheckUpdate}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg transition-colors"
-                  title="检查更新"
-                >
-                  <RefreshCw className="w-4 h-4" />
-                  <span className="hidden md:inline">检查更新</span>
-                </button>
-              )}
-              
-              {/* 检查中 */}
-              {updateStatus === 'checking' && (
-                <div className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-gray-100 text-gray-600 rounded-lg">
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                  <span className="hidden md:inline">检查中...</span>
-                </div>
-              )}
-              
-              {/* 发现新版本 */}
-              {updateStatus === 'available' && (
-                <button
-                  onClick={handleDownloadUpdate}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-green-500 text-white hover:bg-green-600 rounded-lg transition-colors animate-pulse"
-                  title={`发现新版本 ${updateInfo?.version || ''}`}
-                >
-                  <Download className="w-4 h-4" />
-                  <span>下载更新 {updateInfo?.version || ''}</span>
-                </button>
-              )}
-              
-              {/* 下载中 */}
-              {updateStatus === 'downloading' && (
-                <div className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-blue-100 text-blue-600 rounded-lg">
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                  <span>下载中...</span>
-                </div>
-              )}
-              
-              {/* 下载完成 */}
-              {updateStatus === 'downloaded' && (
-                <button
-                  onClick={handleInstallUpdate}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-green-600 text-white hover:bg-green-700 rounded-lg transition-colors"
-                >
-                  <Download className="w-4 h-4" />
-                  <span>立即安装</span>
-                </button>
-              )}
-              
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
-                  <User className="w-4 h-4 text-blue-600" />
-                </div>
-                <span className="text-sm font-medium text-slate-700 hidden md:inline">
-                  {user.username}
-                </span>
+            <div className="flex items-center gap-2 ml-4">
+              {/* 更新状态按钮 */}
+              <div className="flex items-center">
+                {/* 检查更新 */}
+                {updateStatus === 'idle' && (
+                  <button
+                    onClick={handleCheckUpdate}
+                    className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all duration-200"
+                    title="检查更新"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    <span className="hidden lg:inline">检查更新</span>
+                  </button>
+                )}
+                
+                {/* 检查中 */}
+                {updateStatus === 'checking' && (
+                  <div className="flex items-center gap-1.5 px-3 py-2 text-sm text-slate-500 bg-slate-100 rounded-xl">
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span className="hidden lg:inline">检查中...</span>
+                  </div>
+                )}
+                
+                {/* 发现新版本 */}
+                {updateStatus === 'available' && (
+                  <button
+                    onClick={handleDownloadUpdate}
+                    className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-gradient-to-r from-green-500 to-emerald-500 text-white hover:from-green-600 hover:to-emerald-600 rounded-xl shadow-lg shadow-green-500/25 transition-all duration-200"
+                    title={`发现新版本 ${updateInfo?.version || ''}`}
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>更新 {updateInfo?.version || ''}</span>
+                  </button>
+                )}
+                
+                {/* 下载中 */}
+                {updateStatus === 'downloading' && (
+                  <div className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-blue-500 text-white rounded-xl">
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>下载中...</span>
+                  </div>
+                )}
+                
+                {/* 下载完成 */}
+                {updateStatus === 'downloaded' && (
+                  <button
+                    onClick={handleInstallUpdate}
+                    className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-gradient-to-r from-emerald-500 to-teal-500 text-white hover:from-emerald-600 hover:to-teal-600 rounded-xl shadow-lg shadow-emerald-500/25 transition-all duration-200"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>立即安装</span>
+                  </button>
+                )}
               </div>
-              <button
-                onClick={onLogout}
-                className="p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                title="退出登录"
-              >
-                <LogOut className="w-4 h-4" />
-              </button>
+
+              {/* 分隔线 */}
+              <div className="h-8 w-px bg-slate-200 mx-1"></div>
+
+              {/* 用户信息卡片 */}
+              <div className="flex items-center gap-3 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 rounded-xl transition-colors">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center shadow-md">
+                    <User className="w-4 h-4 text-white" />
+                  </div>
+                  <div className="hidden md:block">
+                    <p className="text-sm font-semibold text-slate-700 leading-tight">
+                      {user.username}
+                    </p>
+                    <p className="text-[10px] text-slate-400 leading-tight">
+                      {user.role === 'admin' ? '管理员' : '用户'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={onLogout}
+                  className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all duration-200"
+                  title="退出登录"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           )}
         </div>
