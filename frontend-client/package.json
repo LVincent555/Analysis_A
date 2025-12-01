@@ -1,6 +1,6 @@
 {
   "name": "stock-analysis-client",
-  "version": "0.4.9",
+  "version": "0.4.10",
   "description": "A股分析系统桌面客户端",
   "private": true,
   "main": "electron/main.js",
