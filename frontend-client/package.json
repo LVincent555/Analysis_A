@@ -1,6 +1,6 @@
 {
   "name": "stock-analysis-client",
-  "version": "0.4.7",
+  "version": "0.4.8",
   "description": "A股分析系统桌面客户端",
   "private": true,
   "main": "electron/main.js",
@@ -14,7 +14,8 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-scripts": "5.0.1",
-    "recharts": "^2.10.0"
+    "recharts": "^2.10.0",
+    "electron-updater": "^6.1.7"
   },
   "scripts": {
     "start": "react-scripts start",
@@ -50,7 +51,6 @@
     "electron": "^28.0.0",
     "electron-builder": "^24.9.1",
     "electron-is-dev": "^3.0.1",
-    "electron-updater": "^6.1.7",
     "sql.js": "^1.10.0",
     "postcss": "^8.4.33",
     "tailwindcss": "^3.4.1",
