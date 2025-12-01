@@ -1,8 +1,8 @@
-version: 0.4.10
+version: 0.4.11
 files:
-  - url: StockAnalysis Setup 0.4.10.exe
-    sha512: WTbo9OyDATLgyWqsGs5Q/2I/Th/1GSj2SbGIINivBzYD7GkilYxgeottUsdIj5eXEPYV0r8Vuhg8igUruDqI5A==
-    size: 98581743
-path: StockAnalysis Setup 0.4.10.exe
-sha512: WTbo9OyDATLgyWqsGs5Q/2I/Th/1GSj2SbGIINivBzYD7GkilYxgeottUsdIj5eXEPYV0r8Vuhg8igUruDqI5A==
-releaseDate: '2025-12-01T16:15:49.601Z'
+  - url: StockAnalysis-Setup-0.4.11.exe
+    sha512: jtLEduVO3ykqdk7qM7xGHHcHMV26mndGRFMN/j4S/IJKCOyepuNu1DO6Jhx7uoL+66ZYFrG99sU/fma3Gf2rnw==
+    size: 98581703
+path: StockAnalysis-Setup-0.4.11.exe
+sha512: jtLEduVO3ykqdk7qM7xGHHcHMV26mndGRFMN/j4S/IJKCOyepuNu1DO6Jhx7uoL+66ZYFrG99sU/fma3Gf2rnw==
+releaseDate: '2025-12-01T16:24:19.328Z'

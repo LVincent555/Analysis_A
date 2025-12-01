@@ -1,6 +1,6 @@
 {
   "name": "stock-analysis-client",
-  "version": "0.4.10",
+  "version": "0.4.11",
   "description": "A股分析系统桌面客户端",
   "private": true,
   "main": "electron/main.js",
@@ -80,9 +80,10 @@
       "createStartMenuShortcut": true
     },
     "publish": {
-      "provider": "generic",
-      "url": "http://60.205.251.109:8000/updates/",
-      "channel": "latest"
+      "provider": "github",
+      "owner": "LVincent555",
+      "repo": "Analysis_A",
+      "releaseType": "release"
     },
     "extraResources": [
       {
