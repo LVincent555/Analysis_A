@@ -68,12 +68,8 @@ function createWindow() {
     return { action: 'deny' };
   });
 
-  // 启动后检查更新（非开发模式）
-  if (!isDev) {
-    setTimeout(() => {
-      checkForUpdates();
-    }, 3000);
-  }
+  // 注意：更新检查改为登录后触发，不在启动时自动检查
+  // 这样可以带上认证Token
 }
 
 /**
@@ -288,9 +284,16 @@ ipcMain.handle('db:isAvailable', () => {
 
 // ==================== 更新 IPC 处理器 ====================
 
-// 检查更新
-ipcMain.handle('update:check', () => {
+// 检查更新（带认证Token）
+ipcMain.handle('update:check', (event, token) => {
   if (autoUpdater) {
+    // 设置认证头
+    if (token) {
+      autoUpdater.requestHeaders = {
+        'Authorization': `Bearer ${token}`
+      };
+      console.log('已设置更新请求认证头');
+    }
     return autoUpdater.checkForUpdates();
   }
   return Promise.resolve(null);

@@ -1,9 +1,11 @@
 /**
  * 更新管理组件
  * 显示更新状态和控制更新
+ * 登录后自动检查更新（带认证Token）
  */
 import React, { useState, useEffect } from 'react';
 import { Download, RefreshCw, CheckCircle, AlertCircle, X } from 'lucide-react';
+import authService from '../../services/authService';
 
 // 检查是否在 Electron 环境
 const isElectron = window.electronAPI?.isElectron;
@@ -20,6 +22,7 @@ function UpdateManager() {
 
     // 监听更新事件
     window.electronAPI.onUpdateAvailable?.((info) => {
+      console.log('发现新版本:', info);
       setUpdateStatus('available');
       setUpdateInfo(info);
       setShowBanner(true);
@@ -35,18 +38,37 @@ function UpdateManager() {
       setShowBanner(true);
     });
 
-    // 监听检查中状态
-    const handleChecking = () => setUpdateStatus('checking');
-    const handleNotAvailable = () => setUpdateStatus('idle');
-    const handleError = (err) => {
+    window.electronAPI.onUpdateNotAvailable?.(() => {
+      console.log('当前已是最新版本');
+      setUpdateStatus('idle');
+    });
+
+    window.electronAPI.onUpdateError?.((err) => {
+      console.error('更新检查错误:', err);
       setUpdateStatus('error');
       setError(err);
+    });
+
+    // 登录后自动检查更新（带Token）
+    const checkUpdateWithAuth = async () => {
+      if (authService.isLoggedIn()) {
+        const token = authService.getToken();
+        console.log('登录后检查更新...');
+        try {
+          await window.electronAPI.checkForUpdates(token);
+        } catch (e) {
+          console.error('检查更新失败:', e);
+        }
+      }
     };
 
-    // 注意：这些事件需要在 preload.js 中添加
+    // 延迟3秒后检查（确保登录完成）
+    const timer = setTimeout(checkUpdateWithAuth, 3000);
+    
+    return () => clearTimeout(timer);
   }, []);
 
-  // 检查更新
+  // 检查更新（带Token）
   const handleCheckUpdate = async () => {
     if (!isElectron) return;
     
@@ -54,7 +76,8 @@ function UpdateManager() {
     setError(null);
     
     try {
-      await window.electronAPI.checkForUpdates();
+      const token = authService.getToken();
+      await window.electronAPI.checkForUpdates(token);
     } catch (e) {
       setUpdateStatus('error');
       setError(e.message);

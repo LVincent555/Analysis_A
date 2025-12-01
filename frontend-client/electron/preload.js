@@ -47,8 +47,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   
   // ==================== 更新相关 ====================
   
-  /** 检查更新 */
-  checkForUpdates: () => ipcRenderer.invoke('update:check'),
+  /** 检查更新（可传入认证Token） */
+  checkForUpdates: (token) => ipcRenderer.invoke('update:check', token),
   
   /** 下载更新 */
   downloadUpdate: () => ipcRenderer.invoke('update:download'),
