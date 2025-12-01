@@ -391,3 +391,110 @@ async def get_imported_dates(current_user: User = Depends(require_admin)):
     except Exception as e:
         logger.error(f"获取日期列表失败: {str(e)}")
         raise HTTPException(status_code=500, detail=f"获取日期列表失败: {str(e)}")
+
+
+@router.get("/login-history")
+async def get_login_history(current_user: User = Depends(require_admin)):
+    """
+    获取用户登录历史和活跃会话
+    仅管理员可访问
+    """
+    try:
+        from ..database import SessionLocal
+        from ..db_models import User as UserModel, UserSession
+        from sqlalchemy import func
+        from datetime import datetime, timedelta
+        
+        db = SessionLocal()
+        try:
+            # 1. 获取所有用户信息
+            users_query = db.query(
+                UserModel.id,
+                UserModel.username,
+                UserModel.role,
+                UserModel.is_active,
+                UserModel.created_at,
+                UserModel.last_login,
+                func.count(UserSession.id).label('session_count')
+            ).outerjoin(
+                UserSession, UserModel.id == UserSession.user_id
+            ).group_by(
+                UserModel.id
+            ).order_by(
+                UserModel.last_login.desc().nullslast()
+            ).all()
+            
+            users = []
+            for u in users_query:
+                users.append({
+                    'id': u.id,
+                    'username': u.username,
+                    'role': u.role,
+                    'is_active': u.is_active,
+                    'created_at': u.created_at.isoformat() if u.created_at else None,
+                    'last_login': u.last_login.isoformat() if u.last_login else None,
+                    'session_count': u.session_count or 0
+                })
+            
+            # 2. 获取所有活跃会话
+            sessions_query = db.query(
+                UserSession.id,
+                UserSession.user_id,
+                UserSession.device_id,
+                UserSession.device_name,
+                UserSession.created_at,
+                UserSession.expires_at,
+                UserSession.last_active,
+                UserModel.username,
+                UserModel.role
+            ).join(
+                UserModel, UserSession.user_id == UserModel.id
+            ).order_by(
+                UserSession.last_active.desc().nullslast()
+            ).all()
+            
+            sessions = []
+            for s in sessions_query:
+                sessions.append({
+                    'id': s.id,
+                    'user_id': s.user_id,
+                    'username': s.username,
+                    'role': s.role,
+                    'device_id': s.device_id,
+                    'device_name': s.device_name,
+                    'created_at': s.created_at.isoformat() if s.created_at else None,
+                    'expires_at': s.expires_at.isoformat() if s.expires_at else None,
+                    'last_active': s.last_active.isoformat() if s.last_active else None
+                })
+            
+            # 3. 计算统计数据
+            now = datetime.now()
+            active_threshold = now - timedelta(hours=24)
+            session_active_threshold = now - timedelta(hours=1)
+            
+            total_users = len(users)
+            active_users = sum(1 for u in users if u['last_login'] and 
+                             datetime.fromisoformat(u['last_login']) > active_threshold)
+            total_sessions = len(sessions)
+            active_sessions = sum(1 for s in sessions if s['last_active'] and 
+                                datetime.fromisoformat(s['last_active']) > session_active_threshold)
+            
+            return {
+                'success': True,
+                'data': {
+                    'users': users,
+                    'sessions': sessions,
+                    'stats': {
+                        'totalUsers': total_users,
+                        'activeUsers': active_users,
+                        'totalSessions': total_sessions,
+                        'activeSessions': active_sessions
+                    }
+                }
+            }
+        finally:
+            db.close()
+            
+    except Exception as e:
+        logger.error(f"获取登录历史失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"获取登录历史失败: {str(e)}")

@@ -29,6 +29,7 @@ import SectorQueryModule from './components/modules/SectorQueryModule';
 import StockRankingModule from './components/modules/StockRankingModule';
 import IndustryDetailPage from './pages/IndustryDetailPage';
 import AdminPanel from './pages/AdminPanel';
+import UserLoginHistory from './pages/UserLoginHistory';
 import { SignalConfigProvider, useSignalConfig } from './contexts/SignalConfigContext';
 import SignalConfigPanel from './components/SignalConfigPanel';
 import UpdateManager from './components/common/UpdateManager';
@@ -128,6 +129,9 @@ const ContentArea = ({ appState, openConfig }) => {
 
       case 'admin':
         return <AdminPanel />;
+
+      case 'user-login-history':
+        return <UserLoginHistory />;
 
       default:
         return (
