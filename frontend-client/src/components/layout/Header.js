@@ -62,13 +62,31 @@ const Header = ({
     console.log('🔄 手动检查更新...');
     setUpdateStatus('checking');
     
+    // 15秒超时
+    const timeoutId = setTimeout(() => {
+      console.log('⏰ 更新检查超时');
+      setUpdateStatus('idle');
+      alert('检查更新超时，请稍后重试');
+    }, 15000);
+    
     try {
       const token = authService.getToken();
       console.log('Token:', token ? '已获取' : '未获取');
-      await window.electronAPI.checkForUpdates(token);
+      const result = await window.electronAPI.checkForUpdates(token);
+      console.log('📥 检查更新返回:', result);
+      clearTimeout(timeoutId);
+      
+      // 如果返回结果但没有触发事件，手动处理
+      if (result && result.updateInfo) {
+        console.log('🎉 发现新版本:', result.updateInfo.version);
+        setUpdateStatus('available');
+        setUpdateInfo(result.updateInfo);
+      }
     } catch (e) {
+      clearTimeout(timeoutId);
       console.error('检查更新失败:', e);
       setUpdateStatus('idle');
+      alert('检查更新失败: ' + e.message);
     }
   };
   
