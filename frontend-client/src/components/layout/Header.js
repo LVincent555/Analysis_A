@@ -23,6 +23,7 @@ const Header = ({
   // 更新状态
   const [updateStatus, setUpdateStatus] = useState('idle'); // idle, checking, available, downloading, downloaded
   const [updateInfo, setUpdateInfo] = useState(null);
+  const [downloadProgress, setDownloadProgress] = useState(0);
   
   // 监听更新事件
   useEffect(() => {
@@ -40,15 +41,22 @@ const Header = ({
       alert('当前已是最新版本');
     });
     
+    window.electronAPI.onUpdateProgress?.((progress) => {
+      console.log('📥 下载进度:', progress.percent?.toFixed(1) + '%');
+      setDownloadProgress(progress.percent || 0);
+    });
+    
     window.electronAPI.onUpdateDownloaded?.((version) => {
       console.log('📦 更新下载完成:', version);
       setUpdateStatus('downloaded');
+      setDownloadProgress(100);
     });
     
     window.electronAPI.onUpdateError?.((err) => {
       console.error('❌ 更新错误:', err);
       setUpdateStatus('idle');
-      alert('检查更新失败: ' + err);
+      setDownloadProgress(0);
+      alert('更新失败: ' + err);
     });
   }, []);
   
@@ -293,9 +301,15 @@ const Header = ({
                 
                 {/* 下载中 */}
                 {updateStatus === 'downloading' && (
-                  <div className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-blue-500 text-white rounded-xl">
+                  <div className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-gradient-to-r from-blue-500 to-indigo-500 text-white rounded-xl shadow-lg">
                     <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>下载中...</span>
+                    <span>下载中 {downloadProgress.toFixed(0)}%</span>
+                    <div className="w-16 h-1.5 bg-blue-300/50 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-white rounded-full transition-all duration-300"
+                        style={{ width: `${downloadProgress}%` }}
+                      />
+                    </div>
                   </div>
                 )}
                 
