@@ -31,6 +31,7 @@ PUBLIC_PATHS = [
 # 白名单前缀
 PUBLIC_PREFIXES = [
     "/static",              # 静态文件
+    "/updates",             # 客户端更新文件
 ]
 
 # 是否强制只允许通过加密网关访问API
