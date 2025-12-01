@@ -70,15 +70,29 @@ function UpdateManager() {
 
   // 检查更新（带Token）
   const handleCheckUpdate = async () => {
-    if (!isElectron) return;
+    if (!isElectron) {
+      console.log('❌ 非Electron环境，跳过更新检查');
+      return;
+    }
     
+    console.log('🔄 开始检查更新...');
     setUpdateStatus('checking');
     setError(null);
     
     try {
       const token = authService.getToken();
-      await window.electronAPI.checkForUpdates(token);
+      console.log('📤 发送更新检查请求，Token:', token ? '已获取' : '未获取');
+      const result = await window.electronAPI.checkForUpdates(token);
+      console.log('📥 更新检查结果:', result);
+      // 如果没有更新，5秒后恢复idle状态
+      setTimeout(() => {
+        if (updateStatus === 'checking') {
+          console.log('⏰ 检查超时，恢复idle状态');
+          setUpdateStatus('idle');
+        }
+      }, 5000);
     } catch (e) {
+      console.error('❌ 更新检查失败:', e);
       setUpdateStatus('error');
       setError(e.message);
     }
@@ -226,6 +240,8 @@ function UpdateManager() {
           </button>
         </div>
       )}
+
+      {/* 更新按钮已移至 Header.js */}
     </div>
   );
 }

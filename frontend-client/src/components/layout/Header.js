@@ -1,8 +1,12 @@
 ﻿import React, { useState, useEffect } from 'react';
-import { TrendingUp, TrendingDown, Calendar, Settings, Menu, Activity, Minus, User, LogOut } from 'lucide-react';
+import { TrendingUp, TrendingDown, Calendar, Settings, Menu, Activity, Minus, User, LogOut, RefreshCw, Download } from 'lucide-react';
 import apiClient from '../../services/api';
 import { formatDate } from '../../utils';
 import { API_BASE_URL } from '../../constants';
+import authService from '../../services/authService';
+
+// 检查是否在 Electron 环境
+const isElectron = window.electronAPI?.isElectron;
 
 const Header = ({ 
   openConfig, 
@@ -15,6 +19,76 @@ const Header = ({
 }) => {
   // 市场波动率数据
   const [volatilityData, setVolatilityData] = useState(null);
+  
+  // 更新状态
+  const [updateStatus, setUpdateStatus] = useState('idle'); // idle, checking, available, downloading, downloaded
+  const [updateInfo, setUpdateInfo] = useState(null);
+  
+  // 监听更新事件
+  useEffect(() => {
+    if (!isElectron) return;
+    
+    window.electronAPI.onUpdateAvailable?.((info) => {
+      console.log('🎉 发现新版本:', info);
+      setUpdateStatus('available');
+      setUpdateInfo(info);
+    });
+    
+    window.electronAPI.onUpdateNotAvailable?.(() => {
+      console.log('✅ 当前已是最新版本');
+      setUpdateStatus('idle');
+      alert('当前已是最新版本');
+    });
+    
+    window.electronAPI.onUpdateDownloaded?.((version) => {
+      console.log('📦 更新下载完成:', version);
+      setUpdateStatus('downloaded');
+    });
+    
+    window.electronAPI.onUpdateError?.((err) => {
+      console.error('❌ 更新错误:', err);
+      setUpdateStatus('idle');
+      alert('检查更新失败: ' + err);
+    });
+  }, []);
+  
+  // 检查更新
+  const handleCheckUpdate = async () => {
+    if (!isElectron) {
+      alert('更新功能仅在桌面客户端可用');
+      return;
+    }
+    
+    console.log('🔄 手动检查更新...');
+    setUpdateStatus('checking');
+    
+    try {
+      const token = authService.getToken();
+      console.log('Token:', token ? '已获取' : '未获取');
+      await window.electronAPI.checkForUpdates(token);
+    } catch (e) {
+      console.error('检查更新失败:', e);
+      setUpdateStatus('idle');
+    }
+  };
+  
+  // 下载更新
+  const handleDownloadUpdate = async () => {
+    if (!isElectron) return;
+    setUpdateStatus('downloading');
+    try {
+      await window.electronAPI.downloadUpdate();
+    } catch (e) {
+      console.error('下载更新失败:', e);
+      setUpdateStatus('available');
+    }
+  };
+  
+  // 安装更新
+  const handleInstallUpdate = () => {
+    if (!isElectron) return;
+    window.electronAPI.installUpdate();
+  };
   
   // 获取市场波动率数据
   useEffect(() => {
@@ -165,6 +239,57 @@ const Header = ({
           {/* 用户信息和登出 */}
           {user && (
             <div className="flex items-center gap-3 ml-4 pl-4 border-l border-slate-200">
+              {/* 检查更新按钮 */}
+              {updateStatus === 'idle' && (
+                <button
+                  onClick={handleCheckUpdate}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg transition-colors"
+                  title="检查更新"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  <span className="hidden md:inline">检查更新</span>
+                </button>
+              )}
+              
+              {/* 检查中 */}
+              {updateStatus === 'checking' && (
+                <div className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-gray-100 text-gray-600 rounded-lg">
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <span className="hidden md:inline">检查中...</span>
+                </div>
+              )}
+              
+              {/* 发现新版本 */}
+              {updateStatus === 'available' && (
+                <button
+                  onClick={handleDownloadUpdate}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-green-500 text-white hover:bg-green-600 rounded-lg transition-colors animate-pulse"
+                  title={`发现新版本 ${updateInfo?.version || ''}`}
+                >
+                  <Download className="w-4 h-4" />
+                  <span>下载更新 {updateInfo?.version || ''}</span>
+                </button>
+              )}
+              
+              {/* 下载中 */}
+              {updateStatus === 'downloading' && (
+                <div className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-blue-100 text-blue-600 rounded-lg">
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <span>下载中...</span>
+                </div>
+              )}
+              
+              {/* 下载完成 */}
+              {updateStatus === 'downloaded' && (
+                <button
+                  onClick={handleInstallUpdate}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-green-600 text-white hover:bg-green-700 rounded-lg transition-colors"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>立即安装</span>
+                </button>
+              )}
+              
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
                   <User className="w-4 h-4 text-blue-600" />
