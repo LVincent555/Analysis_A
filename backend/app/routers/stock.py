@@ -14,18 +14,18 @@ stock_service = stock_service_db
 
 
 @router.get("/stocks/raw-data")
-def get_stock_raw_data(  # ✅ 同步
+def get_stock_raw_data(  # ✅ 同步，使用numpy缓存
     date: str = Query(default=None, description="指定日期 (YYYYMMDD格式)"),
     limit: int = Query(default=5000, ge=10, le=10000, description="返回数量")
 ):
     """
     获取当日股票原始排名数据
+    
+    ✅ 使用numpy缓存，不查询数据库
     """
     try:
         from datetime import datetime
-        from ..services.numpy_cache_middleware import numpy_cache  # ✅ 新架构
-        from ..database import SessionLocal
-        from ..db_models import DailyStockData, Stock
+        from ..services.numpy_cache_middleware import numpy_cache
         
         # 获取日期
         if date:
@@ -36,42 +36,33 @@ def get_stock_raw_data(  # ✅ 同步
         if not target_date:
             raise HTTPException(404, "没有可用数据")
         
-        db = SessionLocal()
-        try:
-            # 查询原始数据
-            query = db.query(DailyStockData, Stock.stock_name, Stock.industry).join(
-                Stock, DailyStockData.stock_code == Stock.stock_code
-            ).filter(
-                DailyStockData.date == target_date
-            ).order_by(DailyStockData.rank).limit(limit)
-            
-            results = query.all()
-            
-            data = []
-            for row, stock_name, industry in results:
-                item = {
-                    'code': row.stock_code,
-                    'name': stock_name,
-                    'industry': industry,
-                    'rank': row.rank,
-                    'total_score': float(row.total_score) if row.total_score else None,
-                    'price_change': float(row.price_change) if row.price_change else None,
-                    'close_price': float(row.close_price) if row.close_price else None,
-                    'turnover_rate': float(row.turnover_rate_percent) if row.turnover_rate_percent else None,
-                    'volume_days': float(row.volume_days) if row.volume_days else None,
-                    'avg_volume_ratio_50': float(row.avg_volume_ratio_50) if row.avg_volume_ratio_50 else None,
-                    'volatility': float(row.volatility) if row.volatility else None,
-                    'market_cap': float(row.market_cap_billions) if row.market_cap_billions else None,
-                }
-                data.append(item)
-            
-            return {
-                'date': target_date.strftime('%Y%m%d'),
-                'total_count': len(data),
-                'data': data
+        # ✅ 使用numpy缓存获取TOP N数据（已按rank排序）
+        raw_data = numpy_cache.get_top_n_by_rank(target_date, limit)
+        
+        data = []
+        for row in raw_data:
+            stock_info = numpy_cache.get_stock_info(row['stock_code'])
+            item = {
+                'code': row['stock_code'],
+                'name': stock_info.stock_name if stock_info else '',
+                'industry': stock_info.industry if stock_info else '未知',
+                'rank': row['rank'],
+                'total_score': row.get('total_score'),
+                'price_change': row.get('price_change'),
+                'close_price': row.get('close_price'),
+                'turnover_rate': row.get('turnover_rate'),
+                'volume_days': row.get('volume_days'),
+                'avg_volume_ratio_50': row.get('avg_volume_ratio_50'),
+                'volatility': row.get('volatility'),
+                'market_cap': row.get('market_cap'),
             }
-        finally:
-            db.close()
+            data.append(item)
+        
+        return {
+            'date': target_date.strftime('%Y%m%d'),
+            'total_count': len(data),
+            'data': data
+        }
             
     except HTTPException:
         raise

@@ -318,7 +318,7 @@ class SectorDataStore:
         return slice_data[sorted_indices[:n]]
     
     def row_to_dict(self, row: np.void) -> Dict:
-        """将单行数据转换为字典"""
+        """将单行数据转换为字典（包含所有字段）"""
         sector_id = self.index_mgr.get_sector_id(int(row['sector_idx']))
         row_date = self.index_mgr.get_date(int(row['date_idx']))
         
@@ -335,10 +335,21 @@ class SectorDataStore:
             'volume': int(row['volume']),
             'turnover_rate': float(row['turnover_rate']),
             'volatility': float(row['volatility']),
-            'volume_days': float(row['volume_days']),  # 🔧 补充缺失字段
+            'volume_days': float(row['volume_days']),
             'avg_volume_ratio_50': float(row['avg_volume_ratio_50']),
+            # 技术指标
+            'beta': float(row['beta']),
+            'correlation': float(row['correlation']),
             'rsi': float(row['rsi']),
             'adx': float(row['adx']),
+            'slowk': float(row['slowk']),
+            'dif': float(row['dif']),
+            'dem': float(row['dem']),
+            'macd_signal': float(row['macd_signal']),
+            'long_term': float(row['long_term']),
+            'short_term': int(row['short_term']),
+            'overbought': int(row['overbought']),
+            'oversold': int(row['oversold']),
         }
     
     def rows_to_dicts(self, rows: np.ndarray) -> List[Dict]:
