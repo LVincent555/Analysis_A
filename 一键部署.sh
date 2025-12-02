@@ -207,7 +207,8 @@ cd "$PROJECT_DIR/backend"
 # 检查 requirements.txt 是否存在
 if [ -f "requirements.txt" ]; then
     echo "正在安装 Python 依赖..."
-    pip3 install -r requirements.txt --quiet --upgrade 2>&1 | grep -v "already satisfied" || true
+    # 使用 --break-system-packages 解决 Debian/Ubuntu 系统的 PEP 668 限制
+    pip3 install -r requirements.txt --quiet --upgrade --break-system-packages 2>&1 | grep -v "already satisfied" || true
     echo "✅ Python 依赖安装完成"
 else
     echo -e "${YELLOW}⚠️  requirements.txt 不存在，跳过依赖安装${NC}"
