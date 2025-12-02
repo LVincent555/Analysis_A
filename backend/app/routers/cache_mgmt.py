@@ -1,17 +1,16 @@
 """
 缓存管理API
 提供缓存统计、清理等管理功能
+
+重构后：统一使用 api_cache 二级缓存
 """
 from fastapi import APIRouter, HTTPException
 from typing import Dict, Any
 import logging
 
-from ..services.analysis_service_db import analysis_service_db
-from ..services.industry_service_db import industry_service_db
-from ..services.sector_service_db import sector_service_db
-from ..services.stock_service_db import stock_service_db
-from ..services.rank_jump_service_db import rank_jump_service_db
-from ..services.steady_rise_service_db import steady_rise_service_db
+from ..services.api_cache import api_cache
+from ..services.numpy_cache_middleware import numpy_cache
+from ..services.hot_spots_cache import HotSpotsCache
 
 logger = logging.getLogger(__name__)
 
@@ -21,36 +20,39 @@ router = APIRouter(prefix="/api/cache", tags=["cache"])
 @router.get("/stats")
 async def get_cache_stats() -> Dict[str, Any]:
     """
-    获取所有服务的缓存统计信息
+    获取缓存统计信息
     
     Returns:
-        各服务的缓存统计
+        缓存统计
     """
     try:
-        stats = {
-            "analysis": analysis_service_db.cache.stats(),
-            "industry": industry_service_db.cache.stats(),
-            "sector": sector_service_db.cache.stats(),
-            "stock": stock_service_db.cache.stats(),
-            "rank_jump": {
-                "total": len(rank_jump_service_db.cache),
-                "active": len(rank_jump_service_db.cache)
-            },
-            "steady_rise": {
-                "total": len(steady_rise_service_db.cache),
-                "active": len(steady_rise_service_db.cache)
-            }
-        }
+        # API二级缓存统计
+        api_stats = api_cache.stats()
         
-        # 计算总计
-        total_keys = sum(s.get("total", 0) for s in stats.values())
-        total_active = sum(s.get("active", 0) for s in stats.values())
+        # Numpy一级缓存统计
+        numpy_stats = numpy_cache.get_memory_stats()
+        
+        # 热点榜缓存统计
+        hotspots_stats = HotSpotsCache.get_cache_stats()
         
         return {
-            "services": stats,
-            "summary": {
-                "total_keys": total_keys,
-                "active_keys": total_active
+            "api_cache": {
+                "mode": api_stats['mode'],
+                "hits": api_stats['hits'],
+                "misses": api_stats['misses'],
+                "hit_rate": api_stats['hit_rate'],
+                "size_mb": api_stats.get('size_mb', 0),
+                "count": api_stats.get('count', 0)
+            },
+            "numpy_cache": {
+                "total_mb": numpy_stats['total_mb'],
+                "stocks_count": numpy_stats['stocks_count'],
+                "daily_records": numpy_stats['daily_data']['n_records'],
+                "sector_records": numpy_stats['sector_data']['n_records']
+            },
+            "hotspots_cache": {
+                "cached_dates": len(hotspots_stats['cached_dates']),
+                "memory_kb": hotspots_stats['memory_usage_kb']
             }
         }
     except Exception as e:
@@ -60,15 +62,15 @@ async def get_cache_stats() -> Dict[str, Any]:
 
 @router.post("/clear")
 async def clear_cache(
-    service: str = None,
+    cache_type: str = "all",
     pattern: str = None
 ) -> Dict[str, Any]:
     """
     清除缓存
     
     Args:
-        service: 服务名称 (analysis/industry/sector/stock/rank_jump/steady_rise/all)
-        pattern: 模式匹配（清除包含该字符串的key）
+        cache_type: 缓存类型 (api/hotspots/all)
+        pattern: 模式匹配（仅对api缓存有效）
     
     Returns:
         清除结果
@@ -76,44 +78,13 @@ async def clear_cache(
     try:
         cleared = {}
         
-        services_map = {
-            "analysis": analysis_service_db,
-            "industry": industry_service_db,
-            "sector": sector_service_db,
-            "stock": stock_service_db,
-            "rank_jump": rank_jump_service_db,
-            "steady_rise": steady_rise_service_db
-        }
+        if cache_type in ["api", "all"]:
+            api_cache.invalidate(pattern)
+            cleared["api_cache"] = "已清理"
         
-        if service and service != "all":
-            # 清除指定服务
-            if service not in services_map:
-                raise HTTPException(status_code=400, detail=f"未知服务: {service}")
-            
-            svc = services_map[service]
-            if hasattr(svc.cache, 'clear'):
-                count = svc.cache.clear(pattern=pattern)
-            else:
-                # 旧版dict缓存
-                if pattern:
-                    svc.cache = {k: v for k, v in svc.cache.items() if pattern not in k}
-                else:
-                    svc.cache.clear()
-                count = "unknown"
-            
-            cleared[service] = count
-        else:
-            # 清除所有服务
-            for svc_name, svc in services_map.items():
-                if hasattr(svc.cache, 'clear'):
-                    count = svc.cache.clear(pattern=pattern)
-                else:
-                    if pattern:
-                        svc.cache = {k: v for k, v in svc.cache.items() if pattern not in k}
-                    else:
-                        svc.cache.clear()
-                    count = "unknown"
-                cleared[svc_name] = count
+        if cache_type in ["hotspots", "all"]:
+            HotSpotsCache.clear_cache()
+            cleared["hotspots_cache"] = "已清理"
         
         logger.info(f"✅ 缓存清理完成: {cleared}")
         
@@ -123,48 +94,32 @@ async def clear_cache(
             "pattern": pattern
         }
     
-    except HTTPException:
-        raise
     except Exception as e:
         logger.error(f"清除缓存失败: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/cleanup-expired")
-async def cleanup_expired_cache() -> Dict[str, Any]:
+@router.post("/reload")
+async def reload_all_cache() -> Dict[str, Any]:
     """
-    清理所有过期的缓存项
+    重新加载所有缓存（数据导入后调用）
     
     Returns:
-        清理结果
+        重载结果
     """
     try:
-        cleaned = {}
+        from ..core.startup import preload_cache
         
-        services = [
-            ("analysis", analysis_service_db),
-            ("industry", industry_service_db),
-            ("sector", sector_service_db),
-            ("stock", stock_service_db)
-        ]
-        
-        for svc_name, svc in services:
-            if hasattr(svc.cache, 'cleanup_expired'):
-                count = svc.cache.cleanup_expired()
-                cleaned[svc_name] = count
-        
-        total_cleaned = sum(cleaned.values())
-        
-        logger.info(f"✅ 过期缓存清理完成: 共清理 {total_cleaned} 个")
+        logger.info("🔄 开始重新加载所有缓存...")
+        preload_cache()
         
         return {
             "success": True,
-            "cleaned": cleaned,
-            "total": total_cleaned
+            "message": "所有缓存已重新加载"
         }
     
     except Exception as e:
-        logger.error(f"清理过期缓存失败: {e}")
+        logger.error(f"重载缓存失败: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -178,18 +133,19 @@ async def cache_health_check() -> Dict[str, Any]:
     """
     try:
         stats = await get_cache_stats()
-        summary = stats["summary"]
         
         # 简单的健康评估
         status = "healthy"
-        if summary["total_keys"] > 10000:
-            status = "warning"  # 缓存项过多
+        api_hit_rate = float(stats["api_cache"]["hit_rate"].rstrip('%'))
+        
+        if api_hit_rate < 30:
+            status = "warning"  # 命中率过低
         
         return {
             "status": status,
-            "total_keys": summary["total_keys"],
-            "active_keys": summary["active_keys"],
-            "memory_usage": "估计 {}MB".format(summary["total_keys"] * 10 // 1024)
+            "api_cache": stats["api_cache"],
+            "numpy_cache_mb": stats["numpy_cache"]["total_mb"],
+            "hotspots_dates": stats["hotspots_cache"]["cached_dates"]
         }
     
     except Exception as e:

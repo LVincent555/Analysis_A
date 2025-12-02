@@ -7,10 +7,21 @@ import authService from '../services/authService';
 import secureApi from '../services/secureApi';
 import { API_BASE_URL, SERVERS, switchServer, getCurrentServer } from '../constants/config';
 
+// 简单的加密/解密（用于本地存储，非完全安全但比明文好）
+const encodeCredential = (str) => btoa(encodeURIComponent(str));
+const decodeCredential = (str) => {
+  try {
+    return decodeURIComponent(atob(str));
+  } catch {
+    return '';
+  }
+};
+
 const LoginPage = ({ onLoginSuccess }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberPassword, setRememberPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [appVersion, setAppVersion] = useState('0.4.0');
@@ -50,6 +61,20 @@ const LoginPage = ({ onLoginSuccess }) => {
     
     // 定期检测服务器状态（每30秒）
     const interval = setInterval(checkServerStatus, 30000);
+    
+    // 加载保存的登录信息
+    const savedCredentials = localStorage.getItem('savedCredentials');
+    if (savedCredentials) {
+      try {
+        const { username: savedUser, password: savedPass } = JSON.parse(savedCredentials);
+        setUsername(decodeCredential(savedUser));
+        setPassword(decodeCredential(savedPass));
+        setRememberPassword(true);
+      } catch (e) {
+        localStorage.removeItem('savedCredentials');
+      }
+    }
+    
     return () => clearInterval(interval);
   }, []);
 
@@ -68,6 +93,16 @@ const LoginPage = ({ onLoginSuccess }) => {
       const result = await authService.login(username, password);
       
       if (result.success) {
+        // 保存或清除登录信息
+        if (rememberPassword) {
+          localStorage.setItem('savedCredentials', JSON.stringify({
+            username: encodeCredential(username),
+            password: encodeCredential(password)
+          }));
+        } else {
+          localStorage.removeItem('savedCredentials');
+        }
+        
         // 初始化加密器
         const sessionKey = authService.getSessionKey();
         if (sessionKey) {
@@ -145,6 +180,21 @@ const LoginPage = ({ onLoginSuccess }) => {
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
+            </div>
+
+            {/* 记住密码 */}
+            <div className="flex items-center">
+              <label className="flex items-center cursor-pointer group">
+                <input
+                  type="checkbox"
+                  checked={rememberPassword}
+                  onChange={(e) => setRememberPassword(e.target.checked)}
+                  className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-0 cursor-pointer"
+                />
+                <span className="ml-2 text-sm text-slate-400 group-hover:text-slate-300 transition">
+                  记住密码
+                </span>
+              </label>
             </div>
 
             {/* 错误提示 */}

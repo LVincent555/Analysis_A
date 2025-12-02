@@ -1,6 +1,6 @@
 """
-热点分析服务 - 内存缓存版
-使用memory_cache替代数据库查询，大幅提升性能
+热点分析服务 - Numpy缓存版
+使用numpy_cache替代memory_cache，大幅提升性能并减少内存占用
 """
 from typing import List, Dict, Optional
 from datetime import datetime
@@ -13,8 +13,8 @@ from ..db_models import Stock, DailyStockData
 from ..models.analysis import AnalysisResult
 from ..models.stock import StockInfo
 from ..utils.board_filter import should_filter_stock
-from ..utils.ttl_cache import TTLCache
-from .memory_cache import memory_cache
+from .numpy_cache_middleware import numpy_cache
+from .api_cache import api_cache
 from sqlalchemy import desc
 
 logger = logging.getLogger(__name__)
@@ -23,17 +23,21 @@ logger = logging.getLogger(__name__)
 class AnalysisServiceDB:
     """热点分析服务（内存缓存版）"""
     
+    # 缓存TTL: 30分钟
+    CACHE_TTL = 1800
+    CACHE_PREFIX = 'analysis'
+    
     def __init__(self):
-        """初始化计算结果缓存"""
-        self.cache = TTLCache(default_ttl_seconds=1800)  # 30分钟TTL缓存
+        """初始化服务"""
+        pass  # 使用全局 api_cache
     
     def get_db(self):
         """获取数据库会话（仅在必要时使用）"""
         return SessionLocal()
     
     def get_available_dates(self) -> List[str]:
-        """获取可用日期列表（从内存缓存）"""
-        return memory_cache.get_available_dates()
+        """获取可用日期列表（从Numpy缓存）"""
+        return numpy_cache.get_available_dates()
     
     def analyze_period(
         self,
@@ -61,9 +65,10 @@ class AnalysisServiceDB:
         """
         # 生成缓存key
         cache_key = f"analyze_{period}_{max_count}_{board_type}_{target_date}"
-        if cache_key in self.cache:
+        cached = api_cache.get(cache_key)
+        if cached is not None:
             logger.info(f"✨ 缓存命中: {cache_key}")
-            return self.cache[cache_key]
+            return cached
         
         logger.info(f"🔄 计算热点分析: period={period}, max_count={max_count}, board_type={board_type}")
         
@@ -71,7 +76,7 @@ class AnalysisServiceDB:
         if target_date:
             target_date_obj = datetime.strptime(target_date, '%Y%m%d').date()
         else:
-            target_date_obj = memory_cache.get_latest_date()
+            target_date_obj = numpy_cache.get_latest_date()
         
         if not target_date_obj:
             return AnalysisResult(
@@ -84,7 +89,7 @@ class AnalysisServiceDB:
             )
         
         # 获取最近N天日期
-        all_dates = memory_cache.get_dates_range(period * 2)  # 多取一些以防不够
+        all_dates = numpy_cache.get_dates_range(period * 2)  # 多取一些以防不够
         target_dates = [d for d in all_dates if d <= target_date_obj][:period]
         
         if not target_dates:
@@ -100,15 +105,15 @@ class AnalysisServiceDB:
         date_strs = [d.strftime('%Y%m%d') for d in target_dates]
         latest_date = target_dates[0]  # 最新日期
         
-        # 2. 从内存获取最新日期的TOP N股票（锚定）
-        latest_top_stocks = memory_cache.get_top_n_stocks(latest_date, max_count)
+        # 2. 从Numpy缓存获取最新日期的TOP N股票（锚定）
+        latest_top_stocks = numpy_cache.get_top_n_by_rank(latest_date, max_count)
         
         # 获取锚定股票的代码列表（应用板块过滤）
         anchor_stocks = set()
         for stock_data in latest_top_stocks:
-            if should_filter_stock(stock_data.stock_code, board_type):
+            if should_filter_stock(stock_data['stock_code'], board_type):
                 continue
-            anchor_stocks.add(stock_data.stock_code)
+            anchor_stocks.add(stock_data['stock_code'])
         
         # 3. 从内存获取这些锚定股票在所有日期的数据
         stock_appearances = defaultdict(lambda: {
@@ -120,19 +125,20 @@ class AnalysisServiceDB:
         })
         
         for target_date_item in target_dates:
-            # 获取该日期的所有数据
-            daily_stocks = memory_cache.get_daily_data_by_date(target_date_item)
+            # 获取该日期的所有数据 (返回Dict列表)
+            daily_stocks = numpy_cache.get_all_by_date(target_date_item)
             
             for stock_data in daily_stocks:
-                code = stock_data.stock_code
+                code = stock_data['stock_code']
+                rank = stock_data['rank'] if stock_data['rank'] is not None else 9999
                 
                 # 只处理锚定的股票，且在TOP范围内
-                if code not in anchor_stocks or stock_data.rank > max_count:
+                if code not in anchor_stocks or rank > max_count:
                     continue
                 
                 # 获取股票基础信息
                 if not stock_appearances[code]['code']:
-                    stock_info = memory_cache.get_stock_info(code)
+                    stock_info = numpy_cache.get_stock_info(code)
                     if stock_info:
                         # 处理行业字段
                         industry = stock_info.industry
@@ -159,10 +165,10 @@ class AnalysisServiceDB:
                 stock_appearances[code]['dates'].append(date_str)
                 stock_appearances[code]['date_rank_info'].append({
                     'date': date_str,
-                    'rank': stock_data.rank,
-                    'price_change': float(stock_data.price_change) if stock_data.price_change else None,
-                    'turnover_rate': float(stock_data.turnover_rate_percent) if stock_data.turnover_rate_percent else None,
-                    'volatility': float(stock_data.volatility) if stock_data.volatility else None,
+                    'rank': rank,
+                    'price_change': stock_data['price_change'],
+                    'turnover_rate': stock_data['turnover_rate'],
+                    'volatility': stock_data['volatility'],
                 })
         
         # 4. 构建结果列表
@@ -213,7 +219,7 @@ class AnalysisServiceDB:
         )
         
         # 缓存结果
-        self.cache[cache_key] = result
+        api_cache.set(cache_key, result, ttl=self.CACHE_TTL)
         logger.info(f"✅ 热点分析完成并缓存: {len(stocks_list)}只股票, key={cache_key}")
         
         return result

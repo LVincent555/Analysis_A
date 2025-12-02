@@ -488,6 +488,7 @@ class ImportStateManager:
 
 # 全局单例
 _state_manager = None
+_sector_state_manager = None
 
 
 def get_state_manager() -> ImportStateManager:
@@ -496,3 +497,22 @@ def get_state_manager() -> ImportStateManager:
     if _state_manager is None:
         _state_manager = ImportStateManager()
     return _state_manager
+
+
+def get_sector_state_manager() -> ImportStateManager:
+    """获取板块状态管理器单例"""
+    global _sector_state_manager
+    if _sector_state_manager is None:
+        _sector_state_manager = ImportStateManager("sector_import_state.json")
+    return _sector_state_manager
+
+
+def reload_state_managers():
+    """重新加载所有状态管理器（删除数据后调用）"""
+    global _state_manager, _sector_state_manager
+    if _state_manager is not None:
+        _state_manager.state = _state_manager._load_state()
+        logger.info("✅ 股票状态管理器已刷新")
+    if _sector_state_manager is not None:
+        _sector_state_manager.state = _sector_state_manager._load_state()
+        logger.info("✅ 板块状态管理器已刷新")

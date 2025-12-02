@@ -1,6 +1,8 @@
 """
-股票服务 - 内存缓存版
-使用memory_cache替代数据库查询，大幅提升性能
+股票服务 - Numpy缓存版
+使用numpy_cache替代memory_cache，大幅提升性能并减少内存占用
+
+注意：search_stock_full 需要全部83个指标，暂保留使用 memory_cache
 """
 from typing import Optional
 from datetime import datetime, timedelta
@@ -9,8 +11,8 @@ import logging
 from ..database import SessionLocal
 from ..db_models import Stock, DailyStockData
 from ..models.stock import StockHistory, StockFullHistory, StockDailyFull
-from ..utils.ttl_cache import TTLCache
-from .memory_cache import memory_cache
+from .numpy_cache_middleware import numpy_cache
+from .api_cache import api_cache
 from sqlalchemy import desc, or_
 
 logger = logging.getLogger(__name__)
@@ -19,9 +21,11 @@ logger = logging.getLogger(__name__)
 class StockServiceDB:
     """股票服务（内存缓存版）"""
     
+    CACHE_TTL = 1800  # 30分钟
+    
     def __init__(self):
-        """初始化计算结果缓存"""
-        self.cache = TTLCache(default_ttl_seconds=1800)  # 30分钟TTL缓存
+        """初始化服务"""
+        pass  # 使用全局 api_cache
     
     def get_db(self):
         """获取数据库会话"""
@@ -152,7 +156,7 @@ class StockServiceDB:
 
     def search_stock_full(self, keyword: str, limit: int = 5) -> list[StockFullHistory]:
         """
-        搜索股票并返回全量历史数据
+        搜索股票并返回全量历史数据（需要完整83个指标，使用数据库查询）
         
         Args:
             keyword: 搜索关键词（代码或名称）
@@ -164,16 +168,17 @@ class StockServiceDB:
         keyword_lower = keyword.lower()
         matched_stocks = []
         
-        # 1. 搜索匹配的股票
+        # 1. 搜索匹配的股票 (使用numpy_cache)
+        all_stocks = numpy_cache.get_all_stocks()
+        
         # 先尝试精确匹配
-        all_stocks = memory_cache.get_all_stocks()
         if keyword in all_stocks:
             matched_stocks.append(all_stocks[keyword])
         
         # 如果没找到或者需要更多，进行模糊匹配
         if len(matched_stocks) < limit:
             for code, stock in all_stocks.items():
-                if code == keyword: # 已经添加过了
+                if code == keyword:  # 已经添加过了
                     continue
                     
                 if keyword_lower in code.lower() or (stock.stock_name and keyword_lower in stock.stock_name.lower()):
@@ -184,27 +189,31 @@ class StockServiceDB:
         if not matched_stocks:
             return []
             
-        # 2. 获取全量历史数据
+        # 2. 使用数据库查询获取全量历史数据（包含完整83个指标）
         results = []
-        for stock in matched_stocks:
-            # 获取该股票的所有历史数据（按日期降序）
-            daily_data_map = memory_cache.daily_data_by_stock.get(stock.stock_code, {})
-            if not daily_data_map:
-                continue
+        db = SessionLocal()
+        try:
+            for stock in matched_stocks:
+                # 从数据库查询完整数据
+                daily_data = db.query(DailyStockData).filter(
+                    DailyStockData.stock_code == stock.stock_code
+                ).order_by(desc(DailyStockData.date)).all()
                 
-            # 排序数据（最新日期在前）
-            sorted_data = sorted(daily_data_map.values(), key=lambda x: x.date, reverse=True)
-            
-            # 转换为全量模型
-            full_daily_list = [self._convert_to_daily_full(data) for data in sorted_data]
-            
-            results.append(StockFullHistory(
-                code=stock.stock_code,
-                name=stock.stock_name,
-                industry=stock.industry or '未知',
-                total_count=len(full_daily_list),
-                daily_data=full_daily_list
-            ))
+                if not daily_data:
+                    continue
+                    
+                # 转换为全量模型
+                full_daily_list = [self._convert_to_daily_full(data) for data in daily_data]
+                
+                results.append(StockFullHistory(
+                    code=stock.stock_code,
+                    name=stock.stock_name,
+                    industry=stock.industry or '未知',
+                    total_count=len(full_daily_list),
+                    daily_data=full_daily_list
+                ))
+        finally:
+            db.close()
             
         return results
     
@@ -235,24 +244,26 @@ class StockServiceDB:
         else:
             cache_key = f"stock_{keyword}_{target_date}_default"
         
-        if cache_key in self.cache:
+        cached = api_cache.get(cache_key)
+        if cached is not None:
             logger.info(f"✨ 缓存命中: {cache_key}")
-            return self.cache[cache_key]
+            return cached
         
         logger.info(f"🔄 搜索股票: {keyword}")
         
-        # 1. 从内存中查找股票
+        # 1. 从Numpy缓存中查找股票
         keyword_lower = keyword.lower()
         stock_info = None
         stock_code = None
         
         # 先精确匹配代码
-        if keyword in memory_cache.get_all_stocks():
+        all_stocks = numpy_cache.get_all_stocks()
+        if keyword in all_stocks:
             stock_code = keyword
-            stock_info = memory_cache.get_stock_info(keyword)
+            stock_info = numpy_cache.get_stock_info(keyword)
         else:
             # 模糊匹配代码或名称
-            for code, stock in memory_cache.get_all_stocks().items():
+            for code, stock in all_stocks.items():
                 if (keyword_lower in code.lower() or 
                     (stock.stock_name and keyword_lower in stock.stock_name.lower())):
                     stock_code = code
@@ -262,21 +273,17 @@ class StockServiceDB:
         if not stock_info or not stock_code:
             return None
         
-        # 2. 从内存获取历史数据（30天）
+        # 2. 从Numpy缓存获取历史数据（30天）
         if target_date:
             target_date_obj = datetime.strptime(target_date, '%Y%m%d').date()
         else:
-            target_date_obj = memory_cache.get_latest_date()
+            target_date_obj = numpy_cache.get_latest_date()
         
         if not target_date_obj:
             return None
         
-        # 获取30天日期
-        all_dates = memory_cache.get_dates_range(60)
-        target_dates = [d for d in all_dates if d <= target_date_obj][:30]
-        
-        # 获取该股票的历史数据
-        history_data = memory_cache.get_stock_history(stock_code, target_dates)
+        # 获取该股票的历史数据 (返回Dict列表，按日期降序)
+        history_data = numpy_cache.get_stock_history(stock_code, 30, target_date_obj)
         
         if not history_data:
             return None
@@ -285,30 +292,38 @@ class StockServiceDB:
         date_rank_info = []
         for data in reversed(history_data):  # 反转：降序变升序
             info = {
-                'date': data.date.strftime('%Y%m%d'),
-                'rank': data.rank,
-                'price_change': float(data.price_change) if data.price_change else None,
-                'turnover_rate': float(data.turnover_rate_percent) if data.turnover_rate_percent else None,
-                'volume_days': float(data.volume_days) if data.volume_days else None,
-                'avg_volume_ratio_50': float(data.avg_volume_ratio_50) if data.avg_volume_ratio_50 else None,
-                'volatility': float(data.volatility) if data.volatility else None,
+                'date': data['date'],
+                'rank': data['rank'],
+                'price_change': data['price_change'],
+                'turnover_rate': data['turnover_rate'],
+                'volume_days': data['volume_days'],
+                'avg_volume_ratio_50': data['avg_volume_ratio_50'],
+                'volatility': data['volatility'],
             }
             date_rank_info.append(info)
         
         # 4. 计算信号（最新日期）
+        # SignalCalculator 现已迁移到 numpy_cache
         signals = []
         if history_data:
             from .signal_calculator import SignalCalculator
+            from datetime import datetime as dt
             
-            latest_data = history_data[0]  # 最新数据
-            calculator = SignalCalculator(signal_thresholds)
-            signal_result = calculator.calculate_signals(
-                stock_code=stock_code,
-                current_date=latest_data.date,
-                current_data=latest_data,
-                history_days=7
-            )
-            signals = signal_result.get('signals', [])
+            latest_date_str = history_data[0]['date']
+            latest_date_obj = dt.strptime(latest_date_str, '%Y%m%d').date()
+            
+            # 从 numpy_cache 获取 Dict 数据用于信号计算
+            latest_data = numpy_cache.get_daily_data(stock_code, latest_date_obj)
+            
+            if latest_data:
+                calculator = SignalCalculator(signal_thresholds)
+                signal_result = calculator.calculate_signals(
+                    stock_code=stock_code,
+                    current_date=latest_date_obj,
+                    current_data=latest_data,  # 现在是 Dict
+                    history_days=7
+                )
+                signals = signal_result.get('signals', [])
         
         # 5. 构建结果并缓存
         result = StockHistory(
@@ -321,7 +336,7 @@ class StockServiceDB:
             signals=signals
         )
         
-        self.cache[cache_key] = result
+        api_cache.set(cache_key, result, ttl=self.CACHE_TTL)
         logger.info(f"✅ 股票查询完成: {stock_info.stock_name}")
         
         return result

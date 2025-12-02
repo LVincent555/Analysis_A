@@ -56,21 +56,23 @@ export const useAppState = () => {
 
   // ==================== 核心逻辑 ====================
 
+  // 获取日期函数
+  const fetchAvailableDates = useCallback(async (updateSelected = false) => {
+    try {
+      const response = await apiClient.get(`/api/dates`);
+      setAvailableDates(response);
+      if (updateSelected && response && response.latest_date) {
+        setSelectedDate(response.latest_date);
+      }
+    } catch (err) {
+      console.error('获取日期失败:', err);
+    }
+  }, []);
+
   // 初始化获取日期
   useEffect(() => {
-    const fetchAvailableDates = async () => {
-      try {
-        const response = await apiClient.get(`/api/dates`);
-        setAvailableDates(response);
-        if (response && response.latest_date) {
-          setSelectedDate(response.latest_date);
-        }
-      } catch (err) {
-        console.error('获取日期失败:', err);
-      }
-    };
-    fetchAvailableDates();
-  }, []);
+    fetchAvailableDates(true);
+  }, [fetchAvailableDates]);
 
   // 切换菜单展开状态
   const toggleMenu = (menuName) => {
@@ -124,6 +126,7 @@ export const useAppState = () => {
     expandedMenu, toggleMenu,
     availableDates, 
     selectedDate, setSelectedDate,
+    refreshDates: () => fetchAvailableDates(true), // 刷新日期并更新选中日期
     showDetailPage, selectedIndustry,
     navigateToDetail, backToMain,
     isDrawerOpen, setIsDrawerOpen, // 暴露 Drawer 状态

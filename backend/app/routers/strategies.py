@@ -13,46 +13,13 @@ import logging
 import time
 
 from ..services.strategies.needle_under_20 import NeedleUnder20Strategy, get_washout_detector
-from ..services.memory_cache import memory_cache
+from ..services.numpy_cache_middleware import numpy_cache
+from ..services.api_cache import api_cache
 
 logger = logging.getLogger(__name__)
 
-# ========== LRU缓存（30分钟TTL，最多5个参数组合）==========
-class TTLCache:
-    """带TTL的LRU缓存"""
-    def __init__(self, maxsize: int = 5, ttl_seconds: int = 1800):
-        self.maxsize = maxsize
-        self.ttl = ttl_seconds
-        self.cache: OrderedDict[str, Tuple[float, Any]] = OrderedDict()
-    
-    def _make_key(self, **kwargs) -> str:
-        return str(sorted(kwargs.items()))
-    
-    def get(self, **kwargs) -> Any:
-        key = self._make_key(**kwargs)
-        if key in self.cache:
-            timestamp, value = self.cache[key]
-            if time.time() - timestamp < self.ttl:
-                # 移到最后（最近使用）
-                self.cache.move_to_end(key)
-                return value
-            else:
-                # 过期，删除
-                del self.cache[key]
-        return None
-    
-    def set(self, value: Any, **kwargs):
-        key = self._make_key(**kwargs)
-        # LRU淘汰
-        while len(self.cache) >= self.maxsize:
-            self.cache.popitem(last=False)
-        self.cache[key] = (time.time(), value)
-    
-    def clear(self):
-        self.cache.clear()
-
-# 策略结果缓存（25小时，重启后端自动清空）
-_strategy_cache = TTLCache(maxsize=10, ttl_seconds=90000)  # 25小时
+# 策略缓存 TTL: 25小时
+STRATEGY_CACHE_TTL = 90000
 
 # 洗盘检测器
 def _get_detector(long_period: int = 10):
@@ -63,7 +30,7 @@ router = APIRouter(prefix="/api/strategies", tags=["strategies"])
 
 
 @router.get("/needle-under-20")
-async def get_needle_under_20_stocks(
+def get_needle_under_20_stocks(  # ✅ 同步，CPU密集型
     date: str = Query(None, description="日期，格式：YYYYMMDD，默认最新"),
     days: int = Query(5, description="分析天数范围，默认5天"),
     min_score: int = Query(0, description="最低评分阈值"),
@@ -82,22 +49,18 @@ async def get_needle_under_20_stocks(
         if date:
             target_date = datetime.strptime(date, '%Y%m%d').date()
         else:
-            target_date = memory_cache.get_latest_date()
+            target_date = numpy_cache.get_latest_date()  # 使用numpy_cache
         
         if not target_date:
             return {"data": [], "total_count": 0, "date_range": [], "industry_distribution": {}}
         
         date_str = target_date.strftime('%Y%m%d')
         
-        # ========== 检查缓存 ==========
-        cache_params = dict(
-            date=date_str, days=days, min_score=min_score,
-            pattern=pattern, bbi_filter=bbi_filter,
-            max_drop_pct=max_drop_pct, long_period=long_period
-        )
-        cached = _strategy_cache.get(**cache_params)
+        # ========== 检查缓存 (跨进程共享) ==========
+        cache_key = f"needle20:{date_str}:{days}:{min_score}:{pattern}:{bbi_filter}:{max_drop_pct}:{long_period}"
+        cached = api_cache.get(cache_key)
         if cached:
-            logger.info(f"✓ 命中缓存: {cache_params}")
+            logger.info(f"✓ 命中缓存: {cache_key}")
             return cached
         
         start_time = time.time()
@@ -106,7 +69,7 @@ async def get_needle_under_20_stocks(
         signal_dates = [target_date]
         
         # 获取日期范围用于显示
-        all_dates = memory_cache.get_dates_range(days * 2)
+        all_dates = numpy_cache.get_dates_range(days * 2)  # 使用numpy_cache
         display_dates = [d for d in all_dates if d <= target_date][:days]
         
         if not signal_dates:
@@ -118,7 +81,7 @@ async def get_needle_under_20_stocks(
         seen_stocks = set()
         
         # 检查数据是否充足
-        available_dates = memory_cache.get_dates_range(50)
+        available_dates = numpy_cache.get_dates_range(50)  # 使用numpy_cache
         data_days = len(available_dates)
         required_days = long_period + 7
         data_sufficient = data_days >= required_days
@@ -126,13 +89,13 @@ async def get_needle_under_20_stocks(
         # ========== 只检测目标日期当天 ==========
         for check_date in signal_dates:
             # 遍历所有股票
-            for stock_code in memory_cache.get_all_stocks().keys():
+            for stock_code in numpy_cache.get_all_stocks().keys():  # 使用numpy_cache
                 if stock_code in seen_stocks:
                     continue
                     
                 try:
-                    # 使用memory_cache获取数据
-                    stock_data = memory_cache.get_stock_data_for_strategy(stock_code, check_date, lookback_days=30)
+                    # 使用numpy_cache获取数据
+                    stock_data = numpy_cache.get_stock_data_for_strategy(stock_code, check_date, lookback_days=30)
                     if not stock_data:
                         continue
                     
@@ -185,7 +148,7 @@ async def get_needle_under_20_stocks(
                     seen_stocks.add(stock_code)
                     
                     # 获取股票信息
-                    stock_info = memory_cache.get_stock_info(stock_code)
+                    stock_info = numpy_cache.get_stock_info(stock_code)  # 使用numpy_cache
                     
                     # 构建washout_analysis，覆盖涨跌幅
                     washout_dict = washout.to_dict()
@@ -235,8 +198,8 @@ async def get_needle_under_20_stocks(
             "data_sufficient": data_sufficient
         }
         
-        # ========== 存入缓存 ==========
-        _strategy_cache.set(response, **cache_params)
+        # ========== 存入缓存 (跨进程共享, TTL=25小时) ==========
+        api_cache.set(cache_key, response, ttl=STRATEGY_CACHE_TTL)
         logger.info(f"✓ 计算完成并缓存: {len(results)}条, 耗时{elapsed:.2f}s")
         
         return response
@@ -247,7 +210,7 @@ async def get_needle_under_20_stocks(
 
 
 @router.get("/needle-under-20/{stock_code}")
-async def get_stock_needle_detail(
+def get_stock_needle_detail(  # ✅ 同步
     stock_code: str,
     date: str = Query(None, description="日期，格式：YYYYMMDD")
 ):
@@ -261,13 +224,13 @@ async def get_stock_needle_detail(
         if date:
             target_date = datetime.strptime(date, '%Y%m%d').date()
         else:
-            target_date = memory_cache.get_latest_date()
+            target_date = numpy_cache.get_latest_date()  # 使用numpy_cache
         
         if not target_date:
             raise HTTPException(status_code=404, detail="无可用数据")
         
-        # 使用memory_cache的新方法获取数据
-        stock_data = memory_cache.get_stock_data_for_strategy(stock_code, target_date, lookback_days=30)
+        # 使用numpy_cache获取策略数据（需要完整OHLCV）
+        stock_data = numpy_cache.get_stock_data_for_strategy(stock_code, target_date, lookback_days=30)
         
         if not stock_data:
             raise HTTPException(status_code=404, detail="股票数据不存在或数据不足")
@@ -288,7 +251,7 @@ async def get_stock_needle_detail(
         )
         
         # 获取股票信息
-        stock_info = memory_cache.get_stock_info(stock_code)
+        stock_info = numpy_cache.get_stock_info(stock_code)  # 使用numpy_cache
         
         result_dict = result.to_dict()
         result_dict['industry'] = stock_info.industry if stock_info else '未知'

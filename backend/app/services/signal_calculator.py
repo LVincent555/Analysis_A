@@ -8,7 +8,7 @@ from datetime import date, timedelta
 from collections import defaultdict
 
 from ..db_models import DailyStockData
-from .memory_cache import memory_cache
+from .numpy_cache_middleware import numpy_cache
 from .hot_spots_cache import HotSpotsCache
 
 logger = logging.getLogger(__name__)
@@ -84,7 +84,7 @@ class SignalCalculator:
         self,
         stock_code: str,
         current_date: date,
-        current_data: DailyStockData,
+        current_data: Dict,  # ✅ 现在接受 Dict，不再是 ORM 对象
         history_days: int = 7,
         simplify_hot_labels: bool = False  # 🔥 新增：是否简化热点标签（行业板块用）
     ) -> Dict:
@@ -94,7 +94,7 @@ class SignalCalculator:
         Args:
             stock_code: 股票代码
             current_date: 当前日期
-            current_data: 当前日期的股票数据
+            current_data: 当前日期的股票数据 (Dict 格式)
             history_days: 历史追踪天数
         
         Returns:
@@ -103,13 +103,19 @@ class SignalCalculator:
         signals = []
         signal_score = 0.0
         
+        # 提取当前数据字段
+        current_rank = current_data['rank'] if current_data.get('rank') is not None else 9999
+        current_price_change = current_data.get('price_change')
+        current_turnover_rate = current_data.get('turnover_rate')
+        current_volatility = current_data.get('volatility')
+        
         # 1. 热点榜信号（根据模式选择）
         if self.thresholds.hot_list_mode == "frequent":
             # 高频热点榜：基于14天聚合数据
             hot_signal = self.calculate_hot_spot_signal(stock_code, current_date.strftime('%Y%m%d'))
         else:
             # 即时龙头榜：基于当日排名
-            hot_signal = self._check_hot_list(current_data.rank)
+            hot_signal = self._check_hot_list(current_rank)
         
         if hot_signal:
             # 🔥 修复：根据simplify_hot_labels参数决定添加主标签还是所有标签
@@ -125,7 +131,7 @@ class SignalCalculator:
             signal_score += hot_signal['score']
         
         # 2. 排名跳变榜信号
-        jump_signal = self._check_rank_jump(stock_code, current_date, current_data.rank)
+        jump_signal = self._check_rank_jump(stock_code, current_date, current_rank)
         if jump_signal:
             signals.append(jump_signal['label'])
             signal_score += jump_signal['score']
@@ -137,19 +143,19 @@ class SignalCalculator:
             signal_score += rise_signal['score']
         
         # 4. 涨幅榜信号
-        price_signal = self._check_price_surge(current_data.price_change)
+        price_signal = self._check_price_surge(current_price_change)
         if price_signal:
             signals.append(price_signal['label'])
             signal_score += price_signal['score']
         
         # 5. 成交量榜信号
-        volume_signal = self._check_volume_surge(current_data.turnover_rate_percent)
+        volume_signal = self._check_volume_surge(current_turnover_rate)
         if volume_signal:
             signals.append(volume_signal['label'])
             signal_score += volume_signal['score']
         
         # 6. 波动率上升信号
-        volatility_signal = self._check_volatility_surge(stock_code, current_date, current_data.volatility)
+        volatility_signal = self._check_volatility_surge(stock_code, current_date, current_volatility)
         if volatility_signal:
             signals.append(volatility_signal['label'])
             signal_score += volatility_signal['score']
@@ -392,7 +398,7 @@ class SignalCalculator:
     ) -> Optional[Dict]:
         """检查排名跳变信号"""
         # 获取前一天的数据
-        dates = memory_cache.get_dates_range(10)  # 获取最近10天
+        dates = numpy_cache.get_dates_range(10)  # 获取最近10天
         prev_date = None
         for d in dates:
             if d < current_date:
@@ -402,16 +408,17 @@ class SignalCalculator:
         if not prev_date:
             return None
         
-        prev_data = memory_cache.get_daily_data_by_stock(stock_code, prev_date)
+        prev_data = numpy_cache.get_daily_data(stock_code, prev_date)
         if not prev_data:
             return None
         
         # 计算排名提升（排名变小 = 提升）
-        improvement = prev_data.rank - current_rank
+        prev_rank = prev_data['rank'] if prev_data['rank'] is not None else 9999
+        improvement = prev_rank - current_rank
         
         # 调试日志
         if stock_code in ['000839', '600624']:
-            logger.info(f"🔍 [{stock_code}] 跳变计算: prev_rank={prev_data.rank}, current_rank={current_rank}, improvement={improvement}")
+            logger.info(f"🔍 [{stock_code}] 跳变计算: prev_rank={prev_rank}, current_rank={current_rank}, improvement={improvement}")
             logger.info(f"   阈值: rank_jump_min={self.thresholds.rank_jump_min}, rank_jump_large={self.thresholds.rank_jump_large}")
         
         if improvement >= self.thresholds.rank_jump_large:
@@ -441,7 +448,7 @@ class SignalCalculator:
         current_date: date
     ) -> Optional[Dict]:
         """检查稳步上升信号（连续N天排名上升）"""
-        dates = memory_cache.get_dates_range(10)  # 最近10天
+        dates = numpy_cache.get_dates_range(10)  # 最近10天
         dates = [d for d in dates if d <= current_date][:8]  # 取当前日期及之前的7天
         
         if len(dates) < 2:
@@ -450,9 +457,9 @@ class SignalCalculator:
         # 获取历史排名
         ranks = []
         for d in dates:
-            data = memory_cache.get_daily_data_by_stock(stock_code, d)
+            data = numpy_cache.get_daily_data(stock_code, d)
             if data:
-                ranks.append(data.rank)
+                ranks.append(data['rank'] if data['rank'] is not None else 9999)
         
         if len(ranks) < 2:
             return None
@@ -520,7 +527,7 @@ class SignalCalculator:
             return None
         
         # 获取前一天的数据
-        dates = memory_cache.get_dates_range(10)
+        dates = numpy_cache.get_dates_range(10)
         prev_date = None
         for d in dates:
             if d < current_date:
@@ -530,12 +537,12 @@ class SignalCalculator:
         if not prev_date:
             return None
         
-        prev_data = memory_cache.get_daily_data_by_stock(stock_code, prev_date)
-        if not prev_data or prev_data.volatility is None or prev_data.volatility == 0:
+        prev_data = numpy_cache.get_daily_data(stock_code, prev_date)
+        if not prev_data or prev_data['volatility'] is None or prev_data['volatility'] == 0:
             return None
         
         # 计算波动率百分比变化: (current - prev) / prev * 100
-        volatility_change_percent = ((current_volatility - prev_data.volatility) / prev_data.volatility) * 100
+        volatility_change_percent = ((current_volatility - prev_data['volatility']) / prev_data['volatility']) * 100
         
         if volatility_change_percent >= self.thresholds.volatility_surge_large:
             return {
@@ -568,7 +575,7 @@ class SignalCalculator:
                 'dates': ['20251107', '20251106', ...]
             }
         """
-        dates = memory_cache.get_dates_range(history_days + 5)
+        dates = numpy_cache.get_dates_range(history_days + 5)
         dates = [d for d in dates if d <= current_date][:history_days]
         
         hot_list_history = []
@@ -577,21 +584,23 @@ class SignalCalculator:
         date_strs = []
         
         for i, d in enumerate(dates):
-            data = memory_cache.get_daily_data_by_stock(stock_code, d)
+            data = numpy_cache.get_daily_data(stock_code, d)
             if not data:
                 continue
             
             date_strs.append(d.strftime('%Y%m%d'))
             
             # 热点榜
-            hot = data.rank <= self.thresholds.hot_list_top
+            data_rank = data['rank'] if data['rank'] is not None else 9999
+            hot = data_rank <= self.thresholds.hot_list_top
             hot_list_history.append(hot)
             
             # 跳变榜（需要前一天数据）
             if i < len(dates) - 1:
-                prev_data = memory_cache.get_daily_data_by_stock(stock_code, dates[i+1])
+                prev_data = numpy_cache.get_daily_data(stock_code, dates[i+1])
                 if prev_data:
-                    improvement = prev_data.rank - data.rank
+                    prev_rank = prev_data['rank'] if prev_data['rank'] is not None else 9999
+                    improvement = prev_rank - data_rank
                     rank_jump_history.append(improvement >= self.thresholds.rank_jump_min)
                 else:
                     rank_jump_history.append(False)
@@ -600,9 +609,10 @@ class SignalCalculator:
             
             # 稳步上升（简化：只看是否比前一天排名更好）
             if i < len(dates) - 1:
-                prev_data = memory_cache.get_daily_data_by_stock(stock_code, dates[i+1])
+                prev_data = numpy_cache.get_daily_data(stock_code, dates[i+1])
                 if prev_data:
-                    steady_rise_history.append(data.rank < prev_data.rank)
+                    prev_rank = prev_data['rank'] if prev_data['rank'] is not None else 9999
+                    steady_rise_history.append(data_rank < prev_rank)
                 else:
                     steady_rise_history.append(False)
             else:
@@ -630,7 +640,7 @@ class SignalCalculator:
             from .strategies.needle_under_20 import NeedleUnder20Strategy
             
             # 获取历史数据（需要30天数据计算位置指标）
-            all_dates = memory_cache.get_dates_range(35)
+            all_dates = numpy_cache.get_dates_range(35)
             target_dates = [d for d in all_dates if d <= current_date][:30]
             
             if len(target_dates) < 10:
@@ -641,21 +651,21 @@ class SignalCalculator:
             volumes, turnovers, ranks = [], [], []
             
             for d in sorted(target_dates):
-                daily_data = memory_cache.get_daily_data_by_stock(stock_code, d)
+                daily_data = numpy_cache.get_daily_data(stock_code, d)
                 if daily_data:
-                    closes.append(float(daily_data.close))
-                    highs.append(float(daily_data.high))
-                    lows.append(float(daily_data.low))
-                    opens.append(float(daily_data.open))
-                    volumes.append(float(daily_data.volume) if daily_data.volume else 0)
-                    turnovers.append(float(daily_data.turnover_rate) if daily_data.turnover_rate else 0)
-                    ranks.append(int(daily_data.rank) if daily_data.rank else 0)
+                    closes.append(float(daily_data['close_price']) if daily_data['close_price'] else 0)
+                    highs.append(float(daily_data['high_price']) if daily_data['high_price'] else 0)
+                    lows.append(float(daily_data['low_price']) if daily_data['low_price'] else 0)
+                    opens.append(float(daily_data['open_price']) if daily_data['open_price'] else 0)
+                    volumes.append(float(daily_data['volume']) if daily_data['volume'] else 0)
+                    turnovers.append(float(daily_data['turnover_rate']) if daily_data['turnover_rate'] else 0)
+                    ranks.append(int(daily_data['rank']) if daily_data['rank'] else 0)
             
             if len(closes) < 10:
                 return None
             
             # 获取股票名称
-            stock_info = memory_cache.get_stock_info(stock_code)
+            stock_info = numpy_cache.get_stock_info(stock_code)
             stock_name = stock_info.stock_name if stock_info else ''
             
             # 分析

@@ -14,7 +14,7 @@ stock_service = stock_service_db
 
 
 @router.get("/stocks/raw-data")
-async def get_stock_raw_data(
+def get_stock_raw_data(  # ✅ 同步
     date: str = Query(default=None, description="指定日期 (YYYYMMDD格式)"),
     limit: int = Query(default=5000, ge=10, le=10000, description="返回数量")
 ):
@@ -23,7 +23,7 @@ async def get_stock_raw_data(
     """
     try:
         from datetime import datetime
-        from ..services.memory_cache import memory_cache
+        from ..services.numpy_cache_middleware import numpy_cache  # ✅ 新架构
         from ..database import SessionLocal
         from ..db_models import DailyStockData, Stock
         
@@ -31,7 +31,7 @@ async def get_stock_raw_data(
         if date:
             target_date = datetime.strptime(date, '%Y%m%d').date()
         else:
-            target_date = memory_cache.get_latest_date()
+            target_date = numpy_cache.get_latest_date()
         
         if not target_date:
             raise HTTPException(404, "没有可用数据")
@@ -80,7 +80,7 @@ async def get_stock_raw_data(
 
 
 @router.get("/stock/search", response_model=List[StockFullHistory])
-async def search_stock_full(
+def search_stock_full(  # ✅ 同步
     q: str = Query(..., min_length=1, description="股票代码或名称（模糊匹配）"),
     limit: int = Query(5, ge=1, le=20, description="返回的最大匹配数量")
 ):
@@ -100,7 +100,7 @@ async def search_stock_full(
 
 
 @router.get("/stock/{stock_code}", response_model=StockHistory)
-async def query_stock(
+def query_stock(  # ✅ 同步
     stock_code: str, 
     date: str = None,
     # 信号阈值参数（与industry_detail保持一致）

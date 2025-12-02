@@ -21,12 +21,10 @@ from .routers.secure import router as secure_router
 from .routers.sync import router as sync_router
 from .routers.admin import router as admin_router
 from .core import preload_cache, run_startup_checks
+from .core.logging_config import setup_logging
 
-# 配置日志
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
+# 配置日志系统（控制台INFO，文件DEBUG）
+setup_logging(console_level=logging.INFO, file_level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 

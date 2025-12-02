@@ -73,6 +73,9 @@ async def secure_gateway(
         if not path:
             raise HTTPException(400, "缺少请求路径")
         
+        # 🔧 增强日志：显示实际请求路径
+        logger.info(f"🔐 加密网关请求: {method} {path}")
+        
         # 3. 验证时间戳（防重放攻击，5分钟内有效）
         current_time = time.time() * 1000
         if abs(current_time - timestamp) > 300000:

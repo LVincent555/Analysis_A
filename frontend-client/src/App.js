@@ -40,7 +40,7 @@ const ContentArea = ({ appState, openConfig }) => {
   const { 
     activeModule, selectedDate, 
     hotSpotsState, queryState, sectorQueryState, rankJumpState, steadyRiseState, industryTrendState,
-    navigateToDetail
+    navigateToDetail, refreshDates
   } = appState;
 
   // 渲染内容模块
@@ -128,7 +128,7 @@ const ContentArea = ({ appState, openConfig }) => {
         );
 
       case 'admin':
-        return <AdminPanel />;
+        return <AdminPanel onImportComplete={refreshDates} />;
 
       case 'user-login-history':
         return <UserLoginHistory />;

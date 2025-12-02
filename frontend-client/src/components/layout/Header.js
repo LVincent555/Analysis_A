@@ -116,6 +116,17 @@ const Header = ({
     window.electronAPI.installUpdate();
   };
   
+  // 当日期列表更新时，检查当前选中日期是否有效
+  useEffect(() => {
+    if (availableDates?.dates && selectedDate && setSelectedDate) {
+      // 如果当前选中日期不在可用日期列表中，切换到最新日期
+      if (!availableDates.dates.includes(selectedDate) && availableDates.latest_date) {
+        console.log(`📅 日期 ${selectedDate} 已不存在，切换到 ${availableDates.latest_date}`);
+        setSelectedDate(availableDates.latest_date);
+      }
+    }
+  }, [availableDates, selectedDate, setSelectedDate]);
+
   // 获取市场波动率数据
   useEffect(() => {
     const fetchVolatility = async () => {

@@ -13,7 +13,7 @@ industry_service = industry_service_db
 
 
 @router.get("/industry/stats", response_model=List[IndustryStat])
-async def get_industry_stats(period: int = 3, top_n: int = 20):
+def get_industry_stats(period: int = 3, top_n: int = 20):  # ✅ 同步
     """
     获取行业统计数据
     
@@ -31,7 +31,7 @@ async def get_industry_stats(period: int = 3, top_n: int = 20):
 
 
 @router.get("/industry/trend")
-async def get_industry_trend(period: int = 14, top_n: int = 100, date: str = None):
+def get_industry_trend(period: int = 14, top_n: int = 100, date: str = None):  # ✅ 同步
     """
     获取行业趋势数据（多日期动态变化）- 使用内存缓存优化 + TTL缓存
     
@@ -46,42 +46,42 @@ async def get_industry_trend(period: int = 14, top_n: int = 100, date: str = Non
     try:
         from datetime import datetime
         from collections import Counter
-        from ..services.memory_cache import memory_cache
-        from ..services.ttl_cache import ttl_cache
+        from ..services.numpy_cache_middleware import numpy_cache  # ✅ 新架构
+        from ..services.api_cache import api_cache  # ✅ Phase 6 二级缓存
         
-        # 🔥 优化：添加TTL缓存，避免重复计算
-        cache_key = f"industry_trend_{period}_{top_n}_{date or 'latest'}"
-        cached_result = ttl_cache.get(cache_key)
+        # 🔥 优化：使用跨进程API缓存
+        cache_key = f"industry_trend:{period}:{top_n}:{date or 'latest'}"
+        cached_result = api_cache.get(cache_key)
         if cached_result is not None:
             return cached_result
         
-        # 1. 从内存缓存获取日期范围
+        # 1. 从Numpy缓存获取日期范围
         if date:
             target_date = datetime.strptime(date, '%Y%m%d').date()
         else:
-            target_date = memory_cache.get_latest_date()
+            target_date = numpy_cache.get_latest_date()
         
         if not target_date:
             return {"data": [], "industries": []}
         
         # 获取最近N天日期
-        all_dates = memory_cache.get_dates_range(period * 2)
+        all_dates = numpy_cache.get_dates_range(period * 2)
         target_dates = [d for d in all_dates if d <= target_date][:period]
         
         if not target_dates:
             return {"data": [], "industries": []}
         
-        # 2. 收集所有需要查询的股票代码
+        # 2. 收集所有需要查询的股票代码 (返回Dict列表)
         all_stock_codes = set()
         date_stocks_map = {}
         
         for date_obj in target_dates:
-            top_stocks = memory_cache.get_top_n_stocks(date_obj, top_n)
+            top_stocks = numpy_cache.get_top_n_by_rank(date_obj, top_n)
             date_stocks_map[date_obj] = top_stocks
-            all_stock_codes.update(stock.stock_code for stock in top_stocks)
+            all_stock_codes.update(stock['stock_code'] for stock in top_stocks)
         
         # 3. 批量获取股票信息
-        stocks_info = memory_cache.get_stocks_batch(list(all_stock_codes))
+        stocks_info = numpy_cache.get_stocks_batch(list(all_stock_codes))
         
         # 4. 按日期统计行业分布
         date_industry_map = {}
@@ -92,7 +92,7 @@ async def get_industry_trend(period: int = 14, top_n: int = 100, date: str = Non
             date_industry_map[date_str] = Counter()
             
             for stock_data in top_stocks:
-                stock_info = stocks_info.get(stock_data.stock_code)
+                stock_info = stocks_info.get(stock_data['stock_code'])
                 if stock_info and stock_info.industry:
                     # 处理行业字段
                     industry = stock_info.industry
@@ -125,7 +125,7 @@ async def get_industry_trend(period: int = 14, top_n: int = 100, date: str = Non
         }
         
         # 🔥 优化：缓存结果，TTL=300秒（5分钟）
-        ttl_cache.set(cache_key, result, ttl=300)
+        api_cache.set(cache_key, result, ttl=300)
         
         return result
     except Exception as e:
@@ -133,7 +133,7 @@ async def get_industry_trend(period: int = 14, top_n: int = 100, date: str = Non
 
 
 @router.get("/industry/top1000", response_model=IndustryStats)
-async def get_top1000_industry(limit: int = 1000, date: str = None):
+def get_top1000_industry(limit: int = 1000, date: str = None):  # ✅ 同步
     """
     获取前N名行业统计
     
@@ -146,17 +146,17 @@ async def get_top1000_industry(limit: int = 1000, date: str = None):
     """
     try:
         from datetime import datetime
-        from ..services.memory_cache import memory_cache
+        from ..services.numpy_cache_middleware import numpy_cache  # ✅ 新架构
         
         # 参数验证
         if limit not in [1000, 2000, 3000, 5000]:
             limit = 1000  # 默认值
         
-        # 从内存缓存获取日期（避免数据库查询）
+        # 从Numpy缓存获取日期
         if date:
             target_date = datetime.strptime(date, '%Y%m%d').date()
         else:
-            target_date = memory_cache.get_latest_date()
+            target_date = numpy_cache.get_latest_date()
         
         if not target_date:
             raise HTTPException(status_code=404, detail="没有可用数据")
@@ -183,7 +183,7 @@ async def get_top1000_industry(limit: int = 1000, date: str = None):
 
 
 @router.get("/industry/weighted", response_model=IndustryStatsWeighted)
-async def get_industry_weighted(
+def get_industry_weighted(  # ✅ 同步
     date: str = None,
     k: float = 0.618,
     metric: str = 'B1'
@@ -216,37 +216,37 @@ async def get_industry_weighted(
         if metric not in ['B1', 'B2', 'C1', 'C2']:
             raise HTTPException(status_code=400, detail="metric必须是B1/B2/C1/C2之一")
         
-        # 1. 从内存缓存获取日期
-        from ..services.memory_cache import memory_cache
+        # 1. 从Numpy缓存获取日期
+        from ..services.numpy_cache_middleware import numpy_cache  # ✅ 新架构
         
         if date:
             target_date = datetime.strptime(date, '%Y%m%d').date()
         else:
-            target_date = memory_cache.get_latest_date()
+            target_date = numpy_cache.get_latest_date()
         
         if not target_date:
             raise HTTPException(status_code=404, detail="没有可用数据")
         
         date_str = target_date.strftime('%Y%m%d')
         
-        # 2. 从内存缓存获取该日期的所有股票数据
-        all_stocks = memory_cache.get_daily_data_by_date(target_date)
+        # 2. 从Numpy缓存获取该日期的所有股票数据 (返回Dict列表)
+        all_stocks = numpy_cache.get_all_by_date(target_date)
         
         if not all_stocks:
             raise HTTPException(status_code=404, detail="该日期没有数据")
         
         # 3. 批量获取股票信息
-        stock_codes = [s.stock_code for s in all_stocks]
-        stocks_info = memory_cache.get_stocks_batch(stock_codes)
+        stock_codes = [s['stock_code'] for s in all_stocks]
+        stocks_info = numpy_cache.get_stocks_batch(stock_codes)
         
         # 4. 构建结果（rank, score, industry）
         results = []
         for stock_data in all_stocks:
-            stock_info = stocks_info.get(stock_data.stock_code)
+            stock_info = stocks_info.get(stock_data['stock_code'])
             if stock_info and stock_info.industry:
                 results.append((
-                    stock_data.rank,
-                    stock_data.total_score,
+                    stock_data['rank'],
+                    stock_data['total_score'],
                     stock_info.industry
                 ))
         

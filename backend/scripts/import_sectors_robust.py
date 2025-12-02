@@ -138,7 +138,7 @@ def extract_date_from_filename(filename: str) -> str:
         return None
 
 
-def import_sector_excel_file(file_path: Path, state_manager: ImportStateManager) -> tuple:
+def import_sector_excel_file(file_path: Path, state_manager: ImportStateManager, progress_callback=None) -> tuple:
     """
     导入单个板块Excel文件
     
@@ -147,9 +147,20 @@ def import_sector_excel_file(file_path: Path, state_manager: ImportStateManager)
     - 所有数据在一个事务中
     - 成功则commit，失败则rollback
     
+    Args:
+        file_path: Excel文件路径
+        state_manager: 状态管理器
+        progress_callback: 进度回调函数 (msg, progress_pct)
+    
     Returns:
         (imported_count, skipped_count, success)
     """
+    def report_progress(msg: str, pct: int = None):
+        """报告进度"""
+        if progress_callback:
+            progress_callback(msg, pct)
+        if msg:
+            logger.info(msg)
     filename = file_path.name
     date_str = extract_date_from_filename(filename)
     
@@ -242,7 +253,8 @@ def import_sector_excel_file(file_path: Path, state_manager: ImportStateManager)
                 
                 # 每100条显示进度（但不提交）
                 if imported_count % 100 == 0:
-                    logger.info(f"  进度: {imported_count}/{total_rows} ({imported_count/total_rows*100:.1f}%)")
+                    pct = int(imported_count / total_rows * 100)
+                    report_progress(f"  进度: {imported_count}/{total_rows} ({pct}%)", pct)
                 
             except IntegrityError as e:
                 # 唯一索引冲突：该板块该日期已存在

@@ -76,10 +76,10 @@ class HotSpotsCache:
             days: 预加载天数
         """
         try:
-            from .memory_cache import memory_cache
+            from .numpy_cache_middleware import numpy_cache
             
-            # 从memory_cache获取最近N天日期
-            recent_dates = memory_cache.get_dates_range(days)
+            # 从Numpy缓存获取最近N天日期
+            recent_dates = numpy_cache.get_dates_range(days)
             
             if not recent_dates:
                 logger.warning("无可用日期，跳过热点榜缓存预加载")
@@ -103,7 +103,7 @@ class HotSpotsCache:
             date: 日期 (YYYYMMDD)
         """
         try:
-            from .memory_cache import memory_cache
+            from .numpy_cache_middleware import numpy_cache
             from datetime import datetime
             from collections import defaultdict
             
@@ -113,7 +113,7 @@ class HotSpotsCache:
             target_date_obj = datetime.strptime(date, '%Y%m%d').date()
             
             # 获取最近14天的日期
-            all_dates = memory_cache.dates
+            all_dates = numpy_cache.index_mgr.get_all_dates()
             target_dates = [d for d in all_dates if d <= target_date_obj][:14]
             
             if not target_dates:
@@ -135,12 +135,12 @@ class HotSpotsCache:
             debug_info = []
             
             for idx, date_obj in enumerate(target_dates):
-                # 获取该日期的TOP3000股票（扩展范围）
-                daily_stocks = memory_cache.get_top_n_stocks(date_obj, 3000)
+                # 获取该日期的TOP3000股票（扩展范围）- 返回Dict列表
+                daily_stocks = numpy_cache.get_top_n_by_rank(date_obj, 3000)
                 
                 for stock_data in daily_stocks:
-                    code = stock_data.stock_code
-                    rank = stock_data.rank
+                    code = stock_data['stock_code']
+                    rank = stock_data['rank'] if stock_data['rank'] is not None else 9999
                     
                     stock_appearances[code]['count'] += 1
                     stock_appearances[code]['dates'].append(date_obj)
@@ -173,20 +173,20 @@ class HotSpotsCache:
                     
                     # 记录股票基础信息（首次）
                     if 'name' not in stock_appearances[code]:
-                        stock_info = memory_cache.get_stock_info(code)
+                        stock_info = numpy_cache.get_stock_info(code)
                         if stock_info:
                             stock_appearances[code]['name'] = stock_info.stock_name
                             stock_appearances[code]['industry'] = stock_info.industry or '未知'
             
-            # 输出调试信息
+            # 输出调试信息（DEBUG级别，不输出到控制台）
             if debug_code in stock_appearances:
-                logger.info(f"🔍 [{debug_code}云南城投] 14天统计详情:")
+                logger.debug(f"🔍 [{debug_code}云南城投] 14天统计详情:")
                 for info in debug_info:
-                    logger.info(f"   {info}")
+                    logger.debug(f"   {info}")
                 tier_info = stock_appearances[debug_code]['tier_counts']
-                logger.info(f"   📊 档位统计: TOP100={tier_info[100]}次, TOP200={tier_info[200]}次, TOP400={tier_info[400]}次, TOP600={tier_info[600]}次")
-                logger.info(f"   📊 档位统计: TOP800={tier_info[800]}次, TOP1000={tier_info[1000]}次, TOP2000={tier_info[2000]}次, TOP3000={tier_info[3000]}次")
-                logger.info(f"   ✅ 总计: {stock_appearances[debug_code]['count']}次, 最新排名: {stock_appearances[debug_code]['latest_rank']}")
+                logger.debug(f"   📊 档位统计: TOP100={tier_info[100]}次, TOP200={tier_info[200]}次, TOP400={tier_info[400]}次, TOP600={tier_info[600]}次")
+                logger.debug(f"   📊 档位统计: TOP800={tier_info[800]}次, TOP1000={tier_info[1000]}次, TOP2000={tier_info[2000]}次, TOP3000={tier_info[3000]}次")
+                logger.debug(f"   ✅ 总计: {stock_appearances[debug_code]['count']}次, 最新排名: {stock_appearances[debug_code]['latest_rank']}")
             
             # 按最新排名排序（与最新热点对齐），而不是按出现次数
             sorted_stocks = sorted(

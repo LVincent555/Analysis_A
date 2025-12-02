@@ -5,8 +5,8 @@
 from typing import List, Dict, Optional
 from datetime import datetime, date
 from ..models import SectorRankingResult, SectorInfo, SectorDetail
-from ..utils.ttl_cache import TTLCache
-from .memory_cache import memory_cache
+from .numpy_cache_middleware import numpy_cache
+from .api_cache import api_cache
 import logging
 
 logger = logging.getLogger(__name__)
@@ -15,9 +15,11 @@ logger = logging.getLogger(__name__)
 class SectorServiceDB:
     """板块数据服务（内存缓存版）"""
     
+    CACHE_TTL = 1800  # 30分钟
+    
     def __init__(self):
-        """初始化计算结果缓存"""
-        self.cache = TTLCache(default_ttl_seconds=1800)  # 30分钟TTL缓存
+        """初始化服务"""
+        pass  # 使用全局 api_cache
     
     def get_available_dates(self) -> List[str]:
         """
@@ -26,7 +28,7 @@ class SectorServiceDB:
         Returns:
             日期列表（降序）
         """
-        return memory_cache.get_sector_available_dates()
+        return numpy_cache.get_sector_available_dates()
     
     def get_sector_ranking(
         self,
@@ -44,28 +46,29 @@ class SectorServiceDB:
                 logger.error(f"无效的日期格式: {target_date}")
                 return SectorRankingResult(date='', sectors=[], total_count=0)
         else:
-            query_date = memory_cache.get_sector_latest_date()
+            query_date = numpy_cache.get_sector_latest_date()
             if not query_date:
                 return SectorRankingResult(date='', sectors=[], total_count=0)
         
-        # 从内存获取数据
-        daily_data_list = memory_cache.get_top_n_sectors(query_date, limit)
-        total_count = len(memory_cache.get_sector_daily_data_by_date(query_date))
+        # 从Numpy缓存获取数据 (返回Dict列表)
+        daily_data_list = numpy_cache.get_top_n_sectors(query_date, limit)
+        all_sectors = numpy_cache.get_sector_all_by_date(query_date)
+        total_count = len(all_sectors) if all_sectors else 0
         
         sectors = []
         for daily_data in daily_data_list:
-            # 从内存缓存获取板块名称
-            sector_info = memory_cache.get_sector_info(daily_data.sector_id)
-            sector_name = sector_info.sector_name if sector_info else str(daily_data.sector_id)
+            # 从Numpy缓存获取板块名称
+            sector_info = numpy_cache.get_sector_info(daily_data['sector_id'])
+            sector_name = sector_info.sector_name if sector_info else str(daily_data['sector_id'])
             
             info = SectorInfo(
                 name=sector_name,
-                rank=daily_data.rank,
-                total_score=float(daily_data.total_score) if daily_data.total_score else None,
-                price_change=float(daily_data.price_change) if daily_data.price_change else None,
-                turnover_rate=float(daily_data.turnover_rate_percent) if daily_data.turnover_rate_percent else None,
-                volume=daily_data.volume,
-                volatility=float(daily_data.volatility) if daily_data.volatility else None
+                rank=daily_data['rank'],
+                total_score=daily_data['total_score'],
+                price_change=daily_data['price_change'],
+                turnover_rate=daily_data['turnover_rate'],
+                volume=daily_data['volume'],
+                volatility=daily_data['volatility']
             )
             sectors.append(info)
         
@@ -86,7 +89,7 @@ class SectorServiceDB:
         """
         # 1. 查找板块ID
         target_sector = None
-        for sector in memory_cache.sectors.values():
+        for sector in numpy_cache.sectors.values():
             if sector.sector_name == sector_name:
                 target_sector = sector
                 break
@@ -102,33 +105,29 @@ class SectorServiceDB:
             except ValueError:
                 return None
         else:
-            target_date_obj = memory_cache.get_sector_latest_date()
+            target_date_obj = numpy_cache.get_sector_latest_date()
             
         if not target_date_obj:
             return None
             
-        # 获取最近N天日期
-        all_dates = memory_cache.sector_dates
-        target_dates = [d for d in all_dates if d <= target_date_obj][:days]
-        
-        # 3. 获取历史数据
-        history_data = memory_cache.get_sector_history(target_sector.id, target_dates)
+        # 3. 获取历史数据 (返回Dict列表)
+        history_data = numpy_cache.get_sector_history(target_sector.sector_id, days)
         
         if not history_data:
             return None
         
-        # 构建历史记录
+        # 构建历史记录 (已经是Dict，不需要转换)
         history = []
         for data in reversed(history_data):  # 从旧到新排序
             record = {
-                'date': data.date.strftime('%Y%m%d'),
-                'rank': data.rank,
-                'total_score': float(data.total_score) if data.total_score else None,
-                'price_change': float(data.price_change) if data.price_change else None,
-                'turnover_rate': float(data.turnover_rate_percent) if data.turnover_rate_percent else None,
-                'volume': data.volume,
-                'volatility': float(data.volatility) if data.volatility else None,
-                'close_price': float(data.close_price) if data.close_price else None
+                'date': data['date'],
+                'rank': data['rank'],
+                'total_score': data['total_score'],
+                'price_change': data['price_change'],
+                'turnover_rate': data['turnover_rate'],
+                'volume': data['volume'],
+                'volatility': data['volatility'],
+                'close_price': data['close_price']
             }
             history.append(record)
         
@@ -151,7 +150,7 @@ class SectorServiceDB:
         search_pattern = keyword.lower()
         results = []
         
-        for sector in memory_cache.sectors.values():
+        for sector in numpy_cache.sectors.values():
             if search_pattern in sector.sector_name.lower():
                 results.append(sector.sector_name)
                 if len(results) >= 20:

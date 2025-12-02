@@ -15,7 +15,7 @@ router = APIRouter(prefix="/api/industry", tags=["industry-detail"])
 
 
 @router.get("/{industry_name}/stocks", response_model=IndustryStocksResponse)
-async def get_industry_stocks(
+def get_industry_stocks(  # ✅ 同步
     industry_name: str,
     date: Optional[str] = Query(None, description="日期 YYYYMMDD，默认最新"),
     sort_mode: str = Query("rank", description="排序模式: rank|score|price_change|volume|signal|signal_count"),
@@ -110,7 +110,7 @@ async def get_industry_stocks(
 
 
 @router.get("/{industry_name}/detail", response_model=IndustryDetailResponse)
-async def get_industry_detail(
+def get_industry_detail(  # ✅ 同步
     industry_name: str,
     date: Optional[str] = Query(None, description="日期 YYYYMMDD，默认最新"),
     k: float = Query(0.618, ge=0.1, le=0.99, description="K值（权重衰减参数）")
@@ -156,7 +156,7 @@ async def get_industry_detail(
 
 
 @router.get("/{industry_name}/trend", response_model=IndustryTrendResponse)
-async def get_industry_trend(
+def get_industry_trend(  # ✅ 同步
     industry_name: str,
     period: int = Query(7, ge=3, le=30, description="追踪天数"),
     k: float = Query(0.618, ge=0.1, le=0.99, description="K值参数")
@@ -203,7 +203,7 @@ async def get_industry_trend(
 
 
 @router.post("/compare", response_model=IndustryCompareResponse)
-async def compare_industries(request: IndustryCompareRequest):
+def compare_industries(request: IndustryCompareRequest):  # ✅ 同步
     """
     多板块对比（2-5个）
     

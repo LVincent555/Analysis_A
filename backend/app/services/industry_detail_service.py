@@ -11,8 +11,8 @@ from ..models.industry_detail import (
     StockSignalInfo, IndustryStocksResponse, IndustryDetailResponse,
     IndustryTrendResponse, IndustryCompareResponse
 )
-from ..utils.ttl_cache import TTLCache
-from .memory_cache import memory_cache
+from .numpy_cache_middleware import numpy_cache
+from .api_cache import api_cache
 from .signal_calculator import SignalCalculator, SignalThresholds
 
 logger = logging.getLogger(__name__)
@@ -21,9 +21,11 @@ logger = logging.getLogger(__name__)
 class IndustryDetailService:
     """板块成分股详细分析服务"""
     
+    CACHE_TTL = 1800  # 30分钟
+    
     def __init__(self):
-        """初始化缓存"""
-        self.cache = TTLCache(default_ttl_seconds=1800)  # 30分钟缓存
+        """初始化服务"""
+        pass  # 使用全局 api_cache
     
     def get_industry_stocks(
         self,
@@ -64,9 +66,10 @@ class IndustryDetailService:
         else:
             cache_key = f"industry_stocks_{industry_name}_{target_date}_{sort_mode}_{calculate_signals}"
         
-        if cache_key in self.cache:
+        cached = api_cache.get(cache_key)
+        if cached is not None:
             logger.info(f"✨ 缓存命中: {cache_key}")
-            return self.cache[cache_key]
+            return cached
         
         logger.info(f"🔄 查询板块成分股: {industry_name}, 日期: {target_date}, 排序: {sort_mode}")
         
@@ -74,14 +77,14 @@ class IndustryDetailService:
         if target_date:
             query_date = datetime.strptime(target_date, '%Y%m%d').date()
         else:
-            query_date = memory_cache.get_latest_date()
+            query_date = numpy_cache.get_latest_date()
         
         if not query_date:
             logger.warning("无可用日期")
             return None
         
-        # 2. 从内存缓存获取该日期的所有数据
-        all_stocks = memory_cache.get_daily_data_by_date(query_date)
+        # 2. 从Numpy缓存获取该日期的所有数据 (返回Dict列表)
+        all_stocks = numpy_cache.get_all_by_date(query_date)
         if not all_stocks:
             logger.warning(f"日期 {query_date} 无数据")
             return None
@@ -89,7 +92,7 @@ class IndustryDetailService:
         # 3. 筛选该板块的股票
         industry_stocks = []
         for stock_data in all_stocks:
-            stock_info = memory_cache.get_stock_info(stock_data.stock_code)
+            stock_info = numpy_cache.get_stock_info(stock_data['stock_code'])
             if stock_info and stock_info.industry:
                 # 处理行业字段（可能是列表格式）
                 industry = stock_info.industry
@@ -123,17 +126,17 @@ class IndustryDetailService:
         # 5. 构建响应数据（完整版，包含信号）
         stocks_list = []
         for stock_info, stock_data in industry_stocks:
-            # 基础数据
+            # 基础数据 (stock_data 现在是 Dict)
             stock_signal = StockSignalInfo(
                 stock_code=stock_info.stock_code,
                 stock_name=stock_info.stock_name,
-                rank=stock_data.rank,
-                total_score=float(stock_data.total_score) if stock_data.total_score else 0.0,
-                price_change=float(stock_data.price_change) if stock_data.price_change else None,
-                turnover_rate_percent=float(stock_data.turnover_rate_percent) if stock_data.turnover_rate_percent else None,
-                volume_days=float(stock_data.volume_days) if stock_data.volume_days else None,
-                market_cap_billions=float(stock_data.market_cap_billions) if stock_data.market_cap_billions else None,
-                volatility=float(stock_data.volatility) if stock_data.volatility else None,
+                rank=stock_data['rank'] if stock_data.get('rank') is not None else 9999,
+                total_score=stock_data.get('total_score') or 0.0,
+                price_change=stock_data.get('price_change'),
+                turnover_rate_percent=stock_data.get('turnover_rate'),
+                volume_days=stock_data.get('volume_days'),
+                market_cap_billions=stock_data.get('market_cap'),
+                volatility=stock_data.get('volatility'),
             )
             
             # 计算信号（Phase 2）
@@ -176,7 +179,7 @@ class IndustryDetailService:
         )
         
         # 8. 缓存结果
-        self.cache[cache_key] = response
+        api_cache.set(cache_key, response, ttl=self.CACHE_TTL)
         logger.info(f"✅ 板块成分股查询完成: {industry_name}, {len(stocks_list)}只")
         
         return response
@@ -314,9 +317,10 @@ class IndustryDetailService:
         """
         # 缓存key
         cache_key = f"industry_detail_{industry_name}_{target_date}_{k_value}"
-        if cache_key in self.cache:
+        cached = api_cache.get(cache_key)
+        if cached is not None:
             logger.info(f"✨ 缓存命中: {cache_key}")
-            return self.cache[cache_key]
+            return cached
         
         logger.info(f"🔄 查询板块详细分析: {industry_name}, K={k_value}")
         
@@ -357,7 +361,7 @@ class IndustryDetailService:
         )
         
         # 4. 缓存结果
-        self.cache[cache_key] = response
+        api_cache.set(cache_key, response, ttl=self.CACHE_TTL)
         logger.info(f"✅ 板块详细分析完成: {industry_name}")
         
         return response
@@ -446,7 +450,7 @@ class IndustryDetailService:
         logger.info(f"🔄 查询板块历史趋势: {industry_name}, {period}天")
         
         # 获取最近N天的日期
-        dates = memory_cache.get_dates_range(period)
+        dates = numpy_cache.get_dates_range(period)
         if not dates:
             return None
         
@@ -525,7 +529,7 @@ class IndustryDetailService:
         if target_date:
             query_date = datetime.strptime(target_date, '%Y%m%d').date()
         else:
-            query_date = memory_cache.get_latest_date()
+            query_date = numpy_cache.get_latest_date()
         
         # 获取每个板块的详细数据
         industries_detail = []

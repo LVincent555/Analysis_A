@@ -18,7 +18,7 @@ import secureApi from '../services/secureApi';
  * 管理员面板 - 文件上传和数据导入
  * 仅 admin 用户可见
  */
-const AdminPanel = () => {
+const AdminPanel = ({ onImportComplete }) => {
   // 状态
   const [files, setFiles] = useState([]);
   const [uploadQueue, setUploadQueue] = useState([]);
@@ -27,6 +27,11 @@ const AdminPanel = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
+  
+  // 数据删除相关状态
+  const [selectedDates, setSelectedDates] = useState(new Set());
+  const [deletePreview, setDeletePreview] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   // 加载数据文件列表
   const loadFiles = useCallback(async () => {
@@ -67,21 +72,40 @@ const AdminPanel = () => {
     }
   }, []);
 
+  // 记录上一次的导入状态
+  const [wasImporting, setWasImporting] = useState(false);
+
   // 初始化加载
   useEffect(() => {
     loadFiles();
     loadImportStatus();
     loadImportedDates();
+  }, [loadFiles, loadImportStatus, loadImportedDates]);
+
+  // 导入状态轮询
+  useEffect(() => {
+    if (!importStatus?.is_importing) return;
     
-    // 如果正在导入，定时刷新状态
     const interval = setInterval(() => {
-      if (importStatus?.is_importing) {
-        loadImportStatus();
-      }
+      loadImportStatus();
     }, 2000);
     
     return () => clearInterval(interval);
-  }, [loadFiles, loadImportStatus, loadImportedDates, importStatus?.is_importing]);
+  }, [importStatus?.is_importing, loadImportStatus]);
+
+  // 检测导入完成，刷新日期列表
+  useEffect(() => {
+    if (wasImporting && !importStatus?.is_importing) {
+      // 导入刚完成，刷新日期和文件列表
+      loadImportedDates();
+      loadFiles();
+      // 通知父组件刷新全局日期选择器
+      if (onImportComplete) {
+        onImportComplete();
+      }
+    }
+    setWasImporting(importStatus?.is_importing || false);
+  }, [importStatus?.is_importing, wasImporting, loadImportedDates, loadFiles, onImportComplete]);
 
   // 文件转 Base64
   const fileToBase64 = (file) => {
@@ -228,6 +252,112 @@ const AdminPanel = () => {
   // 清除已完成的上传队列
   const clearCompletedUploads = () => {
     setUploadQueue(prev => prev.filter(f => f.status === 'uploading' || f.status === 'pending'));
+  };
+
+  // ==================== 数据删除功能 ====================
+  
+  // 切换日期选中状态
+  const toggleDateSelection = (date) => {
+    setSelectedDates(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(date)) {
+        newSet.delete(date);
+      } else {
+        newSet.add(date);
+      }
+      return newSet;
+    });
+    setDeletePreview(null); // 清除预览
+  };
+
+  // 全选/取消全选
+  const toggleSelectAll = () => {
+    if (selectedDates.size === importedDates.length) {
+      setSelectedDates(new Set());
+    } else {
+      setSelectedDates(new Set(importedDates));
+    }
+    setDeletePreview(null);
+  };
+
+  // 预览删除影响
+  const handlePreviewDelete = async () => {
+    if (selectedDates.size === 0) return;
+    
+    try {
+      setLoading(true);
+      const dates = Array.from(selectedDates);
+      
+      // 对每个日期获取预览
+      const previews = await Promise.all(
+        dates.map(async (date) => {
+          const dateStr = date.replace(/-/g, '');
+          const response = await secureApi.request({
+            path: `/admin/data/preview/${dateStr}`,
+            method: 'GET'
+          });
+          return response.preview;
+        })
+      );
+      
+      // 汇总
+      const summary = {
+        dates: dates,
+        stock_count: previews.reduce((sum, p) => sum + (p.stock_count || 0), 0),
+        sector_count: previews.reduce((sum, p) => sum + (p.sector_count || 0), 0)
+      };
+      summary.total_count = summary.stock_count + summary.sector_count;
+      
+      setDeletePreview(summary);
+    } catch (err) {
+      setError(err.message || '预览失败');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 执行删除
+  const handleDeleteData = async () => {
+    if (selectedDates.size === 0 || !deletePreview) return;
+    
+    const confirmMsg = `确定要删除 ${selectedDates.size} 天的数据吗？\n\n` +
+      `股票数据: ${deletePreview.stock_count} 条\n` +
+      `板块数据: ${deletePreview.sector_count} 条\n` +
+      `总计: ${deletePreview.total_count} 条\n\n` +
+      `⚠️ 此操作不可逆！`;
+    
+    if (!window.confirm(confirmMsg)) return;
+    
+    try {
+      setDeleting(true);
+      setError(null);
+      
+      const dates = Array.from(selectedDates).map(d => d.replace(/-/g, ''));
+      
+      const response = await secureApi.request({
+        path: '/admin/data/delete-batch',
+        method: 'POST',
+        body: {
+          dates: dates,
+          data_type: 'all'
+        }
+      });
+      
+      if (response.success) {
+        alert(`删除成功！\n${response.message}`);
+        setSelectedDates(new Set());
+        setDeletePreview(null);
+        await loadImportedDates();
+        // 通知父组件刷新日期
+        if (onImportComplete) {
+          onImportComplete();
+        }
+      }
+    } catch (err) {
+      setError(err.message || '删除失败');
+    } finally {
+      setDeleting(false);
+    }
   };
 
   // 格式化文件大小
@@ -431,26 +561,97 @@ const AdminPanel = () => {
               )}
             </div>
 
-            {/* 已导入日期 */}
+            {/* 已导入日期 - 可选择删除 */}
             <div className="bg-gray-800 rounded-xl p-4">
-              <h3 className="font-semibold flex items-center gap-2 mb-4">
-                <Calendar className="w-5 h-5 text-purple-400" />
-                已导入日期 (最近30天)
-              </h3>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold flex items-center gap-2">
+                  <Calendar className="w-5 h-5 text-purple-400" />
+                  已导入日期 (最近30天)
+                </h3>
+                {importedDates.length > 0 && (
+                  <button
+                    onClick={toggleSelectAll}
+                    className="text-xs text-gray-400 hover:text-white"
+                  >
+                    {selectedDates.size === importedDates.length ? '取消全选' : '全选'}
+                  </button>
+                )}
+              </div>
               
               {importedDates.length === 0 ? (
                 <p className="text-gray-500 text-center py-4">暂无数据</p>
               ) : (
-                <div className="flex flex-wrap gap-2">
-                  {importedDates.map((date, idx) => (
-                    <span 
-                      key={idx}
-                      className="px-3 py-1 bg-purple-500/20 text-purple-300 rounded-full text-sm"
-                    >
-                      {date}
-                    </span>
-                  ))}
-                </div>
+                <>
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    {importedDates.map((date, idx) => (
+                      <button 
+                        key={idx}
+                        onClick={() => toggleDateSelection(date)}
+                        className={`px-3 py-1 rounded-full text-sm transition-colors ${
+                          selectedDates.has(date)
+                            ? 'bg-red-500/30 text-red-300 ring-1 ring-red-500'
+                            : 'bg-purple-500/20 text-purple-300 hover:bg-purple-500/30'
+                        }`}
+                      >
+                        {date}
+                      </button>
+                    ))}
+                  </div>
+                  
+                  {/* 删除操作区 */}
+                  {selectedDates.size > 0 && (
+                    <div className="mt-4 p-3 bg-gray-700/50 rounded-lg">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm text-gray-300">
+                          已选择 <span className="text-red-400 font-semibold">{selectedDates.size}</span> 天
+                        </span>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={handlePreviewDelete}
+                            disabled={loading}
+                            className="px-3 py-1 text-sm bg-gray-600 hover:bg-gray-500 rounded transition-colors disabled:opacity-50"
+                          >
+                            {loading ? '加载中...' : '预览影响'}
+                          </button>
+                          <button
+                            onClick={() => { setSelectedDates(new Set()); setDeletePreview(null); }}
+                            className="px-3 py-1 text-sm text-gray-400 hover:text-white"
+                          >
+                            取消
+                          </button>
+                        </div>
+                      </div>
+                      
+                      {/* 删除预览 */}
+                      {deletePreview && (
+                        <div className="mt-3 p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
+                          <p className="text-sm text-gray-300 mb-2">即将删除:</p>
+                          <div className="grid grid-cols-2 gap-2 text-sm mb-3">
+                            <div className="text-gray-400">
+                              股票数据: <span className="text-white">{deletePreview.stock_count.toLocaleString()}</span> 条
+                            </div>
+                            <div className="text-gray-400">
+                              板块数据: <span className="text-white">{deletePreview.sector_count.toLocaleString()}</span> 条
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-red-400 font-semibold">
+                              总计: {deletePreview.total_count.toLocaleString()} 条
+                            </span>
+                            <button
+                              onClick={handleDeleteData}
+                              disabled={deleting}
+                              className="px-4 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded transition-colors flex items-center gap-2 disabled:opacity-50"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                              {deleting ? '删除中...' : '确认删除'}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
               )}
             </div>
 

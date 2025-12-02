@@ -10,8 +10,8 @@ import logging
 from ..database import SessionLocal
 from ..db_models import Stock, DailyStockData
 from ..models.industry import IndustryStat
-from ..utils.ttl_cache import TTLCache
-from .memory_cache import memory_cache
+from .numpy_cache_middleware import numpy_cache
+from .api_cache import api_cache
 from sqlalchemy import desc, func
 
 logger = logging.getLogger(__name__)
@@ -20,9 +20,11 @@ logger = logging.getLogger(__name__)
 class IndustryServiceDB:
     """行业趋势服务（内存缓存版）"""
     
+    CACHE_TTL = 1800  # 30分钟
+    
     def __init__(self):
-        """初始化计算结果缓存"""
-        self.cache = TTLCache(default_ttl_seconds=1800)  # 30分钟TTL缓存
+        """初始化服务"""
+        pass  # 使用全局 api_cache
     
     def get_db(self):
         """获取数据库会话（仅在必要时使用）"""
@@ -48,9 +50,10 @@ class IndustryServiceDB:
         # 生成缓存key
         date_str = target_date.strftime('%Y%m%d') if target_date else None
         cache_key = f"industry_stats_{period}_{top_n}_{date_str}"
-        if cache_key in self.cache:
+        cached = api_cache.get(cache_key)
+        if cached is not None:
             logger.info(f"✨ 缓存命中: {cache_key}")
-            return self.cache[cache_key]
+            return cached
         
         logger.info(f"🔄 计算行业统计: period={period}, top_n={top_n}")
         
@@ -58,13 +61,13 @@ class IndustryServiceDB:
         if target_date:
             target_date_obj = target_date
         else:
-            target_date_obj = memory_cache.get_latest_date()
+            target_date_obj = numpy_cache.get_latest_date()
         
         if not target_date_obj:
             return []
         
         # 获取最近N天日期
-        all_dates = memory_cache.get_dates_range(period * 2)
+        all_dates = numpy_cache.get_dates_range(period * 2)
         target_dates = [d for d in all_dates if d <= target_date_obj][:period]
         
         if not target_dates:
@@ -78,17 +81,17 @@ class IndustryServiceDB:
         date_stocks_map = {}
         
         for date in target_dates:
-            top_stocks = memory_cache.get_top_n_stocks(date, top_n)
+            top_stocks = numpy_cache.get_top_n_by_rank(date, top_n)  # 返回Dict列表
             date_stocks_map[date] = top_stocks
-            all_stock_codes.update(stock.stock_code for stock in top_stocks)
+            all_stock_codes.update(stock['stock_code'] for stock in top_stocks)
         
         # 批量获取股票信息（一次性查询，避免循环）
-        stocks_info = memory_cache.get_stocks_batch(list(all_stock_codes))
+        stocks_info = numpy_cache.get_stocks_batch(list(all_stock_codes))
         
         # 统计行业
         for date, top_stocks in date_stocks_map.items():
             for stock_data in top_stocks:
-                stock_info = stocks_info.get(stock_data.stock_code)
+                stock_info = stocks_info.get(stock_data['stock_code'])
                 if stock_info and stock_info.industry:
                     # 处理行业字段
                     industry = stock_info.industry
@@ -120,7 +123,7 @@ class IndustryServiceDB:
         stats.sort(key=lambda x: x.count, reverse=True)
         
         # 缓存结果
-        self.cache[cache_key] = stats
+        api_cache.set(cache_key, stats, ttl=self.CACHE_TTL)
         logger.info(f"✅ 行业分析完成: {len(stats)}个行业")
         
         return stats

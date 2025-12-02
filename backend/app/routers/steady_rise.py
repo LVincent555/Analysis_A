@@ -12,7 +12,7 @@ steady_rise_service = steady_rise_service_db
 
 
 @router.get("/steady-rise", response_model=SteadyRiseResult)
-async def analyze_steady_rise(
+def analyze_steady_rise(  # ✅ 同步
     period: int = Query(default=3, ge=2, le=14, description="分析周期（天数）"),
     board_type: str = Query(default='main', description="板块类型: all/main/bjs"),
     min_rank_improvement: int = Query(default=100, ge=50, le=5000, description="最小排名提升幅度"),

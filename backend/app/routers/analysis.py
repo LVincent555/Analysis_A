@@ -4,7 +4,7 @@
 from fastapi import APIRouter, HTTPException
 from ..services.analysis_service_db import analysis_service_db
 from ..services.hot_spots_cache import HotSpotsCache
-from ..services.numpy_cache import numpy_stock_cache
+from ..services.numpy_cache_middleware import numpy_cache  # ✅ 迁移到新架构
 from ..models import AnalysisResult, AvailableDates
 
 router = APIRouter(prefix="/api", tags=["analysis"])
@@ -14,7 +14,7 @@ analysis_service = analysis_service_db
 
 
 @router.get("/dates", response_model=AvailableDates)
-async def get_available_dates():
+def get_available_dates():  # ✅ 改为同步，避免阻塞事件循环
     """获取可用的日期列表"""
     try:
         dates = analysis_service.get_available_dates()
@@ -27,7 +27,7 @@ async def get_available_dates():
 
 
 @router.get("/analyze/{period}", response_model=AnalysisResult)
-async def analyze_period(period: int, board_type: str = 'main', top_n: int = 100, date: str = None):
+def analyze_period(period: int, board_type: str = 'main', top_n: int = 100, date: str = None):  # ✅ 同步
     """
     分析指定周期的股票重复情况
     
@@ -66,7 +66,7 @@ async def analyze_period(period: int, board_type: str = 'main', top_n: int = 100
 
 
 @router.get("/hot-spots/full")
-async def get_hot_spots_full(date: str = None):
+def get_hot_spots_full(date: str = None):  # ✅ 同步
     """
     获取完整热点榜数据（带rank_label）
     
@@ -98,8 +98,8 @@ async def get_hot_spots_full(date: str = None):
         
         # 获取目标日期
         if not date:
-            from ..services.memory_cache import memory_cache
-            latest_date_obj = memory_cache.get_latest_date()
+            from ..services.numpy_cache_middleware import numpy_cache
+            latest_date_obj = numpy_cache.get_latest_date()
             if latest_date_obj:
                 date = latest_date_obj.strftime('%Y%m%d')
             else:
@@ -124,7 +124,7 @@ async def get_hot_spots_full(date: str = None):
 
 
 @router.get("/market/volatility-summary")
-async def get_market_volatility_summary(days: int = 3):
+def get_market_volatility_summary(days: int = 3):  # ✅ 同步
     """
     获取市场波动率汇总数据
     
@@ -146,7 +146,7 @@ async def get_market_volatility_summary(days: int = 3):
         }
     """
     try:
-        result = numpy_stock_cache.get_market_volatility_summary(days=days)
+        result = numpy_cache.get_market_volatility_summary(days=days)
         
         if 'error' in result:
             raise HTTPException(status_code=500, detail=result['error'])

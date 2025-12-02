@@ -13,7 +13,7 @@ sector_service = sector_service_db
 
 
 @router.get("/sectors/dates", response_model=List[str])
-async def get_available_dates():
+def get_available_dates():  # ✅ 同步
     """
     获取所有可用的数据日期
     
@@ -28,7 +28,7 @@ async def get_available_dates():
 
 @router.get("/sectors/ranking", response_model=SectorRankingResult)
 @router.get("/sector-ranking", response_model=SectorRankingResult)  # 兼容连字符格式
-async def get_sector_ranking(
+def get_sector_ranking(  # ✅ 同步
     date: str = Query(default=None, description="指定日期 (YYYYMMDD格式)"),
     limit: int = Query(default=100, ge=10, le=500, description="返回的板块数量")
 ):
@@ -52,7 +52,7 @@ async def get_sector_ranking(
 
 
 @router.get("/sectors/raw-data")
-async def get_sector_raw_data(
+def get_sector_raw_data(  # ✅ 同步
     date: str = Query(default=None, description="指定日期 (YYYYMMDD格式)"),
     limit: int = Query(default=600, ge=10, le=1000, description="返回数量")
 ):
@@ -61,7 +61,7 @@ async def get_sector_raw_data(
     """
     try:
         from datetime import datetime
-        from ..services.memory_cache import memory_cache
+        from ..services.numpy_cache_middleware import numpy_cache  # ✅ 新架构
         from ..database import SessionLocal
         from ..db_models import SectorDailyData, Sector
         
@@ -69,7 +69,7 @@ async def get_sector_raw_data(
         if date:
             target_date = datetime.strptime(date, '%Y%m%d').date()
         else:
-            target_date = memory_cache.get_sector_latest_date()
+            target_date = numpy_cache.get_sector_latest_date()
         
         if not target_date:
             raise HTTPException(404, "没有可用数据")
@@ -131,7 +131,7 @@ async def get_sector_raw_data(
 
 
 @router.get("/sectors/search/{keyword}", response_model=List[str])
-async def search_sectors(keyword: str):
+def search_sectors(keyword: str):  # ✅ 同步
     """
     搜索板块
     
@@ -148,7 +148,7 @@ async def search_sectors(keyword: str):
 
 
 @router.get("/sectors/trend")
-async def get_sector_trend(
+def get_sector_trend(  # ✅ 同步
     days: int = Query(default=7, ge=3, le=60, description="显示天数"),
     limit: int = Query(default=10, ge=5, le=30, description="前N个板块"),
     date: str = Query(default=None, description="结束日期 (YYYYMMDD格式)")
@@ -176,19 +176,19 @@ async def get_sector_trend(
     try:
         from datetime import datetime
         from collections import defaultdict
-        from ..services.memory_cache import memory_cache
+        from ..services.numpy_cache_middleware import numpy_cache  # ✅ 新架构
         
-        # 1. 从内存缓存获取日期范围
+        # 1. 从Numpy缓存获取日期范围
         if date:
             end_date = datetime.strptime(date, '%Y%m%d').date()
         else:
-            end_date = memory_cache.get_sector_latest_date()
+            end_date = numpy_cache.get_sector_latest_date()
         
         if not end_date:
             raise HTTPException(404, "没有可用数据")
         
         # 获取最近N天的日期
-        all_dates = memory_cache.get_sector_dates_range(days * 2)
+        all_dates = numpy_cache.get_sector_dates_range(days * 2)
         dates = [d for d in all_dates if d <= end_date][:days]
         
         if not dates:
@@ -196,25 +196,25 @@ async def get_sector_trend(
         
         dates.reverse()  # 按时间正序
         
-        # 2. 从内存缓存获取最新日期的前N个板块
+        # 2. 从Numpy缓存获取最新日期的前N个板块 (返回Dict列表)
         latest_date = dates[-1]
-        top_sectors_data = memory_cache.get_top_n_sectors(latest_date, limit)
+        top_sectors_data = numpy_cache.get_top_n_sectors(latest_date, limit)
         
         if not top_sectors_data:
             raise HTTPException(404, "没有板块数据")
         
         # 获取板块ID列表
-        sector_ids = [s.sector_id for s in top_sectors_data]
+        sector_ids = [s['sector_id'] for s in top_sectors_data]
         
-        # 3. 从内存缓存获取这些板块在所有日期的数据
+        # 3. 从Numpy缓存获取这些板块在所有日期的数据
         sector_dict = defaultdict(lambda: {'ranks': [], 'scores': []})
         
         for sector_id in sector_ids:
-            history_data = memory_cache.get_sector_history(sector_id, dates)
+            history_data = numpy_cache.get_sector_history(sector_id, len(dates), end_date=latest_date)
             
             if history_data:
-                # 从内存缓存获取板块基础信息
-                sector_info = memory_cache.get_sector_info(sector_id)
+                # 从Numpy缓存获取板块基础信息
+                sector_info = numpy_cache.get_sector_info(sector_id)
                 sector_name = sector_info.sector_name if sector_info else str(sector_id)
                 sector_dict[sector_id]['name'] = sector_name
                 
@@ -222,12 +222,13 @@ async def get_sector_trend(
                 sector_dict[sector_id]['ranks'] = [None] * len(dates)
                 sector_dict[sector_id]['scores'] = [None] * len(dates)
                 
-                # 填充数据
+                # 填充数据 (history_data 是 Dict 列表)
+                date_strs = [d.strftime('%Y%m%d') for d in dates]
                 for data in history_data:
-                    if data.date in dates:
-                        date_index = dates.index(data.date)
-                        sector_dict[sector_id]['ranks'][date_index] = data.rank
-                        sector_dict[sector_id]['scores'][date_index] = float(data.total_score) if data.total_score else None
+                    if data['date'] in date_strs:
+                        date_index = date_strs.index(data['date'])
+                        sector_dict[sector_id]['ranks'][date_index] = data['rank']
+                        sector_dict[sector_id]['scores'][date_index] = data['total_score']
         
         # 4. 转换为列表（按原始排序）
         sectors = []
@@ -246,7 +247,7 @@ async def get_sector_trend(
 
 
 @router.get("/sectors/rank-changes")
-async def get_sector_rank_changes(
+def get_sector_rank_changes(  # ✅ 同步
     date: str = Query(default=None, description="对比日期 (YYYYMMDD格式)"),
     compare_days: int = Query(default=1, ge=1, le=7, description="对比天数（1=昨天）")
 ):
@@ -272,19 +273,19 @@ async def get_sector_rank_changes(
     """
     try:
         from datetime import datetime
-        from ..services.memory_cache import memory_cache
+        from ..services.numpy_cache_middleware import numpy_cache  # ✅ 新架构
         
-        # 1. 从内存缓存获取当前日期
+        # 1. 从Numpy缓存获取当前日期
         if date:
             current_date = datetime.strptime(date, '%Y%m%d').date()
         else:
-            current_date = memory_cache.get_sector_latest_date()
+            current_date = numpy_cache.get_sector_latest_date()
         
         if not current_date:
             raise HTTPException(404, "没有可用数据")
         
         # 2. 获取对比日期（从所有可用日期中找到比当前日期早的日期）
-        all_dates = memory_cache.sector_dates  # 所有日期（降序排列）
+        all_dates = numpy_cache.get_sector_dates_range(30)  # 获取最近30天
         available_dates = [d for d in all_dates if d < current_date]
         
         if not available_dates:
@@ -293,14 +294,14 @@ async def get_sector_rank_changes(
         # 找到第 compare_days 个早于当前日期的日期
         compare_date = available_dates[min(compare_days - 1, len(available_dates) - 1)]
         
-        # 3. 从内存缓存获取当前日期的数据
-        current_data_list = memory_cache.get_sector_daily_data_by_date(current_date)
+        # 3. 从Numpy缓存获取当前日期的数据 (返回Dict列表)
+        current_data_list = numpy_cache.get_sector_all_by_date(current_date)
         
-        # 4. 从内存缓存获取对比日期的数据
-        compare_data_list = memory_cache.get_sector_daily_data_by_date(compare_date)
+        # 4. 从Numpy缓存获取对比日期的数据 (返回Dict列表)
+        compare_data_list = numpy_cache.get_sector_all_by_date(compare_date)
         
         # 构建对比字典 {sector_id: rank}
-        compare_dict = {data.sector_id: data.rank for data in compare_data_list}
+        compare_dict = {data['sector_id']: data['rank'] for data in compare_data_list}
         
         # 5. 计算变化
         statistics = {
@@ -312,14 +313,14 @@ async def get_sector_rank_changes(
         
         sectors = []
         for data in current_data_list:
-            previous_rank = compare_dict.get(data.sector_id)
+            previous_rank = compare_dict.get(data['sector_id'])
             
             if previous_rank is None:
                 rank_change = None
                 is_new = True
                 statistics['new_entries'] += 1
             else:
-                rank_change = previous_rank - data.rank  # 正数=上升
+                rank_change = previous_rank - data['rank']  # 正数=上升
                 is_new = False
                 if rank_change > 0:
                     statistics['rank_up'] += 1
@@ -328,19 +329,19 @@ async def get_sector_rank_changes(
                 else:
                     statistics['rank_same'] += 1
             
-            # 从内存缓存获取板块名称
-            sector_info = memory_cache.get_sector_info(data.sector_id)
-            sector_name = sector_info.sector_name if sector_info else str(data.sector_id)
+            # 从Numpy缓存获取板块名称
+            sector_info = numpy_cache.get_sector_info(data['sector_id'])
+            sector_name = sector_info.sector_name if sector_info else str(data['sector_id'])
             
             sectors.append({
                 'name': sector_name,
-                'current_rank': data.rank,
+                'current_rank': data['rank'],
                 'previous_rank': previous_rank,
                 'rank_change': rank_change,
                 'is_new': is_new,
-                'total_score': float(data.total_score) if data.total_score else None,
-                'price_change': float(data.price_change) if data.price_change else None,
-                'volume_days': float(data.volume_days) if data.volume_days else None
+                'total_score': data['total_score'],
+                'price_change': data['price_change'],
+                'volume_days': data['volume_days']
             })
         
         # 按当前排名排序
@@ -361,7 +362,7 @@ async def get_sector_rank_changes(
 # ⚠️ 重要：通用路由 {sector_name} 必须放在最后，否则会拦截其他路由
 @router.get("/sectors/{sector_name}", response_model=SectorDetail)
 @router.get("/sector/{sector_name}", response_model=SectorDetail)  # 兼容单数形式
-async def get_sector_detail(
+def get_sector_detail(  # ✅ 同步
     sector_name: str,
     days: int = Query(default=30, ge=7, le=365, description="返回的历史天数"),
     date: str = Query(default=None, description="指定日期 (YYYYMMDD格式)")

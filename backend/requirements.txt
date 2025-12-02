@@ -12,3 +12,6 @@ python-dotenv>=1.0.0
 python-jose[cryptography]>=3.3.0
 bcrypt>=4.1.0
 cryptography>=41.0.0
+
+# v0.5.0 新增：二级缓存（API响应缓存）
+diskcache>=5.6.0
