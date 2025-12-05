@@ -35,7 +35,9 @@ PUBLIC_PREFIXES = [
 ]
 
 # 是否强制只允许通过加密网关访问API
-FORCE_SECURE_API = True
+# 可通过环境变量 FORCE_SECURE_API=false 关闭（用于测试）
+import os
+FORCE_SECURE_API = os.getenv("FORCE_SECURE_API", "true").lower() == "true"
 
 
 class AuthMiddleware(BaseHTTPMiddleware):

@@ -1,6 +1,8 @@
 """
 管理员路由 - 文件上传和数据导入
 仅 admin 角色可访问
+
+v0.5.0: 数据删除时清理统一缓存
 """
 import os
 import base64
@@ -13,6 +15,8 @@ from pydantic import BaseModel
 
 from ..auth.dependencies import get_current_user
 from ..db_models import User
+from ..core.caching import cache  # v0.5.0: 统一缓存
+from ..services.hot_spots_cache import HotSpotsCache  # v0.5.0: 热点榜缓存
 
 logger = logging.getLogger(__name__)
 
@@ -264,7 +268,10 @@ def _do_import_task(username: str):
         try:
             from ..core.startup import preload_cache
             preload_cache()
-            add_log("✅ 内存缓存重载完成！新数据已生效")
+            # v0.5.0: 清理统一缓存系统的 API 缓存和热点榜缓存
+            cache.clear_api_cache()
+            HotSpotsCache.clear_cache()
+            add_log("✅ 内存缓存重载完成！新数据已生效 (含统一缓存)")
         except Exception as cache_error:
             add_log(f"⚠️ 缓存重载失败: {str(cache_error)}", "warning")
         
@@ -658,7 +665,10 @@ async def delete_data_by_date(
                 from ..core.startup import preload_cache
                 logger.info("🔄 删除后重载缓存...")
                 preload_cache()
-                logger.info("✅ 缓存重载完成")
+                # v0.5.0: 清理统一缓存系统的 API 缓存和热点榜缓存
+                cache.clear_api_cache()
+                HotSpotsCache.clear_cache()
+                logger.info("✅ 缓存重载完成 (含统一缓存)")
             except Exception as cache_err:
                 logger.warning(f"⚠️ 缓存重载失败: {cache_err}")
             
@@ -749,7 +759,10 @@ async def delete_data_batch(
                 from ..core.startup import preload_cache
                 logger.info("🔄 删除后重载缓存...")
                 preload_cache()
-                logger.info("✅ 缓存重载完成")
+                # v0.5.0: 清理统一缓存系统的 API 缓存和热点榜缓存
+                cache.clear_api_cache()
+                HotSpotsCache.clear_cache()
+                logger.info("✅ 缓存重载完成 (含统一缓存)")
             except Exception as cache_err:
                 logger.warning(f"⚠️ 缓存重载失败: {cache_err}")
             

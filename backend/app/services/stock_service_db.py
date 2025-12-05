@@ -2,7 +2,7 @@
 股票服务 - Numpy缓存版
 使用numpy_cache替代memory_cache，大幅提升性能并减少内存占用
 
-注意：search_stock_full 需要全部83个指标，暂保留使用 memory_cache
+v0.5.0: 使用统一缓存系统
 """
 from typing import Optional
 from datetime import datetime, timedelta
@@ -12,7 +12,7 @@ from ..database import SessionLocal
 from ..db_models import Stock, DailyStockData
 from ..models.stock import StockHistory, StockFullHistory, StockDailyFull
 from .numpy_cache_middleware import numpy_cache
-from .api_cache import api_cache
+from ..core.caching import cache  # v0.5.0: 统一缓存
 from sqlalchemy import desc, or_
 
 logger = logging.getLogger(__name__)
@@ -244,7 +244,8 @@ class StockServiceDB:
         else:
             cache_key = f"stock_{keyword}_{target_date}_default"
         
-        cached = api_cache.get(cache_key)
+        # v0.5.0: 使用统一缓存系统
+        cached = cache.get_api_cache("stock_search", cache_key)
         if cached is not None:
             logger.info(f"✨ 缓存命中: {cache_key}")
             return cached
@@ -336,7 +337,8 @@ class StockServiceDB:
             signals=signals
         )
         
-        api_cache.set(cache_key, result, ttl=self.CACHE_TTL)
+        # v0.5.0: 使用统一缓存系统
+        cache.set_api_cache("stock_search", cache_key, result, ttl=self.CACHE_TTL)
         logger.info(f"✅ 股票查询完成: {stock_info.stock_name}")
         
         return result

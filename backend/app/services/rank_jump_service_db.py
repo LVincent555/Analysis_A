@@ -1,6 +1,7 @@
 """
 排名跳变服务 - Numpy缓存版
-使用numpy缓存 + api_cache二级缓存
+
+v0.5.0: 使用统一缓存系统
 """
 from typing import List, Optional
 import statistics
@@ -8,14 +9,14 @@ import logging
 from datetime import datetime
 
 from .numpy_cache_middleware import numpy_cache
-from .api_cache import api_cache
+from ..core.caching import cache  # v0.5.0: 统一缓存
 from ..models.stock import RankJumpResult, RankJumpStock
 from ..utils.board_filter import should_filter_stock
 
 logger = logging.getLogger(__name__)
 
-# 缓存TTL: 30分钟
-RANK_JUMP_CACHE_TTL = 1800
+# v0.5.0: 缓存TTL改为25小时
+RANK_JUMP_CACHE_TTL = 90000
 
 
 class RankJumpServiceDB:
@@ -70,10 +71,11 @@ class RankJumpServiceDB:
         else:
             cache_key = f"rank_jump_{jump_threshold}_{board_type}_{sigma_multiplier}_{date_str}"
         
-        cached = api_cache.get(cache_key)
+        # v0.5.0: 使用统一缓存系统 (直接缓存对象，避免反序列化开销)
+        cached = cache.get_api_cache("rank_jump", cache_key)
         if cached:
             logger.info(f"✨ 缓存命中: {cache_key}")
-            return RankJumpResult(**cached)
+            return cached  # 直接返回对象
         
         # ========== 使用numpy缓存计算 ==========
         # 1. 获取最近2天的日期
@@ -170,8 +172,8 @@ class RankJumpServiceDB:
             sigma_stocks=sigma_stocks
         )
         
-        # ========== 存入api_cache二级缓存 ==========
-        api_cache.set(cache_key, result.model_dump(), ttl=RANK_JUMP_CACHE_TTL)
+        # v0.5.0: 直接缓存对象，避免反序列化开销
+        cache.set_api_cache("rank_jump", cache_key, result, ttl=RANK_JUMP_CACHE_TTL)
         logger.info(f"✓ 排名跳变分析完成并缓存: {len(jump_stocks)}只股票")
         
         return result

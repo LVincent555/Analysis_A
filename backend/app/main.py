@@ -22,16 +22,68 @@ from .routers.sync import router as sync_router
 from .routers.admin import router as admin_router
 from .core import preload_cache, run_startup_checks
 from .core.logging_config import setup_logging
+from .core.caching import cache
+from .core.caching.manager import UnifiedCache
+from .core.caching.store import ObjectStore, FileStore
+from .core.caching.policies import WriteBehindPolicy, CacheAsidePolicy
+from .core.caching.syncer import get_syncer, start_syncer, stop_syncer
+from .core.audit import audit_log, create_audit_sync_callback
 
 # 配置日志系统（控制台INFO，文件DEBUG）
 setup_logging(console_level=logging.INFO, file_level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 
+def init_cache_system():
+    """
+    初始化统一缓存系统
+    
+    注册所有缓存分区:
+    - L1 内存: sessions, users, config
+    - L2 磁盘: api_response, reports
+    """
+    import os
+    
+    # 1. 注册会话缓存 (Write-Behind, 30分钟过期)
+    UnifiedCache.register(
+        "sessions",
+        ObjectStore("sessions", WriteBehindPolicy(ttl=1800, sync_interval=10))
+    )
+    
+    # 2. 注册用户缓存 (Cache-Aside, 1小时过期)
+    UnifiedCache.register(
+        "users",
+        ObjectStore("users", CacheAsidePolicy(ttl=3600))
+    )
+    
+    # 3. 注册配置缓存 (Cache-Aside, 永不过期)
+    UnifiedCache.register(
+        "config",
+        ObjectStore("config", CacheAsidePolicy(ttl=0))
+    )
+    
+    # 4. 注册 API 响应缓存 (磁盘, 200MB上限)
+    cache_dir = os.path.join(os.path.dirname(__file__), ".cache", "api")
+    UnifiedCache.register(
+        "api_response",
+        FileStore("api_response", cache_dir=cache_dir, size_limit_gb=0.2)
+    )
+    
+    # 5. 注册报表文件缓存 (磁盘, 500MB上限)
+    report_cache_dir = os.path.join(os.path.dirname(__file__), ".cache", "reports")
+    UnifiedCache.register(
+        "reports",
+        FileStore("reports", cache_dir=report_cache_dir, size_limit_gb=0.5)
+    )
+    
+    logger.info("✅ 统一缓存系统初始化完成")
+    logger.info(f"   已注册分区: {UnifiedCache.region_names()}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
-    # 启动时执行
+    # ========== 启动时执行 ==========
     logger.info("应用启动中...")
     
     # 1. 数据导入和一致性检验
@@ -39,13 +91,30 @@ async def lifespan(app: FastAPI):
         logger.error("❌ 启动检查失败，请检查数据库和数据文件")
         raise RuntimeError("启动检查失败")
     
-    # 2. 预加载缓存
+    # 2. 初始化统一缓存系统
+    init_cache_system()
+    
+    # 3. 预加载 Numpy 缓存 (原有逻辑)
     preload_cache()
     
+    # 4. 配置并启动数据库同步器
+    syncer = get_syncer()
+    syncer.set_audit_sync_callback(create_audit_sync_callback(audit_log))
+    start_syncer()
+    logger.info("✅ 数据库同步器已启动")
+    
     logger.info("✅ 应用启动完成！")
+    
     yield
-    # 关闭时执行
-    logger.info("应用关闭")
+    
+    # ========== 关闭时执行 ==========
+    logger.info("应用关闭中...")
+    
+    # 1. 停止同步器 (会先执行 force_sync)
+    stop_syncer()
+    logger.info("✅ 数据库同步器已停止")
+    
+    logger.info("应用关闭完成")
 
 
 # 创建FastAPI应用

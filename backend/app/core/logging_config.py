@@ -81,19 +81,31 @@ def setup_logging(
         hotspots_handler.setFormatter(file_format)
         hotspots_logger.addHandler(hotspots_handler)
         
-        # 二级缓存专用日志文件
-        cache_logger = logging.getLogger('app.services.api_cache')
-        cache_handler = logging.handlers.RotatingFileHandler(
-            os.path.join(LOG_DIR, 'api_cache.log'),
+        # v0.5.0: 统一缓存系统专用日志文件 (移除旧的api_cache日志)
+        unified_cache_logger = logging.getLogger('app.core.caching')
+        unified_cache_handler = logging.handlers.RotatingFileHandler(
+            os.path.join(LOG_DIR, 'unified_cache.log'),
             maxBytes=10*1024*1024,  # 10MB
             backupCount=3,
             encoding='utf-8'
         )
-        cache_handler.setLevel(logging.DEBUG)
-        cache_handler.setFormatter(file_format)
-        cache_logger.addHandler(cache_handler)
-        # 阻止传播到根 logger（避免重复输出到控制台）
-        cache_logger.propagate = False
+        unified_cache_handler.setLevel(logging.DEBUG)
+        unified_cache_handler.setFormatter(file_format)
+        unified_cache_logger.addHandler(unified_cache_handler)
+        unified_cache_logger.propagate = False
+        
+        # v0.5.0: 审计日志专用文件
+        audit_logger = logging.getLogger('app.core.audit')
+        audit_handler = logging.handlers.RotatingFileHandler(
+            os.path.join(LOG_DIR, 'audit.log'),
+            maxBytes=10*1024*1024,  # 10MB
+            backupCount=5,  # 审计日志保留更多
+            encoding='utf-8'
+        )
+        audit_handler.setLevel(logging.INFO)
+        audit_handler.setFormatter(file_format)
+        audit_logger.addHandler(audit_handler)
+        audit_logger.propagate = False
     
     # 降低第三方库日志级别
     logging.getLogger('urllib3').setLevel(logging.WARNING)
@@ -105,4 +117,6 @@ def setup_logging(
         logger.info(f"   📁 日志目录: {LOG_DIR}")
         logger.info(f"   📄 主日志: app.log (DEBUG)")
         logger.info(f"   📄 热点榜日志: hotspots.log (DEBUG)")
+        logger.info(f"   📄 统一缓存日志: unified_cache.log (DEBUG)")
+        logger.info(f"   📄 审计日志: audit.log (INFO)")
     logger.info(f"   🖥️ 控制台级别: {logging.getLevelName(console_level)}")

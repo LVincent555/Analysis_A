@@ -1,10 +1,13 @@
 """
 行业分析相关API路由
+
+v0.5.0: 使用统一缓存系统
 """
 from fastapi import APIRouter, HTTPException
 from typing import List
 from ..services.industry_service_db import industry_service_db
 from ..models import IndustryStat, IndustryStats, IndustryStatsWeighted
+from ..core.caching import cache  # v0.5.0: 统一缓存
 
 router = APIRouter(prefix="/api", tags=["industry"])
 
@@ -47,11 +50,10 @@ def get_industry_trend(period: int = 14, top_n: int = 100, date: str = None):  #
         from datetime import datetime
         from collections import Counter
         from ..services.numpy_cache_middleware import numpy_cache  # ✅ 新架构
-        from ..services.api_cache import api_cache  # ✅ Phase 6 二级缓存
         
-        # 🔥 优化：使用跨进程API缓存
+        # v0.5.0: 使用统一缓存系统
         cache_key = f"industry_trend:{period}:{top_n}:{date or 'latest'}"
-        cached_result = api_cache.get(cache_key)
+        cached_result = cache.get_api_cache("industry_trend", cache_key)
         if cached_result is not None:
             return cached_result
         
@@ -124,8 +126,8 @@ def get_industry_trend(period: int = 14, top_n: int = 100, date: str = None):  #
             "industries": sorted(list(all_industries))
         }
         
-        # 🔥 优化：缓存结果，TTL=300秒（5分钟）
-        api_cache.set(cache_key, result, ttl=300)
+        # v0.5.0: 使用统一缓存系统写入，TTL=300秒（5分钟）
+        cache.set_api_cache("industry_trend", cache_key, result, ttl=300)
         
         return result
     except Exception as e:
@@ -208,6 +210,7 @@ def get_industry_weighted(  # ✅ 同步
         from datetime import datetime
         from collections import defaultdict
         from ..models.industry import IndustryStatWeighted
+        from ..services.numpy_cache_middleware import numpy_cache
         
         # 参数验证
         if k < 0.3 or k > 2.0:
@@ -217,8 +220,6 @@ def get_industry_weighted(  # ✅ 同步
             raise HTTPException(status_code=400, detail="metric必须是B1/B2/C1/C2之一")
         
         # 1. 从Numpy缓存获取日期
-        from ..services.numpy_cache_middleware import numpy_cache  # ✅ 新架构
-        
         if date:
             target_date = datetime.strptime(date, '%Y%m%d').date()
         else:
@@ -228,6 +229,12 @@ def get_industry_weighted(  # ✅ 同步
             raise HTTPException(status_code=404, detail="没有可用数据")
         
         date_str = target_date.strftime('%Y%m%d')
+        
+        # v0.5.0: 使用统一缓存系统 (TTL=25小时)
+        cache_key = f"weighted_{date_str}_{k}_{metric}"
+        cached = cache.get_api_cache("industry_weighted", cache_key)
+        if cached is not None:
+            return cached
         
         # 2. 从Numpy缓存获取该日期的所有股票数据 (返回Dict列表)
         all_stocks = numpy_cache.get_all_by_date(target_date)
@@ -313,13 +320,18 @@ def get_industry_weighted(  # ✅ 同步
         elif metric == 'C2':
             stats.sort(key=lambda x: x.avg_score, reverse=True)
         
-        return IndustryStatsWeighted(
+        result = IndustryStatsWeighted(
             date=date_str,
             total_stocks=total_stocks,
             k_value=k,
             metric_type=metric,
             stats=stats
         )
+        
+        # v0.5.0: 缓存结果 (TTL=25小时)
+        cache.set_api_cache("industry_weighted", cache_key, result, ttl=90000)
+        
+        return result
             
     except HTTPException:
         raise

@@ -1,6 +1,7 @@
 """
 行业趋势服务 - 内存缓存版
-使用memory_cache替代数据库查询，大幅提升性能
+
+v0.5.0: 使用统一缓存系统
 """
 from typing import List
 from collections import defaultdict
@@ -11,7 +12,7 @@ from ..database import SessionLocal
 from ..db_models import Stock, DailyStockData
 from ..models.industry import IndustryStat
 from .numpy_cache_middleware import numpy_cache
-from .api_cache import api_cache
+from ..core.caching import cache  # v0.5.0: 统一缓存
 from sqlalchemy import desc, func
 
 logger = logging.getLogger(__name__)
@@ -20,7 +21,7 @@ logger = logging.getLogger(__name__)
 class IndustryServiceDB:
     """行业趋势服务（内存缓存版）"""
     
-    CACHE_TTL = 1800  # 30分钟
+    CACHE_TTL = 90000  # v0.5.0: 25小时
     
     def __init__(self):
         """初始化服务"""
@@ -47,10 +48,10 @@ class IndustryServiceDB:
         Returns:
             行业趋势列表
         """
-        # 生成缓存key
+        # v0.5.0: 使用统一缓存系统
         date_str = target_date.strftime('%Y%m%d') if target_date else None
         cache_key = f"industry_stats_{period}_{top_n}_{date_str}"
-        cached = api_cache.get(cache_key)
+        cached = cache.get_api_cache("industry_stats", cache_key)
         if cached is not None:
             logger.info(f"✨ 缓存命中: {cache_key}")
             return cached
@@ -122,8 +123,8 @@ class IndustryServiceDB:
         # 按股票数量排序
         stats.sort(key=lambda x: x.count, reverse=True)
         
-        # 缓存结果
-        api_cache.set(cache_key, stats, ttl=self.CACHE_TTL)
+        # v0.5.0: 使用统一缓存系统
+        cache.set_api_cache("industry_stats", cache_key, stats, ttl=self.CACHE_TTL)
         logger.info(f"✅ 行业分析完成: {len(stats)}个行业")
         
         return stats

@@ -3,6 +3,8 @@
 Strategies Router
 
 提供各种策略的API接口
+
+v0.5.0: 使用统一缓存系统
 """
 
 from fastapi import APIRouter, HTTPException, Query
@@ -15,7 +17,7 @@ import asyncio
 
 from ..services.strategies.needle_under_20 import NeedleUnder20Strategy, get_washout_detector
 from ..services.numpy_cache_middleware import numpy_cache
-from ..services.api_cache import api_cache
+from ..core.caching import cache  # v0.5.0: 统一缓存
 
 logger = logging.getLogger(__name__)
 
@@ -162,8 +164,8 @@ def _compute_needle_under_20(
         "data_sufficient": data_sufficient
     }
     
-    # 存入缓存
-    api_cache.set(cache_key, response, ttl=STRATEGY_CACHE_TTL)
+    # v0.5.0: 使用统一缓存系统
+    cache.set_api_cache("needle20", cache_key, response, ttl=STRATEGY_CACHE_TTL)
     logger.info(f"✓ 计算完成并缓存: {len(results)}条, 耗时{elapsed:.2f}s")
     
     return response
@@ -201,9 +203,9 @@ async def get_needle_under_20_stocks(  # ✅ 改为async，CPU密集型放到线
         
         date_str = target_date.strftime('%Y%m%d')
         
-        # ========== 检查缓存 (跨进程共享) ==========
+        # v0.5.0: 使用统一缓存系统
         cache_key = f"needle20:{date_str}:{days}:{min_score}:{pattern}:{bbi_filter}:{max_drop_pct}:{long_period}"
-        cached = api_cache.get(cache_key)
+        cached = cache.get_api_cache("needle20", cache_key)
         if cached:
             logger.info(f"✓ 命中缓存: {cache_key}")
             return cached

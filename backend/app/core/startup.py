@@ -1,10 +1,12 @@
 """
 应用启动时的初始化操作
+
+v0.5.0: 使用统一缓存系统，预加载3天热点榜数据
 """
 import logging
 from ..services.numpy_cache_middleware import numpy_cache
 from ..services.hot_spots_cache import HotSpotsCache
-from ..services.api_cache import api_cache
+from .caching import cache
 
 logger = logging.getLogger(__name__)
 
@@ -25,29 +27,43 @@ def preload_cache():
         logger.info(f"   📊 板块数据: {numpy_stats['sector_data']['n_records']} 条")
         logger.info("=" * 60)
         
-        # 2. 清理二级缓存
-        logger.info("🧹 清理API二级缓存...")
-        HotSpotsCache.clear_cache()
-        api_cache.invalidate()
-        cache_stats = api_cache.stats()
-        logger.info(f"   ✅ 已清理API二级缓存")
-        logger.info(f"   💾 缓存模式: {cache_stats['mode']}")
-        if cache_stats.get('size_mb'):
-            logger.info(f"   📊 缓存大小: {cache_stats['size_mb']:.2f} MB")
-        
-        # 3. 预加载热点榜缓存（最近21天）
-        logger.info("🔥 预加载热点榜缓存（最近21天）...")
-        HotSpotsCache.preload_recent_dates(days=21)  # 与股票数据天数一致
-        
-        hot_stats = HotSpotsCache.get_cache_stats()
-        logger.info("=" * 60)
-        logger.info("✅ 热点榜缓存已就绪")
-        logger.info(f"   📅 已缓存日期: {', '.join(hot_stats['cached_dates'][:5])}")
-        logger.info(f"   📊 缓存天数: {hot_stats['total_dates']}")
-        logger.info(f"   💾 内存占用: {hot_stats['memory_usage_kb']} KB")
-        logger.info(f"   ⚡ 查询性能: O(1)")
-        logger.info("=" * 60)
+        # 2. v0.5.0: 预加载最近3天热点榜到统一缓存系统
+        logger.info("🔥 预加载热点榜缓存（最近3天）...")
+        _preload_hotspots(days=3)
+        logger.info("✅ 统一缓存系统已就绪")
         
     except Exception as e:
         logger.error(f"❌ 内存缓存加载失败: {e}")
         raise
+
+
+def _preload_hotspots(days: int = 3):
+    """预加载热点榜数据到统一缓存系统"""
+    try:
+        # 获取最近N天日期
+        recent_dates = numpy_cache.get_dates_range(days)
+        if not recent_dates:
+            logger.warning("无可用日期，跳过热点榜预加载")
+            return
+        
+        date_strs = [d.strftime('%Y%m%d') for d in recent_dates]
+        logger.info(f"   预加载日期: {date_strs}")
+        
+        for date_str in date_strs:
+            # 使用 HotSpotsCache 加载数据
+            stocks = HotSpotsCache.get_full_data(date_str)
+            
+            # 存入统一缓存系统 (TTL=25小时)
+            cache_key = f"hotspots_full_{date_str}"
+            cache.set_api_cache("hotspots", cache_key, {
+                "date": date_str,
+                "total_count": len(stocks),
+                "stocks": stocks
+            }, ttl=90000)
+            
+            logger.info(f"   ✅ {date_str}: {len(stocks)} 只股票")
+        
+        logger.info(f"   📊 热点榜预加载完成: {len(date_strs)} 天")
+        
+    except Exception as e:
+        logger.error(f"热点榜预加载失败: {e}")

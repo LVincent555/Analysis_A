@@ -24,7 +24,7 @@ class HotSpotsCache:
     """
     
     _cache: Dict[str, Dict] = {}
-    _ttl: int = 86400  # 24小时过期
+    _ttl: int = 90000  # 25小时过期 (v0.5.0: 延长TTL)
     _max_days: int = 30  # 最多保留30天历史数据
     
     @classmethod

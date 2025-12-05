@@ -1,6 +1,8 @@
 """
 FastAPI依赖注入模块
 提供认证相关的依赖函数
+
+v0.6.0: 会话密钥存储迁移到统一缓存系统
 """
 from typing import Optional
 from fastapi import Depends, HTTPException, status
@@ -14,24 +16,67 @@ from .jwt_handler import verify_token
 # HTTP Bearer认证方案
 security = HTTPBearer(auto_error=False)
 
-# 会话密钥缓存 (生产环境应使用Redis)
-# 格式: {user_id: session_key_bytes}
-_session_keys: dict[int, bytes] = {}
+
+# ==================== 会话密钥管理 (使用统一缓存系统) ====================
+
+def _get_session_store():
+    """获取会话缓存存储"""
+    try:
+        from ..core.caching.manager import UnifiedCache
+        if UnifiedCache.has_region("sessions"):
+            return UnifiedCache.session()
+    except ImportError:
+        pass
+    return None
 
 
 def set_session_key(user_id: int, session_key: bytes):
-    """存储用户会话密钥"""
-    _session_keys[user_id] = session_key
+    """
+    存储用户会话密钥
+    
+    v0.6.0: 使用统一缓存系统 (Write-Behind 策略)
+    """
+    store = _get_session_store()
+    if store:
+        # 存储到统一缓存系统
+        store.set(str(user_id), {"session_key": session_key})
+    else:
+        # 降级: 使用模块级变量 (兼容旧版本)
+        _fallback_session_keys[user_id] = session_key
 
 
 def get_session_key_by_user_id(user_id: int) -> Optional[bytes]:
-    """获取用户会话密钥"""
-    return _session_keys.get(user_id)
+    """
+    获取用户会话密钥
+    
+    v0.6.0: 优先从统一缓存系统读取
+    """
+    store = _get_session_store()
+    if store:
+        data = store.get(str(user_id))
+        if data and isinstance(data, dict):
+            return data.get("session_key")
+    
+    # 降级: 从模块级变量读取
+    return _fallback_session_keys.get(user_id)
 
 
 def remove_session_key(user_id: int):
-    """移除用户会话密钥"""
-    _session_keys.pop(user_id, None)
+    """
+    移除用户会话密钥
+    
+    v0.6.0: 同时清理缓存和降级存储
+    """
+    store = _get_session_store()
+    if store:
+        store.delete(str(user_id))
+    
+    # 同时清理降级存储
+    _fallback_session_keys.pop(user_id, None)
+
+
+# 降级存储 (缓存系统未初始化时使用)
+_fallback_session_keys: dict[int, bytes] = {}
 
 
 async def get_current_user(

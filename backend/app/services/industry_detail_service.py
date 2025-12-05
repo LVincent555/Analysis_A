@@ -1,6 +1,8 @@
 """
 板块成分股详细分析服务
 提供板块成分股查询、信号计算、趋势分析等功能
+
+v0.5.0: 使用统一缓存系统
 """
 import logging
 from typing import List, Optional, Dict
@@ -12,7 +14,7 @@ from ..models.industry_detail import (
     IndustryTrendResponse, IndustryCompareResponse
 )
 from .numpy_cache_middleware import numpy_cache
-from .api_cache import api_cache
+from ..core.caching import cache  # v0.5.0: 统一缓存
 from .signal_calculator import SignalCalculator, SignalThresholds
 
 logger = logging.getLogger(__name__)
@@ -21,7 +23,7 @@ logger = logging.getLogger(__name__)
 class IndustryDetailService:
     """板块成分股详细分析服务"""
     
-    CACHE_TTL = 1800  # 30分钟
+    CACHE_TTL = 90000  # v0.5.0: 25小时
     
     def __init__(self):
         """初始化服务"""
@@ -66,7 +68,8 @@ class IndustryDetailService:
         else:
             cache_key = f"industry_stocks_{industry_name}_{target_date}_{sort_mode}_{calculate_signals}"
         
-        cached = api_cache.get(cache_key)
+        # v0.5.0: 使用统一缓存系统
+        cached = cache.get_api_cache("industry_stocks", cache_key)
         if cached is not None:
             logger.info(f"✨ 缓存命中: {cache_key}")
             return cached
@@ -178,8 +181,8 @@ class IndustryDetailService:
             statistics=statistics
         )
         
-        # 8. 缓存结果
-        api_cache.set(cache_key, response, ttl=self.CACHE_TTL)
+        # v0.5.0: 使用统一缓存系统
+        cache.set_api_cache("industry_stocks", cache_key, response, ttl=self.CACHE_TTL)
         logger.info(f"✅ 板块成分股查询完成: {industry_name}, {len(stocks_list)}只")
         
         return response
@@ -315,9 +318,9 @@ class IndustryDetailService:
         Returns:
             板块详细分析响应
         """
-        # 缓存key
+        # v0.5.0: 使用统一缓存系统
         cache_key = f"industry_detail_{industry_name}_{target_date}_{k_value}"
-        cached = api_cache.get(cache_key)
+        cached = cache.get_api_cache("industry_detail", cache_key)
         if cached is not None:
             logger.info(f"✨ 缓存命中: {cache_key}")
             return cached
@@ -360,8 +363,8 @@ class IndustryDetailService:
             avg_signal_strength=stocks_response.statistics['avg_signal_strength']
         )
         
-        # 4. 缓存结果
-        api_cache.set(cache_key, response, ttl=self.CACHE_TTL)
+        # v0.5.0: 使用统一缓存系统
+        cache.set_api_cache("industry_detail", cache_key, response, ttl=self.CACHE_TTL)
         logger.info(f"✅ 板块详细分析完成: {industry_name}")
         
         return response

@@ -70,6 +70,8 @@ def get_hot_spots_full(date: str = None):  # ✅ 同步
     """
     获取完整热点榜数据（带rank_label）
     
+    v0.5.0: 使用统一缓存系统
+    
     返回14天TOP1000热点榜，包含排名标签和出现次数
     用于前端搜索功能
     
@@ -80,20 +82,12 @@ def get_hot_spots_full(date: str = None):  # ✅ 同步
         {
             "date": "20251107",
             "total_count": 1000,
-            "stocks": [
-                {
-                    "code": "920961",
-                    "name": "创远信科",
-                    "rank": 1,
-                    "rank_label": "TOP100·12次",
-                    "hit_count": 12,
-                    ...
-                }
-            ]
+            "stocks": [...]
         }
     """
     try:
         import logging
+        from ..core.caching import cache
         logger = logging.getLogger(__name__)
         
         # 获取目标日期
@@ -105,16 +99,28 @@ def get_hot_spots_full(date: str = None):  # ✅ 同步
             else:
                 raise HTTPException(status_code=404, detail="无可用日期")
         
+        # v0.5.0: 优先从统一缓存读取
+        cache_key = f"hotspots_full_{date}"
+        cached = cache.get_api_cache("hotspots", cache_key)
+        if cached:
+            logger.debug(f"✨ 热点榜缓存命中: {date}")
+            return cached
+        
         logger.info(f"获取热点榜完整数据: date={date}")
         
-        # 从缓存获取完整数据
+        # 从 HotSpotsCache 获取数据
         stocks = HotSpotsCache.get_full_data(date)
         
-        return {
+        result = {
             "date": date,
             "total_count": len(stocks),
             "stocks": stocks
         }
+        
+        # 存入统一缓存 (TTL=25小时)
+        cache.set_api_cache("hotspots", cache_key, result, ttl=90000)
+        
+        return result
         
     except Exception as e:
         import logging

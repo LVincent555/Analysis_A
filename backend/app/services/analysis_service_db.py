@@ -1,6 +1,7 @@
 """
 热点分析服务 - Numpy缓存版
-使用numpy_cache替代memory_cache，大幅提升性能并减少内存占用
+
+v0.5.0: 使用统一缓存系统
 """
 from typing import List, Dict, Optional
 from datetime import datetime
@@ -14,7 +15,7 @@ from ..models.analysis import AnalysisResult
 from ..models.stock import StockInfo
 from ..utils.board_filter import should_filter_stock
 from .numpy_cache_middleware import numpy_cache
-from .api_cache import api_cache
+from ..core.caching import cache  # v0.5.0: 统一缓存
 from sqlalchemy import desc
 
 logger = logging.getLogger(__name__)
@@ -23,8 +24,8 @@ logger = logging.getLogger(__name__)
 class AnalysisServiceDB:
     """热点分析服务（内存缓存版）"""
     
-    # 缓存TTL: 30分钟
-    CACHE_TTL = 1800
+    # v0.5.0: 缓存TTL改为25小时
+    CACHE_TTL = 90000
     CACHE_PREFIX = 'analysis'
     
     def __init__(self):
@@ -63,9 +64,9 @@ class AnalysisServiceDB:
         Returns:
             分析结果
         """
-        # 生成缓存key
+        # v0.5.0: 使用统一缓存系统
         cache_key = f"analyze_{period}_{max_count}_{board_type}_{target_date}"
-        cached = api_cache.get(cache_key)
+        cached = cache.get_api_cache("analysis", cache_key)
         if cached is not None:
             logger.info(f"✨ 缓存命中: {cache_key}")
             return cached
@@ -218,8 +219,8 @@ class AnalysisServiceDB:
             all_dates=date_strs
         )
         
-        # 缓存结果
-        api_cache.set(cache_key, result, ttl=self.CACHE_TTL)
+        # v0.5.0: 使用统一缓存系统
+        cache.set_api_cache("analysis", cache_key, result, ttl=self.CACHE_TTL)
         logger.info(f"✅ 热点分析完成并缓存: {len(stocks_list)}只股票, key={cache_key}")
         
         return result

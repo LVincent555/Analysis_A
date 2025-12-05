@@ -1,12 +1,12 @@
 """
 板块数据服务 - 内存缓存版
-使用memory_cache替代数据库查询，大幅提升性能
+
+v0.5.0: 移除旧的api_cache
 """
 from typing import List, Dict, Optional
 from datetime import datetime, date
 from ..models import SectorRankingResult, SectorInfo, SectorDetail
 from .numpy_cache_middleware import numpy_cache
-from .api_cache import api_cache
 import logging
 
 logger = logging.getLogger(__name__)
@@ -14,8 +14,6 @@ logger = logging.getLogger(__name__)
 
 class SectorServiceDB:
     """板块数据服务（内存缓存版）"""
-    
-    CACHE_TTL = 1800  # 30分钟
     
     def __init__(self):
         """初始化服务"""

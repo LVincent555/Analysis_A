@@ -2,15 +2,15 @@
 缓存管理API
 提供缓存统计、清理等管理功能
 
-重构后：统一使用 api_cache 二级缓存
+v0.5.0: 使用统一缓存系统，移除旧的api_cache
 """
 from fastapi import APIRouter, HTTPException
 from typing import Dict, Any
 import logging
 
-from ..services.api_cache import api_cache
 from ..services.numpy_cache_middleware import numpy_cache
 from ..services.hot_spots_cache import HotSpotsCache
+from ..core.caching import cache as unified_cache
 
 logger = logging.getLogger(__name__)
 
@@ -22,28 +22,22 @@ async def get_cache_stats() -> Dict[str, Any]:
     """
     获取缓存统计信息
     
+    v0.5.0: 使用统一缓存系统
+    
     Returns:
         缓存统计
     """
     try:
-        # API二级缓存统计
-        api_stats = api_cache.stats()
-        
         # Numpy一级缓存统计
         numpy_stats = numpy_cache.get_memory_stats()
         
         # 热点榜缓存统计
         hotspots_stats = HotSpotsCache.get_cache_stats()
         
+        # 统一缓存系统统计
+        unified_stats = unified_cache.stats()
+        
         return {
-            "api_cache": {
-                "mode": api_stats['mode'],
-                "hits": api_stats['hits'],
-                "misses": api_stats['misses'],
-                "hit_rate": api_stats['hit_rate'],
-                "size_mb": api_stats.get('size_mb', 0),
-                "count": api_stats.get('count', 0)
-            },
             "numpy_cache": {
                 "total_mb": numpy_stats['total_mb'],
                 "stocks_count": numpy_stats['stocks_count'],
@@ -53,7 +47,8 @@ async def get_cache_stats() -> Dict[str, Any]:
             "hotspots_cache": {
                 "cached_dates": len(hotspots_stats['cached_dates']),
                 "memory_kb": hotspots_stats['memory_usage_kb']
-            }
+            },
+            "unified_cache": unified_stats
         }
     except Exception as e:
         logger.error(f"获取缓存统计失败: {e}")
@@ -62,15 +57,15 @@ async def get_cache_stats() -> Dict[str, Any]:
 
 @router.post("/clear")
 async def clear_cache(
-    cache_type: str = "all",
-    pattern: str = None
+    cache_type: str = "all"
 ) -> Dict[str, Any]:
     """
     清除缓存
     
+    v0.5.0: 使用统一缓存系统
+    
     Args:
-        cache_type: 缓存类型 (api/hotspots/all)
-        pattern: 模式匹配（仅对api缓存有效）
+        cache_type: 缓存类型 (hotspots/api/report/all)
     
     Returns:
         清除结果
@@ -78,20 +73,23 @@ async def clear_cache(
     try:
         cleared = {}
         
-        if cache_type in ["api", "all"]:
-            api_cache.invalidate(pattern)
-            cleared["api_cache"] = "已清理"
-        
         if cache_type in ["hotspots", "all"]:
             HotSpotsCache.clear_cache()
             cleared["hotspots_cache"] = "已清理"
+        
+        if cache_type in ["api", "all"]:
+            unified_cache.clear_api_cache()
+            cleared["api_cache"] = "已清理"
+        
+        if cache_type in ["report", "all"]:
+            unified_cache.clear_report_cache()
+            cleared["report_cache"] = "已清理"
         
         logger.info(f"✅ 缓存清理完成: {cleared}")
         
         return {
             "success": True,
-            "cleared": cleared,
-            "pattern": pattern
+            "cleared": cleared
         }
     
     except Exception as e:
@@ -128,24 +126,22 @@ async def cache_health_check() -> Dict[str, Any]:
     """
     缓存健康检查
     
+    v0.5.0: 使用统一缓存系统
+    
     Returns:
         健康状态
     """
     try:
         stats = await get_cache_stats()
         
-        # 简单的健康评估
-        status = "healthy"
-        api_hit_rate = float(stats["api_cache"]["hit_rate"].rstrip('%'))
-        
-        if api_hit_rate < 30:
-            status = "warning"  # 命中率过低
+        # 统一缓存系统状态
+        unified_regions = list(stats.get("unified_cache", {}).keys())
         
         return {
-            "status": status,
-            "api_cache": stats["api_cache"],
+            "status": "healthy",
             "numpy_cache_mb": stats["numpy_cache"]["total_mb"],
-            "hotspots_dates": stats["hotspots_cache"]["cached_dates"]
+            "hotspots_dates": stats["hotspots_cache"]["cached_dates"],
+            "unified_cache_regions": unified_regions
         }
     
     except Exception as e:
@@ -154,3 +150,25 @@ async def cache_health_check() -> Dict[str, Any]:
             "status": "error",
             "error": str(e)
         }
+
+
+@router.post("/gc")
+async def trigger_gc() -> Dict[str, Any]:
+    """
+    触发垃圾回收
+    
+    v0.6.0: 新增接口
+    
+    Returns:
+        GC 结果
+    """
+    try:
+        result = unified_cache.gc()
+        logger.info(f"✅ GC 完成: {result}")
+        return {
+            "success": True,
+            "result": result
+        }
+    except Exception as e:
+        logger.error(f"GC 失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
