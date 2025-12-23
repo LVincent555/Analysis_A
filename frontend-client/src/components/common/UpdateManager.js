@@ -39,7 +39,7 @@ function UpdateManager() {
     });
 
     window.electronAPI.onUpdateNotAvailable?.(() => {
-      console.log('当前已是最新版本');
+      // 自动检查时不打印日志（避免重复）
       setUpdateStatus('idle');
     });
 

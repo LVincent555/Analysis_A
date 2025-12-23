@@ -17,7 +17,9 @@ const DEFAULT_THRESHOLDS = {
   steadyRiseDays: 3,
   priceSurgeMin: 5.0,
   volumeSurgeMin: 10.0,
-  volatilitySurgeMin: 10.0  // 波动率上升阈值默认改为10%
+  volatilitySurgeMin: 10.0,  // 波动率上升阈值默认改为10%
+  // 板块数据源配置（多对多系统）
+  boardDataSource: 'dc',  // dc=DC原版(87行业,一对一), eastmoney=东财板块(527,多对多)
 };
 
 /**

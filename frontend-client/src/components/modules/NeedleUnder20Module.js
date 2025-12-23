@@ -12,6 +12,9 @@ import {
   Star, Award, Zap, BarChart2
 } from 'lucide-react';
 import { API_BASE_URL } from '../../constants/config';
+import { useSignalConfig } from '../../contexts/SignalConfigContext';
+import BoardSignalBadge from '../BoardSignalBadge';
+import boardHeatService from '../../services/boardHeatService';
 
 // 形态配置
 const PATTERN_CONFIG = {
@@ -36,6 +39,7 @@ function NeedleUnder20Module({ selectedDate, days = 5, minScore = 0 }) {
   const [selectedPattern, setSelectedPattern] = useState(null);
   const [industryDistribution, setIndustryDistribution] = useState({});
   const [dateRange, setDateRange] = useState([]);
+  const [boardSignals, setBoardSignals] = useState({});
   
   // 参数状态
   const [analysisDays, setAnalysisDays] = useState(days);
@@ -44,6 +48,9 @@ function NeedleUnder20Module({ selectedDate, days = 5, minScore = 0 }) {
   const [maxDropPct, setMaxDropPct] = useState(null); // 股价跌幅阈值，默认不限
   const [longPeriod, setLongPeriod] = useState(10); // 计算周期：10天或21天
   
+  const { signalThresholds } = useSignalConfig();
+  const isEastmoneyMode = signalThresholds?.boardDataSource === 'eastmoney';
+
   // 数据充足信息
   const [dataDays, setDataDays] = useState(0);
   const [requiredDays, setRequiredDays] = useState(0);
@@ -95,6 +102,30 @@ function NeedleUnder20Module({ selectedDate, days = 5, minScore = 0 }) {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // 批量获取板块信号
+  useEffect(() => {
+    const fetchSignals = async () => {
+      if (!isEastmoneyMode || !data || data.length === 0) return;
+      
+      try {
+        const codes = data.map(s => s.stock_code);
+        if (codes.length === 0) return;
+
+        // 分批处理，防止URL过长（虽然POST没问题，但习惯性优化）
+        const result = await boardHeatService.getStockSignalsBatch(codes, selectedDate);
+        const signalMap = {};
+        result.stocks?.forEach(s => {
+          signalMap[s.stock_code] = s;
+        });
+        setBoardSignals(signalMap);
+      } catch (err) {
+        console.error("Failed to load signals", err);
+      }
+    };
+    
+    fetchSignals();
+  }, [isEastmoneyMode, data, selectedDate]);
 
   // 过滤数据
   const filteredData = data.filter(item => {
@@ -460,6 +491,9 @@ function NeedleUnder20Module({ selectedDate, days = 5, minScore = 0 }) {
                     <th className="px-4 py-3 text-left">排名</th>
                     <th className="px-4 py-3 text-left">股票</th>
                     <th className="px-4 py-3 text-left">行业</th>
+                    {isEastmoneyMode && (
+                      <th className="px-4 py-3 text-left">板块信号</th>
+                    )}
                     <th className="px-4 py-3 text-center">形态</th>
                     <th className="px-4 py-3 text-center">评分</th>
                     <th className="px-4 py-3 text-center">涨跌幅</th>
@@ -502,6 +536,23 @@ function NeedleUnder20Module({ selectedDate, days = 5, minScore = 0 }) {
                           {item.industry || '-'}
                         </td>
                         
+                        {/* 板块信号 */}
+                        {isEastmoneyMode && (
+                          <td className="px-4 py-3">
+                            {boardSignals[item.stock_code] && boardSignals[item.stock_code].board_signal_level !== 'NONE' ? (
+                              <BoardSignalBadge
+                                level={boardSignals[item.stock_code].board_signal_level}
+                                label={boardSignals[item.stock_code].board_signal_label}
+                                type={boardSignals[item.stock_code].max_concept_board_type}
+                                heatPct={boardSignals[item.stock_code].max_concept_heat_pct}
+                                size="sm"
+                              />
+                            ) : (
+                              <span className="text-xs text-gray-400">-</span>
+                            )}
+                          </td>
+                        )}
+
                         {/* 形态 */}
                         <td className="px-4 py-3 text-center">
                           <span className={`inline-block px-2 py-1 text-xs rounded-lg ${patternConfig.bg} ${patternConfig.color} ${patternConfig.border} border`}>

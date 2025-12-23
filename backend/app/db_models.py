@@ -2,7 +2,7 @@
 SQLAlchemy ORM 数据库模型
 对应 version1.sql 的表结构
 """
-from sqlalchemy import Column, String, Integer, BigInteger, Date, DECIMAL, TIMESTAMP, ForeignKey, Index, Boolean, Text
+from sqlalchemy import Column, String, Integer, BigInteger, Date, DECIMAL, TIMESTAMP, ForeignKey, Index, Boolean, Text, Table
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from .database import Base
@@ -266,6 +266,7 @@ class User(Base):
     """
     用户表
     存储用户认证信息和配置
+    v1.1.0: 新增用户信息、登录安全、审计字段
     """
     __tablename__ = "users"
     
@@ -274,36 +275,99 @@ class User(Base):
     password_hash = Column(String(255), nullable=False, comment="密码哈希(bcrypt)")
     user_key_encrypted = Column(Text, nullable=False, comment="用户密钥(主密钥加密)")
     
-    # 用户信息
+    # 用户信息（v1.1.0 新增）
+    email = Column(String(255), nullable=True, comment="邮箱")
+    phone = Column(String(20), nullable=True, comment="手机号")
+    nickname = Column(String(50), nullable=True, comment="昵称")
+    avatar_url = Column(String(500), nullable=True, comment="头像URL")
+    remark = Column(Text, nullable=True, comment="备注")
+    
+    # 角色和状态
     role = Column(String(20), default='user', comment="角色: admin/user")
     is_active = Column(Boolean, default=True, comment="是否启用")
     
     # 时间戳
     created_at = Column(TIMESTAMP, default=datetime.utcnow, comment="创建时间")
+    updated_at = Column(TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow, comment="更新时间")
     last_login = Column(TIMESTAMP, nullable=True, comment="最后登录时间")
+    
+    # 账号有效期（v1.1.0 新增）
+    expires_at = Column(TIMESTAMP, nullable=True, comment="账号过期时间")
+    
+    # 登录安全（v1.1.0 新增）
+    failed_attempts = Column(Integer, default=0, comment="登录失败次数")
+    locked_until = Column(TIMESTAMP, nullable=True, comment="锁定截止时间")
+    password_changed_at = Column(TIMESTAMP, nullable=True, comment="密码修改时间")
     
     # 设备和离线配置
     allowed_devices = Column(Integer, default=3, comment="允许同时登录设备数")
     offline_enabled = Column(Boolean, default=True, comment="是否允许离线使用")
     offline_days = Column(Integer, default=7, comment="离线数据保留天数")
     
+    # 审计字段（v1.1.0 新增）
+    created_by = Column(Integer, nullable=True, comment="创建者ID")
+    deleted_at = Column(TIMESTAMP, nullable=True, comment="删除时间(软删除)")
+    
+    # 强制下线用（v1.1.0 新增）
+    token_version = Column(Integer, default=1, comment="Token版本号")
+    
     # 关系
     sessions = relationship("UserSession", back_populates="user", cascade="all, delete-orphan")
+    roles = relationship("Role", secondary="user_roles", back_populates="users")
     
     def __repr__(self):
         return f"<User(id={self.id}, username={self.username}, role={self.role})>"
     
-    def to_dict(self):
+    def get_status(self) -> str:
+        """获取用户状态"""
+        if self.deleted_at:
+            return "deleted"
+        if not self.is_active:
+            return "inactive"
+        if self.locked_until and self.locked_until > datetime.utcnow():
+            return "locked"
+        if self.expires_at and self.expires_at < datetime.utcnow():
+            return "expired"
+        return "active"
+    
+    def to_dict(self, include_sessions: bool = False):
         """转换为字典（不包含敏感信息）"""
+        result = {
+            "id": self.id,
+            "username": self.username,
+            "email": self.email,
+            "phone": self.phone,
+            "nickname": self.nickname,
+            "avatar_url": self.avatar_url,
+            "remark": self.remark,
+            "role": self.role,
+            "status": self.get_status(),
+            "is_active": self.is_active,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "last_login": self.last_login.isoformat() if self.last_login else None,
+            "expires_at": self.expires_at.isoformat() if self.expires_at else None,
+            "allowed_devices": self.allowed_devices,
+            "offline_enabled": self.offline_enabled,
+            "offline_days": self.offline_days,
+            "failed_attempts": self.failed_attempts,
+            "locked_until": self.locked_until.isoformat() if self.locked_until else None,
+        }
+        if include_sessions:
+            result["active_sessions"] = len([s for s in self.sessions if not s.is_revoked])
+        return result
+    
+    def to_dict_simple(self):
+        """简化版字典（用于列表展示）"""
         return {
             "id": self.id,
             "username": self.username,
+            "nickname": self.nickname,
             "role": self.role,
+            "status": self.get_status(),
             "is_active": self.is_active,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "last_login": self.last_login.isoformat() if self.last_login else None,
-            "offline_enabled": self.offline_enabled,
-            "offline_days": self.offline_days
         }
 
 
@@ -311,6 +375,7 @@ class UserSession(Base):
     """
     用户会话表
     管理多设备登录和会话密钥
+    v1.1.0: 新增设备详情、状态、撤销字段
     """
     __tablename__ = "user_sessions"
     
@@ -328,6 +393,21 @@ class UserSession(Base):
     expires_at = Column(TIMESTAMP, nullable=False, comment="过期时间")
     last_active = Column(TIMESTAMP, default=datetime.utcnow, comment="最后活跃时间")
     
+    # 设备详情（v1.1.0 新增）
+    ip_address = Column(String(45), nullable=True, comment="登录IP")
+    user_agent = Column(String(500), nullable=True, comment="User-Agent")
+    platform = Column(String(50), nullable=True, comment="平台(win32/darwin/linux)")
+    app_version = Column(String(20), nullable=True, comment="客户端版本")
+    location = Column(String(100), nullable=True, comment="地理位置")
+    
+    # 状态（v1.1.0 新增）
+    current_status = Column(String(20), default='online', comment="当前状态")
+    
+    # 撤销/强制下线（v1.1.0 新增）
+    is_revoked = Column(Boolean, default=False, comment="是否被撤销")
+    revoked_at = Column(TIMESTAMP, nullable=True, comment="撤销时间")
+    revoked_by = Column(Integer, nullable=True, comment="撤销操作者ID")
+    
     # 关系
     user = relationship("User", back_populates="sessions")
     
@@ -338,3 +418,179 @@ class UserSession(Base):
     
     def __repr__(self):
         return f"<UserSession(user_id={self.user_id}, device={self.device_id})>"
+    
+    def to_dict(self):
+        """转换为字典"""
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "device_id": self.device_id,
+            "device_name": self.device_name,
+            "ip_address": self.ip_address,
+            "platform": self.platform,
+            "app_version": self.app_version,
+            "location": self.location,
+            "current_status": self.current_status,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "expires_at": self.expires_at.isoformat() if self.expires_at else None,
+            "last_active": self.last_active.isoformat() if self.last_active else None,
+            "is_revoked": self.is_revoked,
+        }
+
+
+class OperationLog(Base):
+    """
+    操作日志表
+    记录所有关键操作（v1.1.0 新增）
+    """
+    __tablename__ = "operation_logs"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    log_type = Column(String(20), nullable=False, comment="日志类型: LOGIN/USER/SESSION/SECURITY/SYSTEM")
+    action = Column(String(50), nullable=False, comment="具体动作")
+    
+    # 操作者
+    operator_id = Column(Integer, nullable=True, comment="操作者ID(null=系统)")
+    operator_name = Column(String(50), nullable=True, comment="操作者用户名")
+    
+    # 目标
+    target_type = Column(String(20), nullable=True, comment="目标类型: user/session/config")
+    target_id = Column(Integer, nullable=True, comment="目标ID")
+    target_name = Column(String(100), nullable=True, comment="目标名称")
+    
+    # 请求信息
+    ip_address = Column(String(45), nullable=True, comment="操作IP")
+    user_agent = Column(String(500), nullable=True, comment="User-Agent")
+    
+    # 详情
+    detail = Column(Text, nullable=True, comment="详细信息(JSON)")
+    old_value = Column(Text, nullable=True, comment="修改前的值(JSON)")
+    new_value = Column(Text, nullable=True, comment="修改后的值(JSON)")
+    
+    # 状态
+    status = Column(String(20), default='success', comment="状态: success/failed")
+    error_message = Column(Text, nullable=True, comment="错误信息")
+    
+    # 时间
+    created_at = Column(TIMESTAMP, default=datetime.utcnow, comment="创建时间")
+    
+    def __repr__(self):
+        return f"<OperationLog(id={self.id}, type={self.log_type}, action={self.action})>"
+    
+    def to_dict(self):
+        """转换为字典"""
+        import json
+        return {
+            "id": self.id,
+            "log_type": self.log_type,
+            "action": self.action,
+            "operator_id": self.operator_id,
+            "operator_name": self.operator_name,
+            "target_type": self.target_type,
+            "target_id": self.target_id,
+            "target_name": self.target_name,
+            "ip_address": self.ip_address,
+            "detail": json.loads(self.detail) if self.detail else None,
+            "old_value": json.loads(self.old_value) if self.old_value else None,
+            "new_value": json.loads(self.new_value) if self.new_value else None,
+            "status": self.status,
+            "error_message": self.error_message,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class SystemConfig(Base):
+    """
+    系统配置表
+    存储可配置的系统参数（v1.1.0 新增）
+    """
+    __tablename__ = "system_configs"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    config_key = Column(String(100), unique=True, nullable=False, comment="配置键")
+    config_value = Column(Text, nullable=False, comment="配置值")
+    config_type = Column(String(20), default='string', comment="值类型: string/int/bool/json")
+    category = Column(String(50), nullable=False, comment="分类: password/login/session/system")
+    description = Column(String(255), nullable=True, comment="描述")
+    updated_at = Column(TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow, comment="更新时间")
+    updated_by = Column(Integer, nullable=True, comment="更新者ID")
+    
+    def __repr__(self):
+        return f"<SystemConfig(key={self.config_key}, value={self.config_value})>"
+    
+    def get_value(self):
+        """获取类型转换后的值"""
+        if self.config_type == 'int':
+            return int(self.config_value)
+        elif self.config_type == 'bool':
+            return self.config_value.lower() == 'true'
+        elif self.config_type == 'json':
+            import json
+            return json.loads(self.config_value)
+        return self.config_value
+
+
+# 用户角色关联表（多对多）
+user_roles = Table(
+    'user_roles',
+    Base.metadata,
+    Column('user_id', Integer, ForeignKey('users.id', ondelete='CASCADE'), primary_key=True),
+    Column('role_id', Integer, ForeignKey('roles.id', ondelete='CASCADE'), primary_key=True),
+    Column('created_at', TIMESTAMP, default=datetime.utcnow)
+)
+
+
+class Role(Base):
+    """
+    角色表
+    定义系统角色和权限（v1.1.0 新增）
+    """
+    __tablename__ = "roles"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(50), unique=True, nullable=False, comment="角色代码")
+    display_name = Column(String(100), nullable=False, comment="显示名称")
+    description = Column(String(255), nullable=True, comment="描述")
+    permissions = Column(Text, nullable=False, default='[]', comment="权限列表(JSON)")
+    is_system = Column(Boolean, default=False, comment="是否系统预设")
+    is_active = Column(Boolean, default=True, comment="是否启用")
+    created_at = Column(TIMESTAMP, default=datetime.utcnow)
+    updated_at = Column(TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # 关系
+    users = relationship("User", secondary=user_roles, back_populates="roles")
+    
+    def __repr__(self):
+        return f"<Role(name={self.name}, display_name={self.display_name})>"
+    
+    def get_permissions(self):
+        """获取权限列表"""
+        import json
+        try:
+            return json.loads(self.permissions) if isinstance(self.permissions, str) else self.permissions
+        except:
+            return []
+    
+    def has_permission(self, permission: str) -> bool:
+        """检查是否有指定权限"""
+        perms = self.get_permissions()
+        if "*" in perms:
+            return True
+        if permission in perms:
+            return True
+        # 检查通配符权限，如 user:* 匹配 user:create
+        prefix = permission.split(":")[0] + ":*"
+        return prefix in perms
+    
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "display_name": self.display_name,
+            "description": self.description,
+            "permissions": self.get_permissions(),
+            "is_system": self.is_system,
+            "is_active": self.is_active,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None
+        }

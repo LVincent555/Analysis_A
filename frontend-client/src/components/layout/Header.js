@@ -25,42 +25,55 @@ const Header = ({
   const [updateInfo, setUpdateInfo] = useState(null);
   const [downloadProgress, setDownloadProgress] = useState(0);
   
-  // 监听更新事件
+  // 监听更新事件（仅用于手动检查更新时的状态同步）
+  // 注意：UpdateManager.js 已经处理了自动更新逻辑，这里只处理手动触发的更新
   useEffect(() => {
     if (!isElectron) return;
     
-    window.electronAPI.onUpdateAvailable?.((info) => {
-      console.log('🎉 发现新版本:', info);
+    // 用于标记是否是手动检查触发的
+    let isManualCheck = false;
+    
+    const handleUpdateAvailable = (info) => {
       setUpdateStatus('available');
       setUpdateInfo(info);
-    });
+    };
     
-    window.electronAPI.onUpdateNotAvailable?.(() => {
-      console.log('✅ 当前已是最新版本');
-      setUpdateStatus('idle');
-      alert('当前已是最新版本');
-    });
+    const handleUpdateNotAvailable = () => {
+      // 只有手动检查时才弹窗提示
+      if (isManualCheck) {
+        setUpdateStatus('idle');
+        isManualCheck = false;
+      }
+    };
     
-    window.electronAPI.onUpdateProgress?.((progress) => {
-      console.log('📥 下载进度:', progress.percent?.toFixed(1) + '%');
+    const handleUpdateProgress = (progress) => {
       setDownloadProgress(progress.percent || 0);
-    });
+    };
     
-    window.electronAPI.onUpdateDownloaded?.((version) => {
-      console.log('📦 更新下载完成:', version);
+    const handleUpdateDownloaded = () => {
       setUpdateStatus('downloaded');
       setDownloadProgress(100);
-    });
+    };
     
-    window.electronAPI.onUpdateError?.((err) => {
-      console.error('❌ 更新错误:', err);
-      setUpdateStatus('idle');
-      setDownloadProgress(0);
-      alert('更新失败: ' + err);
-    });
+    const handleUpdateError = (err) => {
+      if (isManualCheck) {
+        setUpdateStatus('idle');
+        setDownloadProgress(0);
+        isManualCheck = false;
+      }
+    };
+    
+    window.electronAPI.onUpdateAvailable?.(handleUpdateAvailable);
+    window.electronAPI.onUpdateNotAvailable?.(handleUpdateNotAvailable);
+    window.electronAPI.onUpdateProgress?.(handleUpdateProgress);
+    window.electronAPI.onUpdateDownloaded?.(handleUpdateDownloaded);
+    window.electronAPI.onUpdateError?.(handleUpdateError);
+    
+    // 暴露设置手动检查标记的方法
+    window.__setManualUpdateCheck = (val) => { isManualCheck = val; };
   }, []);
   
-  // 检查更新
+  // 检查更新（手动触发）
   const handleCheckUpdate = async () => {
     if (!isElectron) {
       alert('更新功能仅在桌面客户端可用');
@@ -70,30 +83,37 @@ const Header = ({
     console.log('🔄 手动检查更新...');
     setUpdateStatus('checking');
     
+    // 标记为手动检查
+    window.__setManualUpdateCheck?.(true);
+    
     // 15秒超时
     const timeoutId = setTimeout(() => {
       console.log('⏰ 更新检查超时');
       setUpdateStatus('idle');
+      window.__setManualUpdateCheck?.(false);
       alert('检查更新超时，请稍后重试');
     }, 15000);
     
     try {
       const token = authService.getToken();
-      console.log('Token:', token ? '已获取' : '未获取');
       const result = await window.electronAPI.checkForUpdates(token);
-      console.log('📥 检查更新返回:', result);
       clearTimeout(timeoutId);
       
       // 如果返回结果但没有触发事件，手动处理
       if (result && result.updateInfo) {
-        console.log('🎉 发现新版本:', result.updateInfo.version);
         setUpdateStatus('available');
         setUpdateInfo(result.updateInfo);
+      } else if (!result?.updateInfo) {
+        // 没有更新
+        setUpdateStatus('idle');
+        alert('当前已是最新版本');
       }
+      window.__setManualUpdateCheck?.(false);
     } catch (e) {
       clearTimeout(timeoutId);
       console.error('检查更新失败:', e);
       setUpdateStatus('idle');
+      window.__setManualUpdateCheck?.(false);
       alert('检查更新失败: ' + e.message);
     }
   };

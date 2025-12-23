@@ -1,38 +1,38 @@
 import React from 'react';
-import { 
-  BarChart2, Search, TrendingUp, TrendingDown, 
+import {
+  BarChart2, Search, TrendingUp, TrendingDown,
   ChevronUp, ChevronDown, RefreshCw, Activity,
-  Settings, Upload, Users, Shield
+  Settings, Upload, Users, Shield, UserCog, Monitor, FileText, Lock, Database
 } from 'lucide-react';
 
 /**
  * 侧边栏导航组件
  * 包含所有的模块切换和筛选逻辑
  */
-const Sidebar = ({ 
-  activeModule, 
+const Sidebar = ({
+  activeModule,
   setActiveModule,
-  expandedMenu, 
+  expandedMenu,
   toggleMenu,
-  
+
   // 各模块状态
   hotSpotsState,
   queryState,
   rankJumpState,
   steadyRiseState,
   industryTrendState,
-  
+
   // 用户信息
   user
 }) => {
   // 判断是否是管理员
   const isAdmin = user?.role === 'admin';
-  
+
   // 辅助函数：渲染菜单项
   const MenuItem = ({ id, icon: Icon, label, children, colorClass = "indigo" }) => {
     const isActive = activeModule === id || (id === 'query-system' && (activeModule === 'stock-query' || activeModule === 'industry-query'));
     const isExpanded = expandedMenu === id;
-    
+
     // 颜色映射
     const colors = {
       indigo: { bg: 'bg-indigo-50', text: 'text-indigo-700', hover: 'hover:bg-indigo-50', border: 'border-indigo-200' },
@@ -41,7 +41,7 @@ const Sidebar = ({
       orange: { bg: 'bg-orange-50', text: 'text-orange-700', hover: 'hover:bg-orange-50', border: 'border-orange-200' },
       blue: { bg: 'bg-blue-50', text: 'text-blue-700', hover: 'hover:bg-blue-50', border: 'border-blue-200' },
     };
-    
+
     const currentColors = colors[colorClass] || colors.indigo;
 
     return (
@@ -56,20 +56,19 @@ const Sidebar = ({
               toggleMenu(id);
               return;
             }
-            
+
             // 同时也展开/折叠菜单
             if (children) {
               toggleMenu(id);
             }
-            
+
             // 特殊处理：如果是最新热点，点击主菜单也触发刷新
             if (id === 'hot-spots') {
-               if (hotSpotsState.handleRefresh) hotSpotsState.handleRefresh();
+              if (hotSpotsState.handleRefresh) hotSpotsState.handleRefresh();
             }
           }}
-          className={`w-full flex items-center justify-between p-3 rounded-lg font-medium transition-all ${
-            isActive ? `${currentColors.bg} ${currentColors.text}` : 'text-gray-700 hover:bg-gray-50'
-          }`}
+          className={`w-full flex items-center justify-between p-3 rounded-lg font-medium transition-all ${isActive ? `${currentColors.bg} ${currentColors.text}` : 'text-gray-700 hover:bg-gray-50'
+            }`}
         >
           <div className="flex items-center space-x-2">
             <Icon className="h-5 w-5" />
@@ -100,13 +99,12 @@ const Sidebar = ({
       blue: 'bg-blue-100 text-blue-700',
       cyan: 'bg-cyan-100 text-cyan-700'
     };
-    
+
     return (
       <button
         onClick={onClick}
-        className={`w-full text-left py-2 px-3 rounded text-sm font-medium transition-colors ${
-          active ? colors[colorClass] : 'text-gray-600 hover:bg-gray-50'
-        }`}
+        className={`w-full text-left py-2 px-3 rounded text-sm font-medium transition-colors ${active ? colors[colorClass] : 'text-gray-600 hover:bg-gray-50'
+          }`}
       >
         {label} {subLabel && <span className="text-xs opacity-75">{subLabel}</span>}
       </button>
@@ -127,20 +125,20 @@ const Sidebar = ({
           {/* 1. 最新热点 */}
           <MenuItem id="hot-spots" icon={BarChart2} label="最新热点" colorClass="indigo">
             <div className="text-xs font-semibold text-gray-500 uppercase mb-2">板块类型</div>
-            <FilterButton 
-              active={hotSpotsState.boardType === 'main'} 
-              onClick={() => hotSpotsState.setBoardType('main')} 
-              label="主板" subLabel="(排除双创)" 
+            <FilterButton
+              active={hotSpotsState.boardType === 'main'}
+              onClick={() => hotSpotsState.setBoardType('main')}
+              label="主板" subLabel="(排除双创)"
             />
-            <FilterButton 
-              active={hotSpotsState.boardType === 'all'} 
-              onClick={() => hotSpotsState.setBoardType('all')} 
-              label="全部" subLabel="(含双创)" 
+            <FilterButton
+              active={hotSpotsState.boardType === 'all'}
+              onClick={() => hotSpotsState.setBoardType('all')}
+              label="全部" subLabel="(含双创)"
             />
-            <FilterButton 
-              active={hotSpotsState.boardType === 'bjs'} 
-              onClick={() => hotSpotsState.setBoardType('bjs')} 
-              label="北交所" subLabel="(920开头)" 
+            <FilterButton
+              active={hotSpotsState.boardType === 'bjs'}
+              onClick={() => hotSpotsState.setBoardType('bjs')}
+              label="北交所" subLabel="(920开头)"
             />
 
             <div className="text-xs font-semibold text-gray-500 uppercase mb-2 mt-4">分析周期</div>
@@ -149,9 +147,8 @@ const Sidebar = ({
                 <button
                   key={p}
                   onClick={() => hotSpotsState.setSelectedPeriod(p)}
-                  className={`py-2 px-2 rounded text-sm font-medium transition-colors ${
-                    hotSpotsState.selectedPeriod === p ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
+                  className={`py-2 px-2 rounded text-sm font-medium transition-colors ${hotSpotsState.selectedPeriod === p ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
                 >
                   {p}天
                 </button>
@@ -164,9 +161,8 @@ const Sidebar = ({
                 <button
                   key={n}
                   onClick={() => hotSpotsState.setTopN(n)}
-                  className={`py-2 px-2 rounded text-sm font-medium transition-colors ${
-                    hotSpotsState.topN === n ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
+                  className={`py-2 px-2 rounded text-sm font-medium transition-colors ${hotSpotsState.topN === n ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
                 >
                   前{n}个
                 </button>
@@ -191,33 +187,31 @@ const Sidebar = ({
                 setActiveModule('stock-query');
                 queryState.setQuerySubModule('stock');
               }}
-              className={`w-full text-left py-2 px-3 rounded text-sm font-medium transition-colors ${
-                activeModule === 'stock-query'
-                  ? 'bg-purple-100 text-purple-700'
-                  : 'text-gray-600 hover:bg-gray-50'
-              }`}
+              className={`w-full text-left py-2 px-3 rounded text-sm font-medium transition-colors ${activeModule === 'stock-query'
+                ? 'bg-purple-100 text-purple-700'
+                : 'text-gray-600 hover:bg-gray-50'
+                }`}
             >
               🔍 股票查询
             </button>
 
             {/* 板块查询 */}
-            <FilterButton 
-              active={activeModule === 'industry-query'} 
+            <FilterButton
+              active={activeModule === 'industry-query'}
               onClick={() => {
                 setActiveModule('industry-query');
                 queryState.setQuerySubModule('industry');
-              }} 
+              }}
               label="📊 板块查询" colorClass="purple"
             />
 
             {/* 当日DC数据 */}
             <button
               onClick={() => setActiveModule('sector-query')}
-              className={`w-full text-left py-2 px-3 rounded text-sm font-medium transition-colors ${
-                activeModule === 'sector-query'
-                  ? 'bg-purple-100 text-purple-700'
-                  : 'text-gray-600 hover:bg-gray-50'
-              }`}
+              className={`w-full text-left py-2 px-3 rounded text-sm font-medium transition-colors ${activeModule === 'sector-query'
+                ? 'bg-purple-100 text-purple-700'
+                : 'text-gray-600 hover:bg-gray-50'
+                }`}
             >
               📋 当日DC数据
             </button>
@@ -225,11 +219,10 @@ const Sidebar = ({
             {/* 当日股票排名 */}
             <button
               onClick={() => setActiveModule('stock-ranking')}
-              className={`w-full text-left py-2 px-3 rounded text-sm font-medium transition-colors ${
-                activeModule === 'stock-ranking'
-                  ? 'bg-purple-100 text-purple-700'
-                  : 'text-gray-600 hover:bg-gray-50'
-              }`}
+              className={`w-full text-left py-2 px-3 rounded text-sm font-medium transition-colors ${activeModule === 'stock-ranking'
+                ? 'bg-purple-100 text-purple-700'
+                : 'text-gray-600 hover:bg-gray-50'
+                }`}
             >
               📈 当日股票排名
             </button>
@@ -238,8 +231,8 @@ const Sidebar = ({
           {/* 3. 行业趋势 */}
           <MenuItem id="industry-trend" icon={TrendingUp} label="行业趋势分析" colorClass="green">
             {/* 数量统计 */}
-            <FilterButton 
-              active={activeModule === 'industry-trend'} 
+            <FilterButton
+              active={activeModule === 'industry-trend'}
               onClick={() => setActiveModule('industry-trend')}
               label="📊 股票板块-直接数量统计" colorClass="green"
             />
@@ -251,9 +244,8 @@ const Sidebar = ({
                     <button
                       key={limit}
                       onClick={() => industryTrendState.setTopNLimit(limit)}
-                      className={`py-2 px-2 rounded text-sm font-medium transition-colors ${
-                        industryTrendState.topNLimit === limit ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }`}
+                      className={`py-2 px-2 rounded text-sm font-medium transition-colors ${industryTrendState.topNLimit === limit ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
                     >
                       前{limit}
                     </button>
@@ -265,11 +257,10 @@ const Sidebar = ({
             {/* 权值热度 */}
             <button
               onClick={() => setActiveModule('industry-weighted')}
-              className={`w-full text-left py-2 px-3 rounded text-sm font-medium transition-colors ${
-                activeModule === 'industry-weighted'
-                  ? 'bg-gradient-to-r from-green-100 to-indigo-100 text-indigo-700 border-l-4 border-indigo-500'
-                  : 'text-gray-600 hover:bg-gray-50'
-              }`}
+              className={`w-full text-left py-2 px-3 rounded text-sm font-medium transition-colors ${activeModule === 'industry-weighted'
+                ? 'bg-gradient-to-r from-green-100 to-indigo-100 text-indigo-700 border-l-4 border-indigo-500'
+                : 'text-gray-600 hover:bg-gray-50'
+                }`}
             >
               🔥 股票板块-权值热度
             </button>
@@ -277,13 +268,24 @@ const Sidebar = ({
             {/* 板块数据 */}
             <button
               onClick={() => setActiveModule('sector-trend')}
-              className={`w-full text-left py-2 px-3 rounded text-sm font-medium transition-colors ${
-                activeModule === 'sector-trend'
-                  ? 'bg-gradient-to-r from-blue-100 to-cyan-100 text-cyan-700 border-l-4 border-cyan-500'
-                  : 'text-gray-600 hover:bg-gray-50'
-              }`}
+              className={`w-full text-left py-2 px-3 rounded text-sm font-medium transition-colors ${activeModule === 'sector-trend'
+                ? 'bg-gradient-to-r from-blue-100 to-cyan-100 text-cyan-700 border-l-4 border-cyan-500'
+                : 'text-gray-600 hover:bg-gray-50'
+                }`}
             >
               📈 dc板块数据分析
+            </button>
+
+            {/* 东财板块热度榜 */}
+            <button
+              onClick={() => setActiveModule('ext-board-heat')}
+              className={`w-full text-left py-2 px-3 rounded text-sm font-medium transition-colors ${activeModule === 'ext-board-heat'
+                ? 'bg-gradient-to-r from-orange-100 to-red-100 text-orange-700 border-l-4 border-orange-500'
+                : 'text-gray-600 hover:bg-gray-50'
+                }`}
+            >
+              🔥 东财板块热度榜
+              <span className="ml-2 text-xs bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded">NEW</span>
             </button>
           </MenuItem>
 
@@ -293,14 +295,14 @@ const Sidebar = ({
             <FilterButton active={rankJumpState.boardType === 'main'} onClick={() => rankJumpState.setBoardType('main')} label="主板" colorClass="orange" />
             <FilterButton active={rankJumpState.boardType === 'all'} onClick={() => rankJumpState.setBoardType('all')} label="全部" colorClass="orange" />
             <FilterButton active={rankJumpState.boardType === 'bjs'} onClick={() => rankJumpState.setBoardType('bjs')} label="北交所" colorClass="orange" />
-            
+
             <div className="text-xs font-semibold text-gray-500 uppercase mb-2 mt-4">跳变阈值</div>
             <div className="space-y-2">
               {[1000, 1500, 2000, 2500, 3000].map(t => (
-                <FilterButton 
+                <FilterButton
                   key={t}
-                  active={rankJumpState.threshold === t} 
-                  onClick={() => rankJumpState.setThreshold(t)} 
+                  active={rankJumpState.threshold === t}
+                  onClick={() => rankJumpState.setThreshold(t)}
                   label={`向前跳变 ≥${t}名`} colorClass="orange"
                 />
               ))}
@@ -309,43 +311,42 @@ const Sidebar = ({
 
           {/* 5. 稳步上升 */}
           <MenuItem id="steady-rise" icon={TrendingDown} label="稳步上升" colorClass="blue">
-             <div className="text-xs font-semibold text-gray-500 uppercase mb-2">板块类型</div>
-             <FilterButton active={steadyRiseState.boardType === 'main'} onClick={() => steadyRiseState.setBoardType('main')} label="主板" colorClass="blue" />
-             <FilterButton active={steadyRiseState.boardType === 'all'} onClick={() => steadyRiseState.setBoardType('all')} label="全部" colorClass="blue" />
-             <FilterButton active={steadyRiseState.boardType === 'bjs'} onClick={() => steadyRiseState.setBoardType('bjs')} label="北交所" colorClass="blue" />
-             
-             <div className="text-xs font-semibold text-gray-500 uppercase mb-2 mt-4">分析周期</div>
-             <div className="grid grid-cols-2 gap-2">
-               {[2, 3, 5, 7, 14].map(p => (
-                 <button key={p} onClick={() => steadyRiseState.setPeriod(p)} 
-                   className={`py-2 px-2 rounded text-sm font-medium transition-colors ${steadyRiseState.period === p ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
-                   {p}天
-                 </button>
-               ))}
-             </div>
+            <div className="text-xs font-semibold text-gray-500 uppercase mb-2">板块类型</div>
+            <FilterButton active={steadyRiseState.boardType === 'main'} onClick={() => steadyRiseState.setBoardType('main')} label="主板" colorClass="blue" />
+            <FilterButton active={steadyRiseState.boardType === 'all'} onClick={() => steadyRiseState.setBoardType('all')} label="全部" colorClass="blue" />
+            <FilterButton active={steadyRiseState.boardType === 'bjs'} onClick={() => steadyRiseState.setBoardType('bjs')} label="北交所" colorClass="blue" />
 
-             <div className="text-xs font-semibold text-gray-500 uppercase mb-2 mt-4">最小提升幅度</div>
-             <div className="space-y-2">
-               {[100, 500, 1000, 2000].map(t => (
-                 <FilterButton 
-                   key={t}
-                   active={steadyRiseState.minImprovement === t} 
-                   onClick={() => steadyRiseState.setMinImprovement(t)} 
-                   label={`提升 ≥${t}名`} colorClass="blue"
-                 />
-               ))}
-             </div>
+            <div className="text-xs font-semibold text-gray-500 uppercase mb-2 mt-4">分析周期</div>
+            <div className="grid grid-cols-2 gap-2">
+              {[2, 3, 5, 7, 14].map(p => (
+                <button key={p} onClick={() => steadyRiseState.setPeriod(p)}
+                  className={`py-2 px-2 rounded text-sm font-medium transition-colors ${steadyRiseState.period === p ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
+                  {p}天
+                </button>
+              ))}
+            </div>
+
+            <div className="text-xs font-semibold text-gray-500 uppercase mb-2 mt-4">最小提升幅度</div>
+            <div className="space-y-2">
+              {[100, 500, 1000, 2000].map(t => (
+                <FilterButton
+                  key={t}
+                  active={steadyRiseState.minImprovement === t}
+                  onClick={() => steadyRiseState.setMinImprovement(t)}
+                  label={`提升 ≥${t}名`} colorClass="blue"
+                />
+              ))}
+            </div>
           </MenuItem>
-          
+
           {/* 6. 策略：单针下二十 */}
           <div className="mb-2">
             <button
               onClick={() => setActiveModule('needle-under-20')}
-              className={`w-full flex items-center justify-between p-3 rounded-lg font-medium transition-all ${
-                activeModule === 'needle-under-20'
-                  ? 'bg-rose-50 text-rose-700 border border-rose-200'
-                  : 'text-gray-700 hover:bg-gray-50'
-              }`}
+              className={`w-full flex items-center justify-between p-3 rounded-lg font-medium transition-all ${activeModule === 'needle-under-20'
+                ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                : 'text-gray-700 hover:bg-gray-50'
+                }`}
             >
               <div className="flex items-center space-x-2">
                 <TrendingDown className="h-5 w-5 text-rose-500" />
@@ -362,11 +363,10 @@ const Sidebar = ({
                 {/* 系统管理主菜单 */}
                 <button
                   onClick={() => toggleMenu('system-admin')}
-                  className={`w-full flex items-center justify-between p-3 rounded-lg font-medium transition-all ${
-                    activeModule === 'admin' || activeModule === 'user-login-history'
-                      ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                      : 'text-gray-700 hover:bg-gray-50'
-                  }`}
+                  className={`w-full flex items-center justify-between p-3 rounded-lg font-medium transition-all ${['admin', 'user-management', 'session-management', 'operation-logs', 'system-config', 'role-management', 'user-security-settings'].includes(activeModule)
+                    ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                    : 'text-gray-700 hover:bg-gray-50'
+                    }`}
                 >
                   <div className="flex items-center space-x-2">
                     <Shield className="h-5 w-5 text-amber-500" />
@@ -383,34 +383,104 @@ const Sidebar = ({
                     )}
                   </div>
                 </button>
-                
+
                 {/* 子菜单 */}
                 {expandedMenu === 'system-admin' && (
-                  <div className="mt-2 ml-4 space-y-1 border-l-2 border-amber-200 pl-3">
+                  <div className="mt-2 ml-4 space-y-3 border-l-2 border-amber-200 pl-3">
                     {/* 数据管理 */}
                     <button
                       onClick={() => setActiveModule('admin')}
-                      className={`w-full text-left py-2 px-3 rounded text-sm font-medium transition-colors flex items-center space-x-2 ${
-                        activeModule === 'admin'
-                          ? 'bg-amber-100 text-amber-700'
-                          : 'text-gray-600 hover:bg-amber-50'
-                      }`}
+                      className={`w-full text-left py-2 px-3 rounded text-sm font-medium transition-colors flex items-center space-x-2 ${activeModule === 'admin'
+                        ? 'bg-amber-100 text-amber-700'
+                        : 'text-gray-600 hover:bg-amber-50'
+                        }`}
                     >
                       <Upload className="h-4 w-4" />
                       <span>数据管理</span>
                     </button>
-                    
-                    {/* 用户登录记录 */}
+
+                    {/* 外部板块同步 */}
                     <button
-                      onClick={() => setActiveModule('user-login-history')}
-                      className={`w-full text-left py-2 px-3 rounded text-sm font-medium transition-colors flex items-center space-x-2 ${
-                        activeModule === 'user-login-history'
+                      onClick={() => setActiveModule('ext-board-sync')}
+                      className={`w-full text-left py-2 px-3 rounded text-sm font-medium transition-colors flex items-center space-x-2 ${activeModule === 'ext-board-sync'
+                        ? 'bg-amber-100 text-amber-700'
+                        : 'text-gray-600 hover:bg-amber-50'
+                        }`}
+                    >
+                      <Database className="h-4 w-4" />
+                      <span>外部板块同步</span>
+                    </button>
+
+                    {/* 用户中心分组 */}
+                    <div className="text-xs text-amber-600 font-semibold mt-2">用户中心</div>
+                    <div className="space-y-1">
+                      <button
+                        onClick={() => setActiveModule('user-management')}
+                        className={`w-full text-left py-2 px-3 rounded text-sm font-medium transition-colors flex items-center space-x-2 ${activeModule === 'user-management'
                           ? 'bg-amber-100 text-amber-700'
                           : 'text-gray-600 hover:bg-amber-50'
-                      }`}
+                          }`}
+                      >
+                        <UserCog className="h-4 w-4" />
+                        <span>用户管理</span>
+                      </button>
+
+                      <button
+                        onClick={() => setActiveModule('role-management')}
+                        className={`w-full text-left py-2 px-3 rounded text-sm font-medium transition-colors flex items-center space-x-2 ${activeModule === 'role-management'
+                          ? 'bg-amber-100 text-amber-700'
+                          : 'text-gray-600 hover:bg-amber-50'
+                          }`}
+                      >
+                        <Shield className="h-4 w-4" />
+                        <span>角色管理</span>
+                      </button>
+
+                      <button
+                        onClick={() => setActiveModule('session-management')}
+                        className={`w-full text-left py-2 px-3 rounded text-sm font-medium transition-colors flex items-center space-x-2 ${activeModule === 'session-management'
+                          ? 'bg-amber-100 text-amber-700'
+                          : 'text-gray-600 hover:bg-amber-50'
+                          }`}
+                      >
+                        <Monitor className="h-4 w-4" />
+                        <span>会话管理</span>
+                      </button>
+
+                      <button
+                        onClick={() => setActiveModule('operation-logs')}
+                        className={`w-full text-left py-2 px-3 rounded text-sm font-medium transition-colors flex items-center space-x-2 ${activeModule === 'operation-logs'
+                          ? 'bg-amber-100 text-amber-700'
+                          : 'text-gray-600 hover:bg-amber-50'
+                          }`}
+                      >
+                        <FileText className="h-4 w-4" />
+                        <span>操作日志</span>
+                        <span className="text-xs text-gray-400 ml-1">(含登录记录)</span>
+                      </button>
+                    </div>
+
+                    {/* 系统配置分组 - [v2.2.1] 将"安全策略"移到这里 */}
+                    <div className="text-xs text-amber-600 font-semibold mt-3">系统配置</div>
+                    <button
+                      onClick={() => setActiveModule('user-security-settings')}
+                      className={`w-full text-left py-2 px-3 rounded text-sm font-medium transition-colors flex items-center space-x-2 ${activeModule === 'user-security-settings'
+                        ? 'bg-amber-100 text-amber-700'
+                        : 'text-gray-600 hover:bg-amber-50'
+                        }`}
                     >
-                      <Users className="h-4 w-4" />
-                      <span>用户登录记录</span>
+                      <Lock className="h-4 w-4" />
+                      <span>安全策略</span>
+                    </button>
+                    <button
+                      onClick={() => setActiveModule('system-config')}
+                      className={`w-full text-left py-2 px-3 rounded text-sm font-medium transition-colors flex items-center space-x-2 ${activeModule === 'system-config'
+                        ? 'bg-amber-100 text-amber-700'
+                        : 'text-gray-600 hover:bg-amber-50'
+                        }`}
+                    >
+                      <Settings className="h-4 w-4" />
+                      <span>系统设置</span>
                     </button>
                   </div>
                 )}

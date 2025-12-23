@@ -89,6 +89,16 @@ class SecureApiService {
 
       // 解密响应
       const decryptedResponse = this.crypto.decrypt(response.data.data);
+      // 若解密结果是字符串，尝试 JSON 解析
+      if (typeof decryptedResponse === 'string') {
+        try {
+          return JSON.parse(decryptedResponse);
+        } catch (e) {
+          // 不是标准 JSON，则原样返回
+          console.warn('secureApi: response is plain string, not JSON');
+          return decryptedResponse;
+        }
+      }
       return decryptedResponse;
 
     } catch (error) {

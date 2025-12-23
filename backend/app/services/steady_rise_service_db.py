@@ -28,7 +28,9 @@ class SteadyRiseServiceDB:
         board_type: str = 'main',
         min_rank_improvement: int = 100,
         sigma_multiplier: float = 1.0,
-        target_date: Optional[str] = None
+        target_date: Optional[str] = None,
+        calculate_signals: bool = False,
+        signal_thresholds = None
     ) -> SteadyRiseResult:
         """
         稳步上升分析
@@ -57,7 +59,20 @@ class SteadyRiseServiceDB:
         date_str = target_date_obj.strftime('%Y%m%d')
         
         # v0.5.0: 使用统一缓存系统 (直接缓存对象，避免反序列化开销)
-        cache_key = f"steady_rise_{period}_{board_type}_{min_rank_improvement}_{sigma_multiplier}_{date_str}"
+        if calculate_signals and signal_thresholds:
+            threshold_hash = (
+                f"{signal_thresholds.hot_list_mode}_"
+                f"{signal_thresholds.hot_list_version}_"
+                f"{signal_thresholds.hot_list_top}_"
+                f"{signal_thresholds.rank_jump_min}_"
+                f"{signal_thresholds.steady_rise_days_min}_"
+                f"{signal_thresholds.price_surge_min}_"
+                f"{signal_thresholds.volume_surge_min}_"
+                f"{signal_thresholds.volatility_surge_min}"
+            )
+            cache_key = f"steady_rise_{period}_{board_type}_{min_rank_improvement}_{sigma_multiplier}_{date_str}_{threshold_hash}"
+        else:
+            cache_key = f"steady_rise_{period}_{board_type}_{min_rank_improvement}_{sigma_multiplier}_{date_str}"
         cached = cache.get_api_cache("steady_rise", cache_key)
         if cached:
             logger.info(f"✨ 缓存命中: {cache_key}")
@@ -166,6 +181,32 @@ class SteadyRiseServiceDB:
             stock for stock in steady_stocks
             if lower_bound <= stock.total_improvement <= upper_bound
         ]
+
+        if calculate_signals and signal_thresholds:
+            from ..services.signal_calculator import SignalCalculator
+
+            calculator = SignalCalculator(signal_thresholds)
+            for stock in steady_stocks:
+                try:
+                    current_data = {
+                        'rank': stock.end_rank,
+                        'price_change': stock.price_change,
+                        'turnover_rate': stock.turnover_rate,
+                        'volatility': stock.volatility
+                    }
+                    signals_dict = calculator.calculate_signals(
+                        stock_code=stock.code,
+                        current_date=target_dates[-1],
+                        current_data=current_data,
+                        history_days=7,
+                        simplify_hot_labels=True
+                    )
+                    signals = [s for s in signals_dict.get('signals', []) if '上升' not in s]
+                    stock.signals = signals
+                    stock.signal_count = len(signals)
+                except Exception:
+                    stock.signals = []
+                    stock.signal_count = 0
         
         # 构建结果
         result = SteadyRiseResult(

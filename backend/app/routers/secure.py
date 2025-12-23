@@ -7,6 +7,7 @@ import logging
 import json
 from io import BytesIO
 from typing import Any
+import httpx
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.routing import APIRoute
@@ -81,46 +82,42 @@ async def secure_gateway(
         if abs(current_time - timestamp) > 300000:
             raise HTTPException(400, "请求已过期")
         
-        # 4. 内部路由调用
+        # 4. 内部路由调用（使用 httpx ASGI 客户端，确保依赖注入生效）
         app = request.app
-        
-        # 构建查询字符串
-        query_string = "&".join(f"{k}={v}" for k, v in params.items()) if params else ""
-        
-        # 构建内部请求的scope
-        scope = {
-            "type": "http",
-            "method": method,
-            "path": path,
-            "query_string": query_string.encode(),
-            "headers": [
-                (b"content-type", b"application/json"),
-                (b"x-forwarded-user", str(user.id).encode()),
-            ],
-            "app": app,
-            "state": {"user": user, "user_id": user.id},
+
+        # 透传原始认证头，避免二次认证失败
+        auth_header = request.headers.get("authorization")
+        headers = {
+            "content-type": "application/json",
+            "x-forwarded-user": str(user.id),
+            "x-secure-gateway": "1",  # 标记为网关内部调用，绕过 FORCE_SECURE_API
         }
-        
-        # 构建请求体
-        if body:
-            body_bytes = json.dumps(body).encode() if isinstance(body, dict) else str(body).encode()
-        else:
-            body_bytes = b""
-        
-        # 创建内部请求
-        async def receive():
-            return {"type": "http.request", "body": body_bytes, "more_body": False}
-        
-        internal_request = Request(scope, receive)
-        internal_request.state.user = user
-        internal_request.state.user_id = user.id
-        
-        # 5. 查找并执行路由
-        result = await _call_internal_route(app, path, method, params, body, user)
-        
-        # 6. 加密响应
-        encrypted_response = crypto.encrypt(result)
-        
+        if auth_header:
+            headers["authorization"] = auth_header
+
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://internal") as client:
+            resp = await client.request(
+                method,
+                path,
+                params=params or None,
+                json=body if body is not None else None,
+                headers=headers,
+            )
+
+        if resp.status_code >= 400:
+            detail = resp.text
+            try:
+                detail_json = resp.json()
+                detail = detail_json.get("detail", detail)
+            except Exception:
+                pass
+            logger.warning(f"加密网关HTTP错误: {resp.status_code} - {detail}")
+            raise HTTPException(status_code=resp.status_code, detail=detail)
+
+        # 5. 加密响应
+        result_data = resp.json()
+        encrypted_response = crypto.encrypt(result_data)
         return SecureResponse(data=encrypted_response)
         
     except HTTPException as he:

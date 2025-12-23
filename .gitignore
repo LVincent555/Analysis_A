@@ -95,3 +95,24 @@ service_config.json
 
 # v0.4.0 敏感文件 - 包含密码，绝不提交
 docs/client/默认账户信息.md
+
+# 幽灵协议 - SSL 证书 (私钥绝不提交)
+*.key
+*.csr
+*.pem
+ca.crt
+ca.srl
+server_ext.cnf
+# 允许提交 .gitkeep
+!backend/certs/.gitkeep
+!frontend-client/assets/certs/.gitkeep
+# 证书目录下的证书也忽略
+backend/certs/
+frontend-client/assets/certs/
+scripts/certs/
+
+# [v2.2.1] 新增忽略
+backend/app/.cache/
+frontend-client/build/
+frontend-client/dist/
+.npm/

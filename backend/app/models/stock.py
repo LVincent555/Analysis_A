@@ -88,6 +88,8 @@ class RankJumpStock(BaseModel):
     rank_change: int  # 排名变化（正数表示向前跳）
     latest_date: str  # 最新日期
     previous_date: str  # 前一天日期
+    signals: Optional[List[str]] = None
+    signal_count: Optional[int] = None
     # 技术指标
     price_change: Optional[float] = None  # 涨跌幅
     turnover_rate: Optional[float] = None  # 换手率
@@ -121,6 +123,8 @@ class SteadyRiseStock(BaseModel):
     avg_daily_improvement: float  # 平均每天提升
     rank_history: List[int]  # 排名历史
     dates: List[str]  # 日期列表
+    signals: Optional[List[str]] = None
+    signal_count: Optional[int] = None
     # 技术指标（最新一天的）
     price_change: Optional[float] = None
     turnover_rate: Optional[float] = None

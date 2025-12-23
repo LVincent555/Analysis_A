@@ -4,6 +4,8 @@
  */
 const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const path = require('path');
+const os = require('os');
+const { randomUUID } = require('crypto');
 const database = require('./database');
 
 // 判断是否开发模式
@@ -11,6 +13,7 @@ const isDev = !app.isPackaged;
 
 let mainWindow = null;
 let autoUpdater = null;
+let cachedDeviceId = null;
 
 // 尝试加载自动更新模块
 try {
@@ -19,6 +22,27 @@ try {
   autoUpdater.autoInstallOnAppQuit = true;
 } catch (e) {
   console.warn('electron-updater 未安装，自动更新功能不可用');
+}
+
+/**
+ * 获取或创建持久化设备ID
+ */
+async function getOrCreateDeviceId() {
+  if (cachedDeviceId) return cachedDeviceId;
+
+  // 尝试从本地数据库读取
+  const savedId = database.getDeviceInfo('device_id');
+  if (savedId) {
+    cachedDeviceId = savedId;
+    return cachedDeviceId;
+  }
+
+  // 生成新ID（使用主机名 + UUID）
+  const hostname = os.hostname() || 'unknown';
+  const newId = `device-${hostname}-${randomUUID()}`;
+  database.setDeviceInfo('device_id', newId);
+  cachedDeviceId = newId;
+  return cachedDeviceId;
 }
 
 /**
@@ -228,6 +252,12 @@ ipcMain.handle('window:close', () => {
   if (mainWindow) {
     mainWindow.close();
   }
+});
+
+// ==================== 设备指纹 ====================
+
+ipcMain.handle('device:getId', async () => {
+  return await getOrCreateDeviceId();
 });
 
 // ==================== 数据库 IPC 处理器 ====================

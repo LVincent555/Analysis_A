@@ -1,5 +1,108 @@
 # 更新日志 (Changelog)
 
+## [v0.6.1] - 2025-12-23
+
+### 🔐 系统管理模块强化与统一缓存集成
+
+#### 🆕 新增功能
+
+**无状态策略引擎 (`PolicyEngine`)**
+- 统一管理密码策略、登录策略、会话策略
+- 支持按 Key 限频告警（每分钟同 Key 只报一次 MISS）
+- 优先级决议：用户特定字段 > 全局系统配置 > 代码默认值
+
+**统一缓存系统集成 (UnifiedCache)**
+- `config` 分区改用 `WriteThroughPolicy(ttl=0)` 策略
+- 实现应用启动时全量预热系统配置到内存
+- 支持配置更新后的即时热刷新（Write-Through 机制）
+
+**登录安全流程重构**
+- 严格执行"先检查锁定状态，再验证密码"的安全逻辑
+- 防止在账户锁定期间继续累加失败次数或执行耗时的哈希验证
+- 动态 Token TTL：根据 session 策略动态生成 Access/Refresh Token
+- 动态设备限制：支持全局和用户级的最大并发设备数限制
+
+#### 🎨 前端菜单收敛
+
+**界面优化**
+- 菜单精简：删除原"登录记录"菜单（已并入"操作日志"，支持 `LOGIN` 类型筛选）
+- 菜单重组：将"用户登录设置"更名为"安全策略"，并移至"系统配置"分组
+- 功能整合：将分散在用户中心的策略配置与系统配置统一归口
+
+#### 🔧 技术改进
+
+- **facade.py**: 增强 `PublicCache`，添加 `reload_configs` 和 `get_config` 支持 JSON 解析
+- **config_service.py**: 修改 `update` 方法，确保数据库变更后同步刷新 UnifiedCache
+- **main.py**: 在 `lifespan` 钩子中注入配置预热逻辑
+
+#### 📁 新增/修改文件
+
+```
+backend/app/
+├── services/policy_engine.py    # 新增：策略引擎
+├── main.py                     # 修改：生命周期预热
+├── core/caching/facade.py      # 修改：缓存门面增强
+├── routers/auth.py             # 修改：安全登录流程
+└── services/config_service.py   # 修改：配置同步刷新
+
+frontend-client/src/
+├── components/layout/Sidebar.js # 修改：菜单收敛
+├── pages/UserSecuritySettings.js # 修改：更名安全策略
+└── pages/SystemConfig.js        # 修改：文案更新
+```
+
+---
+
+## [v0.5.0] - 2025-12-13
+
+### 🔥 板块热度计算 ETL 集成
+
+#### 🆕 新增功能
+
+**板块热度计算 ETL (`task_board_heat.py`)**
+- 后台管理页面新增"板块热度计算"区块
+- 支持指定日期/全部日期/强制重算/允许借用快照
+- 实时日志轮询显示
+- 任务取消支持
+
+**A股交易日自动对齐**
+- 同步脚本 (`sync_ext_boards.py`) 自动将非交易日回退到最近交易日
+- 热度计算脚本 (`task_board_heat.py`) 同样支持交易日回退
+- 避免周末/节假日产生无效快照
+
+**数据库修复工具 (`fix_snap_date.py`)**
+- 一键修复 `ext_board_daily_snap` 中非交易日的快照日期
+- 自动检测并回退到最近交易日
+
+#### 🐛 Bug修复
+
+- 修复 Windows 下 `asyncio.create_subprocess_exec` 不支持的问题（改用 `ThreadPoolExecutor + subprocess.Popen`）
+- 修复 `--all` 和 `--date` 同时使用时 `--all` 不生效的问题
+
+#### 📁 新增文件
+
+```
+backend/scripts/
+├── task_board_heat.py      # 板块热度计算脚本（已有，集成到后台）
+└── fix_snap_date.py        # 快照日期修复工具（新增）
+
+backend/app/routers/ext_board_mgmt.py
+└── 新增 /heat/calc, /heat/status, /heat/cancel 接口
+
+frontend-client/src/pages/ExtBoardSync.js
+└── 新增"板块热度计算 (ETL)"区块
+```
+
+#### 📚 API 新增
+
+| 接口 | 方法 | 说明 |
+|------|------|------|
+| `/api/admin/ext-boards/heat/calc` | POST | 触发热度计算任务 |
+| `/api/admin/ext-boards/heat/status` | GET | 获取任务状态和日志 |
+| `/api/admin/ext-boards/heat/cancel` | POST | 取消正在运行的任务 |
+
+---
+
 ## [v0.4.0] - 2025-12-01
 
 ### 🔐 重大更新：桌面客户端 + 加密通信系统

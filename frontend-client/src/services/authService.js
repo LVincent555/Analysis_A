@@ -27,9 +27,9 @@ class AuthService {
    * 用户登录
    */
   async login(username, password, deviceId = null) {
-    // 生成设备ID
+    // 生成/获取设备ID（优先 Electron 持久化）
     if (!deviceId) {
-      deviceId = this.getDeviceId();
+      deviceId = await this.resolveDeviceId();
     }
 
     try {
@@ -194,6 +194,24 @@ class AuthService {
       localStorage.setItem('device_id', deviceId);
     }
     return deviceId;
+  }
+
+  /**
+   * 解析设备ID：优先 Electron 提供的持久化指纹
+   */
+  async resolveDeviceId() {
+    try {
+      if (window.electronAPI && window.electronAPI.getDeviceId) {
+        const id = await window.electronAPI.getDeviceId();
+        if (id) {
+          localStorage.setItem('device_id', id); // 兼容 Web 存储
+          return id;
+        }
+      }
+    } catch (e) {
+      console.warn('获取设备ID失败，使用本地存储ID:', e);
+    }
+    return this.getDeviceId();
   }
 
   /**

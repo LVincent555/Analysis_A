@@ -241,6 +241,36 @@ export default function SignalConfigPanel() {
               </select>
               <p className="text-xs text-indigo-700 mt-2">波动率百分比变化≥X%</p>
             </div>
+
+            {/* 板块数据源 */}
+            <div className="bg-teal-50 border border-teal-200 rounded-lg p-5">
+              <label className="block text-sm font-semibold text-teal-900 mb-2">
+                📊 板块数据源
+              </label>
+              <select
+                value={tempThresholds.boardDataSource || 'dc'}
+                onChange={(e) => setTempThresholds({...tempThresholds, boardDataSource: e.target.value})}
+                className="w-full px-3 py-2 border border-teal-300 rounded-lg focus:ring-2 focus:ring-teal-500"
+              >
+                <option value="dc">DC原版（87行业，一对一）</option>
+                <option value="eastmoney">东财板块（527，多对多）🆕</option>
+              </select>
+              <p className="text-xs text-teal-700 mt-2">
+                {tempThresholds.boardDataSource === 'eastmoney' 
+                  ? '多对多关系：个股可属于多个板块，热度分摊计算' 
+                  : '一对一关系：个股对应单一行业板块'}
+              </p>
+              {tempThresholds.boardDataSource === 'eastmoney' && (
+                <div className="mt-2 p-2 bg-teal-100 rounded text-xs text-teal-800">
+                  <strong>🆕 新版特性：</strong>
+                  <ul className="mt-1 space-y-0.5">
+                    <li>• 527个板块（86行业+441概念）</li>
+                    <li>• 多对多热度守恒分摊</li>
+                    <li>• 攻守分离信号（行业防守/概念进攻）</li>
+                  </ul>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* 说明 */}

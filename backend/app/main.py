@@ -20,14 +20,22 @@ from .routers.auth import router as auth_router
 from .routers.secure import router as secure_router
 from .routers.sync import router as sync_router
 from .routers.admin import router as admin_router
+from .routers.user_mgmt import router as user_mgmt_router
+from .routers.session_mgmt import router as session_mgmt_router
+from .routers.log_mgmt import router as log_mgmt_router
+from .routers.config_mgmt import router as config_mgmt_router
+from .routers.role_mgmt import router as role_mgmt_router
+from .routers.ext_board_mgmt import router as ext_board_mgmt_router
+from .routers.board_heat import router as board_heat_router
 from .core import preload_cache, run_startup_checks
 from .core.logging_config import setup_logging
 from .core.caching import cache
 from .core.caching.manager import UnifiedCache
 from .core.caching.store import ObjectStore, FileStore
-from .core.caching.policies import WriteBehindPolicy, CacheAsidePolicy
+from .core.caching.policies import WriteBehindPolicy, CacheAsidePolicy, WriteThroughPolicy
 from .core.caching.syncer import get_syncer, start_syncer, stop_syncer
 from .core.audit import audit_log, create_audit_sync_callback
+from .database import SessionLocal
 
 # 配置日志系统（控制台INFO，文件DEBUG）
 setup_logging(console_level=logging.INFO, file_level=logging.DEBUG)
@@ -56,10 +64,11 @@ def init_cache_system():
         ObjectStore("users", CacheAsidePolicy(ttl=3600))
     )
     
-    # 3. 注册配置缓存 (Cache-Aside, 永不过期)
+    # 3. [v2.2.1] 配置缓存改用 Write-Through (TTL=0 永不过期)
+    # 这样 reload_configs() 调用 set() 时会真正写入内存，而非删除
     UnifiedCache.register(
         "config",
-        ObjectStore("config", CacheAsidePolicy(ttl=0))
+        ObjectStore("config", WriteThroughPolicy(ttl=0))
     )
     
     # 4. 注册 API 响应缓存 (磁盘, 200MB上限)
@@ -94,10 +103,20 @@ async def lifespan(app: FastAPI):
     # 2. 初始化统一缓存系统
     init_cache_system()
     
-    # 3. 预加载 Numpy 缓存 (原有逻辑)
+    # 3. [v2.2.1] 预热系统配置到内存
+    db = SessionLocal()
+    try:
+        cache.reload_configs(db)
+        logger.info("✅ 系统配置预热完成 (Write-Through)")
+    except Exception as e:
+        logger.error(f"❌ 配置预热失败: {e}")
+    finally:
+        db.close()
+    
+    # 4. 预加载 Numpy 缓存 (原有逻辑)
     preload_cache()
     
-    # 4. 配置并启动数据库同步器
+    # 5. 配置并启动数据库同步器
     syncer = get_syncer()
     syncer.set_audit_sync_callback(create_audit_sync_callback(audit_log))
     start_syncer()
@@ -191,6 +210,13 @@ app.include_router(auth_router)  # 认证模块（登录/注册）
 app.include_router(secure_router)  # 加密网关（统一加密入口）
 app.include_router(sync_router)  # 数据同步（离线功能）
 app.include_router(admin_router)  # 管理员模块（文件上传/导入）
+app.include_router(user_mgmt_router)  # 用户管理模块（v1.1.0）
+app.include_router(session_mgmt_router)  # 会话管理模块（v1.1.0）
+app.include_router(log_mgmt_router)  # 操作日志模块（v1.1.0）
+app.include_router(config_mgmt_router)  # 系统配置模块（v1.1.0）
+app.include_router(role_mgmt_router)  # 角色权限模块（v1.1.0）
+app.include_router(ext_board_mgmt_router)  # 外部板块同步模块
+app.include_router(board_heat_router)  # 板块热度API（多对多系统）
 
 
 @app.get("/")

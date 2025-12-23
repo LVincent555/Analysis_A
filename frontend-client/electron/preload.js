@@ -56,28 +56,34 @@ contextBridge.exposeInMainWorld('electronAPI', {
   /** 安装更新 */
   installUpdate: () => ipcRenderer.invoke('update:install'),
   
-  /** 监听更新事件 */
+  /** 监听更新事件（使用 once 避免重复监听，或先移除旧监听器） */
   onUpdateAvailable: (callback) => {
+    ipcRenderer.removeAllListeners('update:available');
     ipcRenderer.on('update:available', (_, data) => callback(data));
   },
   
   onUpdateProgress: (callback) => {
+    ipcRenderer.removeAllListeners('update:progress');
     ipcRenderer.on('update:progress', (_, data) => callback(data));
   },
   
   onUpdateDownloaded: (callback) => {
+    ipcRenderer.removeAllListeners('update:downloaded');
     ipcRenderer.on('update:downloaded', (_, version) => callback(version));
   },
   
   onUpdateNotAvailable: (callback) => {
+    ipcRenderer.removeAllListeners('update:not-available');
     ipcRenderer.on('update:not-available', () => callback());
   },
   
   onUpdateChecking: (callback) => {
+    ipcRenderer.removeAllListeners('update:checking');
     ipcRenderer.on('update:checking', () => callback());
   },
   
   onUpdateError: (callback) => {
+    ipcRenderer.removeAllListeners('update:error');
     ipcRenderer.on('update:error', (_, error) => callback(error));
   },
   
@@ -129,7 +135,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   platform: process.platform,
   
   /** 是否Electron环境 */
-  isElectron: true
+  isElectron: true,
+
+  // 设备指纹
+  getDeviceId: () => ipcRenderer.invoke('device:getId')
 });
 
 console.log('Electron preload 脚本已加载');

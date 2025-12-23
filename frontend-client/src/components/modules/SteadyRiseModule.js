@@ -6,6 +6,9 @@ import { RefreshCw, TrendingUp, ChevronDown, ChevronUp, Filter, Search, X } from
 import apiClient from '../../services/api';
 import { API_BASE_URL } from '../../constants/config';
 import { formatDate } from '../../utils';
+import { useSignalConfig } from '../../contexts/SignalConfigContext';
+import BoardSignalBadge from '../BoardSignalBadge';
+import boardHeatService from '../../services/boardHeatService';
 
 const sigmaMultipliers = [1.0, 0.75, 0.5, 0.3, 0.15];
 
@@ -17,14 +20,28 @@ export default function SteadyRiseModule({ risePeriod, riseBoardType, minRankImp
   const [riseShowSigma, setRiseShowSigma] = useState(false);
   const [riseSigmaMultiplier, setRiseSigmaMultiplier] = useState(1.0);
   const [searchQuery, setSearchQuery] = useState('');
+  const [boardSignals, setBoardSignals] = useState({});
+
+  const { signalThresholds } = useSignalConfig();
+  const isEastmoneyMode = signalThresholds?.boardDataSource === 'eastmoney';
 
   // 获取稳步上升数据
   useEffect(() => {
     const fetchSteadyRiseData = async () => {
       setSteadyRiseLoading(true);
       setSteadyRiseError(null);
+      setBoardSignals({});
       try {
         let url = `/api/steady-rise?period=${risePeriod}&board_type=${riseBoardType}&min_rank_improvement=${minRankImprovement}&sigma_multiplier=${riseSigmaMultiplier}`;
+        url += `&calculate_signals=true`;
+        url += `&hot_list_mode=${signalThresholds?.hotListMode || 'frequent'}`;
+        url += `&hot_list_version=${signalThresholds?.hotListVersion || 'v2'}`;
+        url += `&hot_list_top=${signalThresholds?.hotListTop || 100}`;
+        url += `&rank_jump_min=${signalThresholds?.rankJumpMin || 1000}`;
+        url += `&steady_rise_days=${signalThresholds?.steadyRiseDays || 3}`;
+        url += `&price_surge_min=${signalThresholds?.priceSurgeMin || 5.0}`;
+        url += `&volume_surge_min=${signalThresholds?.volumeSurgeMin || 10.0}`;
+        url += `&volatility_surge_min=${signalThresholds?.volatilitySurgeMin || 10.0}`;
         if (selectedDate) {
           url += `&date=${selectedDate}`;
         }
@@ -39,7 +56,33 @@ export default function SteadyRiseModule({ risePeriod, riseBoardType, minRankImp
     };
 
     fetchSteadyRiseData();
-  }, [risePeriod, riseBoardType, minRankImprovement, riseSigmaMultiplier, selectedDate]);
+  }, [risePeriod, riseBoardType, minRankImprovement, riseSigmaMultiplier, selectedDate, signalThresholds]);
+
+  // 批量获取板块信号
+  useEffect(() => {
+    const fetchSignals = async () => {
+      if (!isEastmoneyMode || !steadyRiseData || !steadyRiseData.stocks) return;
+      
+      try {
+        const codes = new Set();
+        if (steadyRiseData.stocks) steadyRiseData.stocks.forEach(s => codes.add(s.code));
+        if (steadyRiseData.sigma_stocks) steadyRiseData.sigma_stocks.forEach(s => codes.add(s.code));
+        
+        if (codes.size === 0) return;
+
+        const result = await boardHeatService.getStockSignalsBatch(Array.from(codes), selectedDate);
+        const signalMap = {};
+        result.stocks?.forEach(s => {
+          signalMap[s.stock_code] = s;
+        });
+        setBoardSignals(signalMap);
+      } catch (err) {
+        console.error("Failed to load signals", err);
+      }
+    };
+    
+    fetchSignals();
+  }, [isEastmoneyMode, steadyRiseData, selectedDate]);
 
   // 搜索过滤逻辑
   const filteredStocks = useMemo(() => {
@@ -194,6 +237,10 @@ export default function SteadyRiseModule({ risePeriod, riseBoardType, minRankImp
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">股票代码</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">股票名称</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">行业</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">信号</th>
+                      {isEastmoneyMode && (
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">板块信号</th>
+                      )}
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">起始排名</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">最新排名</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">总提升</th>
@@ -219,6 +266,37 @@ export default function SteadyRiseModule({ risePeriod, riseBoardType, minRankImp
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
                           {stock.industry}
                         </td>
+                        <td className="px-4 py-3">
+                          {stock.signals && stock.signals.length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {stock.signals.slice(0, 4).map((signal, idx) => (
+                                <span key={idx} className="text-xs bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded whitespace-nowrap">
+                                  {signal}
+                                </span>
+                              ))}
+                              {stock.signals.length > 4 && (
+                                <span className="text-xs text-gray-400">+{stock.signals.length - 4}</span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-gray-400">-</span>
+                          )}
+                        </td>
+                        {isEastmoneyMode && (
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            {boardSignals[stock.code] && boardSignals[stock.code].board_signal_level !== 'NONE' ? (
+                              <BoardSignalBadge
+                                level={boardSignals[stock.code].board_signal_level}
+                                label={boardSignals[stock.code].board_signal_label}
+                                type={boardSignals[stock.code].max_concept_board_type}
+                                heatPct={boardSignals[stock.code].max_concept_heat_pct}
+                                size="sm"
+                              />
+                            ) : (
+                              <span className="text-xs text-gray-400">-</span>
+                            )}
+                          </td>
+                        )}
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                           第 {stock.start_rank} 名
                         </td>

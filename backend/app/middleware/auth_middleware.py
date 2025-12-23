@@ -64,8 +64,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
         if self._is_public_path(path):
             return await call_next(request)
         
-        # 强制只允许通过加密网关访问API
-        if FORCE_SECURE_API and path.startswith("/api/"):
+        # 强制只允许通过加密网关访问API（secure网关转发会带 x-secure-gateway:1）
+        if FORCE_SECURE_API and path.startswith("/api/") and request.headers.get("x-secure-gateway") != "1":
             return JSONResponse(
                 status_code=403,
                 content={

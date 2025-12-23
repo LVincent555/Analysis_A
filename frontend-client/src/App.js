@@ -30,6 +30,16 @@ import StockRankingModule from './components/modules/StockRankingModule';
 import IndustryDetailPage from './pages/IndustryDetailPage';
 import AdminPanel from './pages/AdminPanel';
 import UserLoginHistory from './pages/UserLoginHistory';
+import UserManagement from './pages/UserManagement';
+import SessionManagement from './pages/SessionManagement';
+import OperationLogs from './pages/OperationLogs';
+import SystemConfig from './pages/SystemConfig';
+import UserSecuritySettings from './pages/UserSecuritySettings';
+import RoleManagement from './pages/RoleManagement';
+import ExtBoardSync from './pages/ExtBoardSync';
+import ExtBoardHeat from './pages/ExtBoardHeat';
+import BoardDetailDialog from './components/BoardDetailDialog';
+import BoardAnalysisPage from './pages/BoardAnalysisPage';
 import { SignalConfigProvider, useSignalConfig } from './contexts/SignalConfigContext';
 import SignalConfigPanel from './components/SignalConfigPanel';
 import UpdateManager from './components/common/UpdateManager';
@@ -40,8 +50,11 @@ const ContentArea = ({ appState, openConfig }) => {
   const { 
     activeModule, selectedDate, 
     hotSpotsState, queryState, sectorQueryState, rankJumpState, steadyRiseState, industryTrendState,
-    navigateToDetail, refreshDates
+    navigateToDetail, refreshDates, setActiveModule
   } = appState;
+  
+  // 板块分析页面状态
+  const [analysisBoard, setAnalysisBoard] = React.useState(null);
 
   // 渲染内容模块
   const renderContent = () => {
@@ -130,8 +143,47 @@ const ContentArea = ({ appState, openConfig }) => {
       case 'admin':
         return <AdminPanel onImportComplete={refreshDates} />;
 
+      case 'ext-board-sync':
+        return <ExtBoardSync />;
+
+      case 'ext-board-heat':
+        // 如果有分析板块，显示分析页面
+        if (analysisBoard) {
+          return (
+            <BoardAnalysisPage 
+              board={analysisBoard}
+              selectedDate={selectedDate}
+              onBack={() => setAnalysisBoard(null)}
+            />
+          );
+        }
+        return (
+          <ExtBoardHeat 
+            selectedDate={selectedDate}
+            onNavigateToAnalysis={(board) => setAnalysisBoard(board)}
+          />
+        );
+
+      case 'user-management':
+        return <UserManagement />;
+
+      case 'session-management':
+        return <SessionManagement />;
+
+      case 'operation-logs':
+        return <OperationLogs />;
+
+        case 'system-config':
+        return <SystemConfig />;
+
+      case 'role-management':
+        return <RoleManagement />;
+
       case 'user-login-history':
         return <UserLoginHistory />;
+
+      case 'user-security-settings':
+        return <UserSecuritySettings />;
 
       default:
         return (

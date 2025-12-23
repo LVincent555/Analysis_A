@@ -74,6 +74,12 @@ async function initDatabase(userDataPath) {
       updated_at INTEGER
     );
     
+    -- 设备信息（持久化本机指纹）
+    CREATE TABLE IF NOT EXISTS device_info (
+      key TEXT PRIMARY KEY,
+      value TEXT
+    );
+
     -- 创建索引
     CREATE INDEX IF NOT EXISTS idx_cache_key ON api_cache(cache_key);
     CREATE INDEX IF NOT EXISTS idx_cache_expires ON api_cache(expires_at);
@@ -251,6 +257,44 @@ function getCacheStats() {
 }
 
 /**
+ * 获取设备信息
+ */
+function getDeviceInfo(key) {
+  if (!db) return null;
+  try {
+    const stmt = db.prepare('SELECT value FROM device_info WHERE key = ?');
+    stmt.bind([key]);
+    if (stmt.step()) {
+      const row = stmt.getAsObject();
+      stmt.free();
+      return row.value;
+    }
+    stmt.free();
+  } catch (e) {
+    console.error('获取设备信息失败:', e);
+  }
+  return null;
+}
+
+/**
+ * 保存设备信息
+ */
+function setDeviceInfo(key, value) {
+  if (!db) return false;
+  try {
+    db.run(
+      'INSERT OR REPLACE INTO device_info (key, value) VALUES (?, ?)',
+      [key, value]
+    );
+    saveDatabase();
+    return true;
+  } catch (e) {
+    console.error('保存设备信息失败:', e);
+    return false;
+  }
+}
+
+/**
  * 保存股票信息
  */
 function saveStockInfo(stocks) {
@@ -386,6 +430,8 @@ module.exports = {
   clearExpiredCache,
   clearAllCache,
   getCacheStats,
+  getDeviceInfo,
+  setDeviceInfo,
   saveStockInfo,
   getStockInfo,
   searchStocks,

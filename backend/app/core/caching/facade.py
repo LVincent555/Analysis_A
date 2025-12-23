@@ -193,29 +193,85 @@ class PublicCache:
         if manager.has_region("users"):
             manager.user().delete(KeyBuilder.user(uid))
     
-    # ---------- 1.3 系统配置 (Cache-Aside) ----------
+    # ---------- 1.3 系统配置 (Write-Through) ----------
     
     @staticmethod
     @safe_cache_call(default_return=None)
     def get_config(key: str, loader: Callable = None) -> Any:
-        """获取系统配置"""
+        """
+        [v2.2.1] 获取系统配置
+        
+        - 强制使用 KeyBuilder 封装 Key，确保与 reload_configs 一致
+        """
         manager = PublicCache._get_manager()
         if not manager.has_region("config"):
             return loader() if loader else None
-        return manager.config().get(KeyBuilder.config(key), loader=loader)
+        real_key = KeyBuilder.config(key)
+        return manager.config().get(real_key, loader=loader)
     
     @staticmethod
     def set_config(key: str, value: Any) -> None:
-        """设置系统配置 (直接写入缓存)"""
+        """
+        [v2.2.1] 设置系统配置
+        
+        由于 config 分区使用 WriteThroughPolicy，set() 会直接写入内存
+        """
         manager = PublicCache._get_manager()
         if manager.has_region("config"):
-            # 使用 set_direct 直接写入，而非 Cache-Aside 的删除逻辑
-            from .policies.cache_aside import CacheAsidePolicy
-            store = manager.config()
-            if hasattr(store.policy, 'set_direct'):
-                store.policy.set_direct(KeyBuilder.config(key), value, store.store)
-            else:
-                store.set(KeyBuilder.config(key), value)
+            real_key = KeyBuilder.config(key)
+            manager.config().set(real_key, value)
+    
+    @staticmethod
+    def reload_configs(db_session) -> None:
+        """
+        [v2.2.1] 全量刷新配置缓存
+        
+        用于：启动时预热、配置修改后刷新
+        
+        特性：
+        - 支持 int/bool/json 类型解析
+        - 单条失败不中断整体
+        - 结束后打印失败汇总
+        """
+        import json
+        
+        # 延迟导入避免循环依赖
+        from ...db_models import SystemConfig
+        
+        manager = PublicCache._get_manager()
+        if not manager.has_region("config"):
+            logger.warning("[ConfigReload] Config region not registered")
+            return
+        
+        configs = db_session.query(SystemConfig).all()
+        config_store = manager.config()
+        
+        loaded, errors = 0, []
+        
+        for c in configs:
+            try:
+                real_key = KeyBuilder.config(c.config_key)
+                val = c.config_value
+                
+                # 类型解析
+                if c.config_type == 'int':
+                    val = int(val)
+                elif c.config_type == 'bool':
+                    val = str(val).lower() in ('true', '1', 'yes', 'on', 'y')
+                elif c.config_type == 'json':
+                    val = json.loads(val)
+                
+                # Write-Through 策略下，set 会写入内存
+                config_store.set(real_key, val)
+                loaded += 1
+            except Exception as e:
+                error_msg = f"Key={c.config_key} Error={str(e)}"
+                errors.append(error_msg)
+                logger.error(f"[ConfigReload] Parse Error: {error_msg}")
+
+        logger.info(f"[ConfigReload] Success: {loaded}/{len(configs)}")
+        if errors:
+            logger.warning(f"[ConfigReload] Failed ({len(errors)}): {errors}")
     
     # ---------- 1.4 API 响应缓存 (FileStore) ----------
     

@@ -10,6 +10,9 @@ import { formatDate } from '../../utils';
 import SearchBar from '../common/SearchBar';
 import HighlightText from '../common/HighlightText';
 import StockDetailPopup from '../common/StockDetailPopup';
+import { useSignalConfig } from '../../contexts/SignalConfigContext';
+import BoardSignalBadge from '../BoardSignalBadge';
+import boardHeatService from '../../services/boardHeatService';
 
 export default function HotSpotsModule({ boardType, selectedPeriod, topN, selectedDate, refreshTrigger }) {
   const [analysisData, setAnalysisData] = useState(null);
@@ -18,6 +21,11 @@ export default function HotSpotsModule({ boardType, selectedPeriod, topN, select
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10); // 默认每页10条
   const [top1000Industry, setTop1000Industry] = useState(null);
+  const [boardSignals, setBoardSignals] = useState({}); // 板块信号缓存
+  
+  // 获取信号配置
+  const { signalThresholds } = useSignalConfig();
+  const isEastmoneyMode = signalThresholds?.boardDataSource === 'eastmoney';
   const [sortBy, setSortBy] = useState('hit_count'); // 'hit_count', 'rank', 'price_change'
   const [searchQuery, setSearchQuery] = useState(''); // 搜索关键词
   
@@ -74,6 +82,28 @@ export default function HotSpotsModule({ boardType, selectedPeriod, topN, select
     };
     fetchTop1000Industry();
   }, [selectedDate]);
+
+  // 批量获取板块信号（仅在东财模式下）
+  useEffect(() => {
+    const fetchBoardSignals = async () => {
+      if (!isEastmoneyMode || !analysisData?.stocks?.length) return;
+      
+      try {
+        const stockCodes = analysisData.stocks.map(s => s.stock_code);
+        const result = await boardHeatService.getStockSignalsBatch(stockCodes, selectedDate);
+        
+        // 转换为 {stock_code: signal} 映射
+        const signalMap = {};
+        result.stocks?.forEach(s => {
+          signalMap[s.stock_code] = s;
+        });
+        setBoardSignals(signalMap);
+      } catch (err) {
+        console.error('获取板块信号失败:', err);
+      }
+    };
+    fetchBoardSignals();
+  }, [isEastmoneyMode, analysisData, selectedDate]);
 
 
   // 统计行业分布
@@ -256,6 +286,11 @@ export default function HotSpotsModule({ boardType, selectedPeriod, topN, select
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         行业
                       </th>
+                      {isEastmoneyMode && (
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          板块信号
+                        </th>
+                      )}
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         命中次数
                       </th>
@@ -300,6 +335,21 @@ export default function HotSpotsModule({ boardType, selectedPeriod, topN, select
                             {stock.industry}
                           </span>
                         </td>
+                        {isEastmoneyMode && (
+                          <td className="px-4 py-4 whitespace-nowrap">
+                            {boardSignals[stock.stock_code] && boardSignals[stock.stock_code].board_signal_level !== 'NONE' ? (
+                              <BoardSignalBadge
+                                level={boardSignals[stock.stock_code].board_signal_level}
+                                label={boardSignals[stock.stock_code].board_signal_label}
+                                type={boardSignals[stock.stock_code].max_concept_board_type}
+                                heatPct={boardSignals[stock.stock_code].max_concept_heat_pct}
+                                size="sm"
+                              />
+                            ) : (
+                              <span className="text-xs text-gray-400">-</span>
+                            )}
+                          </td>
+                        )}
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
                             {stock.appearances} 次

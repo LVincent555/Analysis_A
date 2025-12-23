@@ -121,13 +121,18 @@ async def login(
     db: Session = Depends(get_db)
 ):
     """
-    用户登录
+    用户登录 (v2.2.1)
     
-    - 验证用户名密码
-    - 生成JWT Token和Refresh Token
-    - 生成会话密钥（用于后续加密通信）
-    - 返回加密的会话密钥（客户端用密码派生密钥解密）
+    安全逻辑顺序:
+    1. 查找用户
+    2. [先检查锁定] 防止锁定期间恶意刷写数据库
+    3. 验证密码（失败时更新 failed_attempts，可能触发锁定）
+    4. 检查账户状态
+    5. 检查设备数量限制（使用 PolicyEngine 决议）
+    6. 生成 Token（动态 TTL）
     """
+    from ..services.policy_engine import PolicyEngine
+    
     # 查找用户
     user = db.query(User).filter(User.username == req.username).first()
     
@@ -137,12 +142,42 @@ async def login(
             detail="用户名或密码错误"
         )
     
+    # [v2.2.1] 先检查锁定状态（严禁在锁定期间继续验证密码）
+    if user.locked_until and user.locked_until > datetime.utcnow():
+        remaining = (user.locked_until - datetime.utcnow()).seconds // 60
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"账户已锁定，请 {remaining} 分钟后重试"
+        )
+    
+    # 获取登录策略
+    login_policy = PolicyEngine.get_login_policy()
+    
     # 验证密码
     if not verify_password(req.password, user.password_hash):
+        # [v2.2.1] 更新失败次数
+        user.failed_attempts = (user.failed_attempts or 0) + 1
+        
+        # 检查是否需要锁定
+        if user.failed_attempts >= login_policy["max_attempts"]:
+            user.locked_until = datetime.utcnow() + timedelta(minutes=login_policy["lockout_minutes"])
+            db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"登录失败次数过多，账户已锁定 {login_policy['lockout_minutes']} 分钟"
+            )
+        
+        db.commit()
+        remaining_attempts = login_policy["max_attempts"] - user.failed_attempts
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="用户名或密码错误"
+            detail=f"用户名或密码错误，还剩 {remaining_attempts} 次尝试机会"
         )
+    
+    # [v2.2.1] 登录成功：清零失败计数和锁定状态
+    if user.failed_attempts or user.locked_until:
+        user.failed_attempts = 0
+        user.locked_until = None
     
     # 检查账户状态
     if not user.is_active:
@@ -151,13 +186,16 @@ async def login(
             detail="账户已被禁用"
         )
     
+    # [v2.2.1] 使用 PolicyEngine 获取会话策略
+    session_policy = PolicyEngine.get_session_policy(user)
+    
     # 检查设备数量限制
     active_sessions = db.query(UserSession).filter(
         UserSession.user_id == user.id,
         UserSession.expires_at > datetime.utcnow()
     ).count()
     
-    if active_sessions >= user.allowed_devices:
+    if active_sessions >= session_policy["max_devices"]:
         # 删除最旧的会话
         oldest_session = db.query(UserSession).filter(
             UserSession.user_id == user.id
@@ -175,12 +213,12 @@ async def login(
     password_crypto = AESCrypto(password_derived_key)
     session_key_encrypted = password_crypto.encrypt_key(session_key)
     
-    # 生成Token
+    # [v2.2.1] 使用动态 TTL 生成 Token
     token = create_access_token(user.id, req.device_id)
     refresh_token = create_refresh_token(user.id, req.device_id)
     
-    # 计算过期时间
-    expires_at = datetime.utcnow() + timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)
+    # 计算过期时间（使用策略中的动态值）
+    expires_at = datetime.utcnow() + timedelta(hours=session_policy["access_token_hours"])
     
     # 创建或更新会话记录
     existing_session = db.query(UserSession).filter(
@@ -266,9 +304,18 @@ async def refresh_token(
     ).first()
     
     if not session:
+        logger.warning(f"刷新Token失败: 会话不存在 user_id={user_id}, device_id={device_id}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="会话不存在或已失效"
+        )
+    
+    # 检查会话是否被撤销
+    if session.is_revoked:
+        logger.warning(f"刷新Token失败: 会话已被撤销 session_id={session.id}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="会话已被撤销，请重新登录"
         )
     
     # 生成新Token
