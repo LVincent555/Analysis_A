@@ -285,10 +285,13 @@ def import_excel_file(file_path: Path, state_manager, progress_callback=None) ->
         # === 批量导入（在同一个事务中） ===
         for idx, row in df.iterrows():
             try:
-                # 1. 处理股票代码
                 stock_code = normalize_stock_code(row['代码'])
                 stock_name = str(row['名称']).strip()
-                industry = str(row['行业']).strip() if pd.notna(row['行业']) else None
+                # Industry column might be missing in new data (2026-01-20+)
+                if '行业' in row and pd.notna(row['行业']):
+                    industry = str(row['行业']).strip()
+                else:
+                    industry = None
                 rank = idx + 1
                 
                 # 2. 确保股票记录存在
