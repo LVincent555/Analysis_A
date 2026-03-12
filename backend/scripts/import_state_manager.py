@@ -308,7 +308,8 @@ class ImportStateManager:
         imports = self.state["imports"]
         total = len(imports)
         success = sum(1 for i in imports.values() if i.get("status") == "success")
-        failed = sum(1 for i in imports.values() if i.get("status") == "failed")
+        # "failed"统计包含 explicit "failed" 和 "rolled_back"
+        failed = sum(1 for i in imports.values() if i.get("status") in ["failed", "rolled_back"])
         in_progress = sum(1 for i in imports.values() if i.get("status") == "in_progress")
         
         total_records = sum(i.get("imported_count", 0) for i in imports.values() if i.get("status") == "success")
@@ -321,6 +322,43 @@ class ImportStateManager:
             "total_records_imported": total_records,
             "success_rate": f"{success/total*100:.1f}%" if total > 0 else "0%"
         }
+    
+    def converge_in_progress_tasks(self, timeout_minutes: int = 60) -> int:
+        """
+        收敛超时任务：将长时间处于in_progress的任务标记为rolled_back
+        
+        Args:
+            timeout_minutes: 超时分钟数
+            
+        Returns:
+            收敛的任务数量
+        """
+        count = 0
+        now = datetime.now()
+        updates = False
+        
+        for date_str, info in self.state["imports"].items():
+            if info.get("status") == "in_progress":
+                start_time_str = info.get("start_time")
+                if start_time_str:
+                    try:
+                        start_time = datetime.fromisoformat(start_time_str)
+                        delta = now - start_time
+                        if delta.total_seconds() > timeout_minutes * 60:
+                            # 超时，标记为 rolled_back (User Option A requirement)
+                            info["status"] = "rolled_back"
+                            info["rollback_reason"] = f"Timeout ({timeout_minutes}m) - Process likely crashed"
+                            info["rollback_time"] = now.isoformat()
+                            count += 1
+                            updates = True
+                            logger.warning(f"🔄 自动收敛超时任务: {date_str} -> rolled_back")
+                    except ValueError:
+                        pass
+        
+        if updates:
+            self._save_state()
+            
+        return count
     
     def print_summary(self):
         """打印导入摘要"""

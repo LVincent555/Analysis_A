@@ -27,7 +27,7 @@ class UserCreateRequest(BaseModel):
     email: Optional[str] = Field(None, max_length=255, description="邮箱")
     phone: Optional[str] = Field(None, max_length=20, description="手机号")
     nickname: Optional[str] = Field(None, max_length=50, description="昵称")
-    role: str = Field("user", description="角色: admin/user")
+    role: str = Field("user", description="角色: super_admin/admin/user/readonly")
     allowed_devices: int = Field(3, ge=1, le=10, description="允许设备数")
     offline_enabled: bool = Field(True, description="允许离线使用")
     offline_days: int = Field(7, ge=1, le=30, description="离线天数")
@@ -42,7 +42,7 @@ class UserUpdateRequest(BaseModel):
     nickname: Optional[str] = Field(None, max_length=50)
     avatar_url: Optional[str] = Field(None, max_length=500)
     remark: Optional[str] = None
-    role: Optional[str] = Field(None, description="角色: admin/user")
+    role: Optional[str] = Field(None, description="角色: super_admin/admin/user/readonly")
     allowed_devices: Optional[int] = Field(None, ge=1, le=10)
     offline_enabled: Optional[bool] = None
     offline_days: Optional[int] = Field(None, ge=1, le=30)

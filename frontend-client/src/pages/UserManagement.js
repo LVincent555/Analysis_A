@@ -33,19 +33,19 @@ const UserManagement = () => {
   const [pageSize] = useState(15);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  
+
   // 筛选状态
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  
+
   // 弹窗状态
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showResetPwdModal, setShowResetPwdModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
-  
+
   // 批量操作
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [showBatchMenu, setShowBatchMenu] = useState(false);
@@ -55,23 +55,23 @@ const UserManagement = () => {
     try {
       setLoading(true);
       setError(null);
-      
+
       const params = new URLSearchParams({
         page: page.toString(),
         page_size: pageSize.toString(),
         sort_by: 'created_at',
         sort_order: 'desc'
       });
-      
+
       if (search) params.append('search', search);
       if (roleFilter) params.append('role', roleFilter);
       if (statusFilter) params.append('status', statusFilter);
-      
+
       const response = await secureApi.request({
         path: `/api/admin/users?${params.toString()}`,
         method: 'GET'
       });
-      
+
       setUsers(response.items || []);
       setTotal(response.total || 0);
     } catch (err) {
@@ -144,7 +144,7 @@ const UserManagement = () => {
   const handleToggleStatus = async (user) => {
     const action = user.is_active ? '禁用' : '启用';
     if (!window.confirm(`确定要${action}用户 ${user.username} 吗？`)) return;
-    
+
     try {
       await secureApi.request({
         path: `/api/admin/users/${user.id}/toggle-status`,
@@ -188,7 +188,7 @@ const UserManagement = () => {
   // 删除用户
   const handleDeleteUser = async (user) => {
     if (!window.confirm(`确定要删除用户 ${user.username} 吗？\n此操作将禁用该用户并撤销所有会话。`)) return;
-    
+
     try {
       await secureApi.request({
         path: `/api/admin/users/${user.id}?hard=false`,
@@ -203,10 +203,10 @@ const UserManagement = () => {
   // 批量操作
   const handleBatchAction = async (action) => {
     if (selectedIds.size === 0) return;
-    
+
     const actionText = { enable: '启用', disable: '禁用', delete: '删除' };
     if (!window.confirm(`确定要${actionText[action]} ${selectedIds.size} 个用户吗？`)) return;
-    
+
     try {
       await secureApi.request({
         path: '/api/admin/users/batch',
@@ -268,9 +268,8 @@ const UserManagement = () => {
   const RoleBadge = ({ role }) => {
     const isAdmin = role === 'admin';
     return (
-      <span className={`px-2 py-0.5 text-xs rounded-full ${
-        isAdmin ? 'bg-purple-500/20 text-purple-400' : 'bg-blue-500/20 text-blue-400'
-      }`}>
+      <span className={`px-2 py-0.5 text-xs rounded-full ${isAdmin ? 'bg-purple-500/20 text-purple-400' : 'bg-blue-500/20 text-blue-400'
+        }`}>
         {isAdmin ? '管理员' : '普通用户'}
       </span>
     );
@@ -325,7 +324,7 @@ const UserManagement = () => {
                 className="w-full pl-10 pr-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500"
               />
             </div>
-            
+
             {/* 角色筛选 */}
             <select
               value={roleFilter}
@@ -336,7 +335,7 @@ const UserManagement = () => {
               <option value="admin">管理员</option>
               <option value="user">普通用户</option>
             </select>
-            
+
             {/* 状态筛选 */}
             <select
               value={statusFilter}
@@ -349,7 +348,7 @@ const UserManagement = () => {
               <option value="locked">锁定</option>
               <option value="expired">过期</option>
             </select>
-            
+
             {/* 刷新按钮 */}
             <button
               onClick={loadUsers}
@@ -358,7 +357,7 @@ const UserManagement = () => {
             >
               <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
             </button>
-            
+
             {/* 批量操作 */}
             {selectedIds.size > 0 && (
               <div className="relative">
@@ -529,7 +528,7 @@ const UserManagement = () => {
               )}
             </tbody>
           </table>
-          
+
           {/* 分页 */}
           {totalPages > 1 && (
             <div className="px-4 py-3 border-t border-gray-700 flex items-center justify-between">
@@ -551,9 +550,8 @@ const UserManagement = () => {
                     <button
                       key={pageNum}
                       onClick={() => setPage(pageNum)}
-                      className={`w-8 h-8 rounded ${
-                        page === pageNum ? 'bg-blue-600' : 'hover:bg-gray-700'
-                      }`}
+                      className={`w-8 h-8 rounded ${page === pageNum ? 'bg-blue-600' : 'hover:bg-gray-700'
+                        }`}
                     >
                       {pageNum}
                     </button>
@@ -633,12 +631,47 @@ const UserFormModal = ({ title, user, onClose, onSubmit }) => {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
+  // 动态角色列表
+  const [roles, setRoles] = useState([]);
+  const [rolesLoading, setRolesLoading] = useState(true);
+
+  // 默认角色列表（fallback）
+  const defaultRoles = [
+    { name: 'user', display_name: '普通用户' },
+    { name: 'admin', display_name: '管理员' }
+  ];
+
+  // 加载角色列表
+  useEffect(() => {
+    const loadRoles = async () => {
+      try {
+        const response = await secureApi.request({
+          path: '/api/admin/roles',
+          method: 'GET'
+        });
+        if (response.roles && response.roles.length > 0) {
+          // 只显示激活的角色
+          const activeRoles = response.roles.filter(r => r.is_active !== false);
+          setRoles(activeRoles);
+        } else {
+          setRoles(defaultRoles);
+        }
+      } catch (err) {
+        console.error('加载角色列表失败:', err);
+        setRoles(defaultRoles);
+      } finally {
+        setRolesLoading(false);
+      }
+    };
+    loadRoles();
+  }, []);
+
   const isEdit = !!user;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
-    
+
     // 验证
     if (!isEdit && !formData.username) {
       setError('请输入用户名');
@@ -652,17 +685,17 @@ const UserFormModal = ({ title, user, onClose, onSubmit }) => {
       setError('密码长度至少6位');
       return;
     }
-    
+
     try {
       setLoading(true);
       const submitData = { ...formData };
-      
+
       // 编辑模式不提交用户名和密码
       if (isEdit) {
         delete submitData.username;
         delete submitData.password;
       }
-      
+
       await onSubmit(submitData);
     } catch (err) {
       setError(err.message);
@@ -680,14 +713,14 @@ const UserFormModal = ({ title, user, onClose, onSubmit }) => {
             <X className="w-5 h-5" />
           </button>
         </div>
-        
+
         <form onSubmit={handleSubmit} className="p-4 space-y-4">
           {error && (
             <div className="p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-red-300 text-sm">
               {error}
             </div>
           )}
-          
+
           {/* 用户名 */}
           <div>
             <label className="block text-sm text-gray-400 mb-1">用户名 *</label>
@@ -700,7 +733,7 @@ const UserFormModal = ({ title, user, onClose, onSubmit }) => {
               placeholder="请输入用户名"
             />
           </div>
-          
+
           {/* 密码（仅创建时） */}
           {!isEdit && (
             <div>
@@ -723,7 +756,7 @@ const UserFormModal = ({ title, user, onClose, onSubmit }) => {
               </div>
             </div>
           )}
-          
+
           {/* 昵称 */}
           <div>
             <label className="block text-sm text-gray-400 mb-1">昵称</label>
@@ -735,7 +768,7 @@ const UserFormModal = ({ title, user, onClose, onSubmit }) => {
               placeholder="显示名称"
             />
           </div>
-          
+
           {/* 邮箱和手机 */}
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -759,7 +792,7 @@ const UserFormModal = ({ title, user, onClose, onSubmit }) => {
               />
             </div>
           </div>
-          
+
           {/* 角色 */}
           <div>
             <label className="block text-sm text-gray-400 mb-1">角色</label>
@@ -767,12 +800,20 @@ const UserFormModal = ({ title, user, onClose, onSubmit }) => {
               value={formData.role}
               onChange={(e) => setFormData(prev => ({ ...prev, role: e.target.value }))}
               className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500"
+              disabled={rolesLoading}
             >
-              <option value="user">普通用户</option>
-              <option value="admin">管理员</option>
+              {rolesLoading ? (
+                <option value="">加载中...</option>
+              ) : (
+                roles.map(role => (
+                  <option key={role.name} value={role.name}>
+                    {role.display_name}
+                  </option>
+                ))
+              )}
             </select>
           </div>
-          
+
           {/* 设备和离线配置 */}
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -798,7 +839,7 @@ const UserFormModal = ({ title, user, onClose, onSubmit }) => {
               />
             </div>
           </div>
-          
+
           {/* 离线功能开关 */}
           <div className="flex items-center gap-3">
             <input
@@ -810,7 +851,7 @@ const UserFormModal = ({ title, user, onClose, onSubmit }) => {
             />
             <label htmlFor="offline_enabled" className="text-sm text-gray-300">允许离线使用</label>
           </div>
-          
+
           {/* 备注 */}
           <div>
             <label className="block text-sm text-gray-400 mb-1">备注</label>
@@ -822,7 +863,7 @@ const UserFormModal = ({ title, user, onClose, onSubmit }) => {
               placeholder="备注信息"
             />
           </div>
-          
+
           {/* 按钮 */}
           <div className="flex justify-end gap-3 pt-4">
             <button
@@ -859,7 +900,7 @@ const UserDetailModal = ({ user, onClose }) => {
             <X className="w-5 h-5" />
           </button>
         </div>
-        
+
         <div className="p-4">
           {/* 基本信息 */}
           <div className="flex items-start gap-4 mb-6">
@@ -870,22 +911,20 @@ const UserDetailModal = ({ user, onClose }) => {
               <h3 className="text-xl font-semibold">{user.username}</h3>
               {user.nickname && <p className="text-gray-400">{user.nickname}</p>}
               <div className="flex items-center gap-2 mt-2">
-                <span className={`px-2 py-0.5 text-xs rounded-full ${
-                  user.role === 'admin' ? 'bg-purple-500/20 text-purple-400' : 'bg-blue-500/20 text-blue-400'
-                }`}>
+                <span className={`px-2 py-0.5 text-xs rounded-full ${user.role === 'admin' ? 'bg-purple-500/20 text-purple-400' : 'bg-blue-500/20 text-blue-400'
+                  }`}>
                   {user.role === 'admin' ? '管理员' : '普通用户'}
                 </span>
-                <span className={`px-2 py-0.5 text-xs rounded-full ${
-                  user.status === 'active' ? 'bg-green-500/20 text-green-400' :
+                <span className={`px-2 py-0.5 text-xs rounded-full ${user.status === 'active' ? 'bg-green-500/20 text-green-400' :
                   user.status === 'locked' ? 'bg-red-500/20 text-red-400' :
-                  'bg-gray-500/20 text-gray-400'
-                }`}>
+                    'bg-gray-500/20 text-gray-400'
+                  }`}>
                   {user.status === 'active' ? '正常' : user.status === 'locked' ? '锁定' : '禁用'}
                 </span>
               </div>
             </div>
           </div>
-          
+
           {/* 详细信息 */}
           <div className="grid grid-cols-2 gap-4 mb-6">
             <InfoItem label="邮箱" value={user.email || '-'} />
@@ -897,7 +936,7 @@ const UserDetailModal = ({ user, onClose }) => {
             <InfoItem label="注册时间" value={user.created_at ? new Date(user.created_at).toLocaleString() : '-'} />
             <InfoItem label="最后登录" value={user.last_login ? new Date(user.last_login).toLocaleString() : '-'} />
           </div>
-          
+
           {/* 备注 */}
           {user.remark && (
             <div className="mb-6">
@@ -905,7 +944,7 @@ const UserDetailModal = ({ user, onClose }) => {
               <p className="text-gray-300 bg-gray-700/50 p-3 rounded-lg">{user.remark}</p>
             </div>
           )}
-          
+
           {/* 活跃会话 */}
           {user.sessions && user.sessions.length > 0 && (
             <div>
@@ -921,11 +960,10 @@ const UserDetailModal = ({ user, onClose }) => {
                         <Monitor className="w-4 h-4 text-blue-400" />
                         <span>{session.device_name || session.device_id}</span>
                       </div>
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${
-                        session.current_status === 'online' ? 'bg-green-500/20 text-green-400' :
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${session.current_status === 'online' ? 'bg-green-500/20 text-green-400' :
                         session.current_status === 'idle' ? 'bg-yellow-500/20 text-yellow-400' :
-                        'bg-gray-500/20 text-gray-400'
-                      }`}>
+                          'bg-gray-500/20 text-gray-400'
+                        }`}>
                         {session.current_status}
                       </span>
                     </div>
@@ -971,7 +1009,7 @@ const ResetPasswordModal = ({ user, onClose, onSubmit }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
-    
+
     if (!password) {
       setError('请输入新密码');
       return;
@@ -984,7 +1022,7 @@ const ResetPasswordModal = ({ user, onClose, onSubmit }) => {
       setError('两次输入的密码不一致');
       return;
     }
-    
+
     try {
       setLoading(true);
       await onSubmit(password, forceLogout);
@@ -1004,18 +1042,18 @@ const ResetPasswordModal = ({ user, onClose, onSubmit }) => {
             <X className="w-5 h-5" />
           </button>
         </div>
-        
+
         <form onSubmit={handleSubmit} className="p-4 space-y-4">
           <div className="text-center text-gray-400 mb-4">
             为用户 <span className="text-white font-medium">{user.username}</span> 重置密码
           </div>
-          
+
           {error && (
             <div className="p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-red-300 text-sm">
               {error}
             </div>
           )}
-          
+
           <div>
             <label className="block text-sm text-gray-400 mb-1">新密码</label>
             <div className="relative">
@@ -1035,7 +1073,7 @@ const ResetPasswordModal = ({ user, onClose, onSubmit }) => {
               </button>
             </div>
           </div>
-          
+
           <div>
             <label className="block text-sm text-gray-400 mb-1">确认密码</label>
             <input
@@ -1046,7 +1084,7 @@ const ResetPasswordModal = ({ user, onClose, onSubmit }) => {
               placeholder="请再次输入新密码"
             />
           </div>
-          
+
           <div className="flex items-center gap-3">
             <input
               type="checkbox"
@@ -1059,7 +1097,7 @@ const ResetPasswordModal = ({ user, onClose, onSubmit }) => {
               强制登出所有设备
             </label>
           </div>
-          
+
           <div className="flex justify-end gap-3 pt-4">
             <button
               type="button"

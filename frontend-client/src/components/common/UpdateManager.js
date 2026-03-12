@@ -21,11 +21,41 @@ function UpdateManager() {
     if (!isElectron) return;
 
     // 监听更新事件
-    window.electronAPI.onUpdateAvailable?.((info) => {
+    // 监听更新事件
+    window.electronAPI.onUpdateAvailable?.(async (info) => {
       console.log('发现新版本:', info);
-      setUpdateStatus('available');
-      setUpdateInfo(info);
-      setShowBanner(true);
+      try {
+        const currentVersion = await window.electronAPI.getVersion();
+        const remoteVersion = info.version;
+
+        // 简单版本比较 helpers
+        const compareVersions = (v1, v2) => {
+          if (!v1 || !v2) return 0;
+          const parts1 = v1.replace(/^v/, '').split('.').map(Number);
+          const parts2 = v2.replace(/^v/, '').split('.').map(Number);
+          for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
+            const p1 = parts1[i] || 0;
+            const p2 = parts2[i] || 0;
+            if (p1 > p2) return 1;
+            if (p1 < p2) return -1;
+          }
+          return 0;
+        };
+
+        if (compareVersions(remoteVersion, currentVersion) > 0) {
+          setUpdateStatus('available');
+          setUpdateInfo(info);
+          setShowBanner(true);
+        } else {
+          console.log(`忽略更新: 远程版本 ${remoteVersion} 不高于本地版本 ${currentVersion}`);
+        }
+      } catch (e) {
+        console.error('版本检查错误:', e);
+        // 如果获取版本失败，保守起见还是显示
+        setUpdateStatus('available');
+        setUpdateInfo(info);
+        setShowBanner(true);
+      }
     });
 
     window.electronAPI.onUpdateProgress?.((progress) => {
@@ -64,7 +94,7 @@ function UpdateManager() {
 
     // 延迟3秒后检查（确保登录完成）
     const timer = setTimeout(checkUpdateWithAuth, 3000);
-    
+
     return () => clearTimeout(timer);
   }, []);
 
@@ -74,11 +104,11 @@ function UpdateManager() {
       console.log('❌ 非Electron环境，跳过更新检查');
       return;
     }
-    
+
     console.log('🔄 开始检查更新...');
     setUpdateStatus('checking');
     setError(null);
-    
+
     try {
       const token = authService.getToken();
       console.log('📤 发送更新检查请求，Token:', token ? '已获取' : '未获取');
@@ -101,10 +131,10 @@ function UpdateManager() {
   // 下载更新
   const handleDownload = async () => {
     if (!isElectron) return;
-    
+
     setUpdateStatus('downloading');
     setDownloadProgress(0);
-    
+
     try {
       await window.electronAPI.downloadUpdate();
     } catch (e) {
@@ -173,7 +203,7 @@ function UpdateManager() {
           </div>
           <div className="mt-3">
             <div className="h-2 bg-slate-600 rounded-full overflow-hidden">
-              <div 
+              <div
                 className="h-full bg-indigo-500 transition-all duration-300"
                 style={{ width: `${downloadProgress}%` }}
               />

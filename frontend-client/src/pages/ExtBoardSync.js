@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { 
-  RefreshCw, Play, Square, Clock, Database, 
-  CheckCircle, XCircle, AlertCircle, ChevronDown, ChevronUp 
+import {
+  RefreshCw, Play, Square, Clock, Database,
+  CheckCircle, XCircle, AlertCircle, ChevronDown, ChevronUp
 } from 'lucide-react';
 import apiClient from '../services/api';
 
@@ -37,16 +37,16 @@ const ExtBoardSync = () => {
     use_proxy: true,
     skip_cons: false,
     skip_map: false,
-    delay: '8',
+    delay: '1.5',
     concurrent: true,
-    workers: '10',
+    workers: '6',         // 利特尔定律计算的黄金分割点
     max_ips: '200',
-    ip_ttl: '50',
-    req_delay_min: '2',
-    req_delay_max: '4',
+    ip_ttl: '45',         // 留 15 秒缓冲
+    req_delay_min: '1',   // 设计文档推荐值
+    req_delay_max: '2',   // 设计文档推荐值
     limit: ''
   });
-  
+
   // 轮询定时器
   const pollIntervalRef = useRef(null);
   const heatPollRef = useRef(null);
@@ -79,12 +79,12 @@ const ExtBoardSync = () => {
       const response = await apiClient.get('/api/admin/ext-boards/sync-status');
       setSyncStatus(response);
       setSyncing(response.is_syncing);
-      
+
       // 自动滚动日志
       if (logsEndRef.current) {
         logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
       }
-      
+
       return response.is_syncing;
     } catch (err) {
       console.error('加载同步状态失败:', err);
@@ -98,11 +98,11 @@ const ExtBoardSync = () => {
       const response = await apiClient.get('/api/admin/ext-boards/heat/status');
       setHeatStatus(response);
       setHeatRunning(response.is_running);
-      
+
       if (heatLogsEndRef.current) {
         heatLogsEndRef.current.scrollIntoView({ behavior: 'smooth' });
       }
-      
+
       return response.is_running;
     } catch (err) {
       console.error('加载热度计算状态失败:', err);
@@ -118,7 +118,7 @@ const ExtBoardSync = () => {
       setLoading(false);
     };
     init();
-    
+
     return () => {
       if (pollIntervalRef.current) {
         clearInterval(pollIntervalRef.current);
@@ -142,7 +142,7 @@ const ExtBoardSync = () => {
         }
       }, 2000);
     }
-    
+
     return () => {
       if (pollIntervalRef.current) {
         clearInterval(pollIntervalRef.current);
@@ -162,7 +162,7 @@ const ExtBoardSync = () => {
         }
       }, 2000);
     }
-    
+
     return () => {
       if (heatPollRef.current) {
         clearInterval(heatPollRef.current);
@@ -196,7 +196,7 @@ const ExtBoardSync = () => {
       const response = await apiClient.post('/api/admin/ext-boards/sync', {
         ...payload
       });
-      
+
       if (response.success) {
         setSyncing(true);
         await loadSyncStatus();
@@ -363,8 +363,8 @@ const ExtBoardSync = () => {
         <h3 className="text-lg font-semibold text-white mb-4">数据源统计</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {stats?.providers?.map((provider) => (
-            <div 
-              key={provider.code} 
+            <div
+              key={provider.code}
               className="bg-gray-700/50 rounded-lg p-4"
             >
               <div className="flex items-center justify-between mb-2">
@@ -582,7 +582,7 @@ const ExtBoardSync = () => {
             </>
           )}
         </div>
-        
+
         <div className="flex flex-wrap gap-3 mb-4">
           {!syncing ? (
             <>
@@ -623,18 +623,17 @@ const ExtBoardSync = () => {
               <span className="ml-1">同步日志</span>
               {syncing && <RefreshCw className="w-4 h-4 ml-2 animate-spin" />}
             </button>
-            
+
             {logsExpanded && (
               <div className="bg-gray-900 rounded-lg p-3 max-h-64 overflow-y-auto font-mono text-sm">
                 {syncStatus?.logs?.map((log, index) => (
-                  <div 
+                  <div
                     key={index}
-                    className={`${
-                      log.includes('ERROR') ? 'text-red-400' :
-                      log.includes('WARNING') ? 'text-yellow-400' :
-                      log.includes('成功') || log.includes('完成') ? 'text-green-400' :
-                      'text-gray-300'
-                    }`}
+                    className={`${log.includes('ERROR') ? 'text-red-400' :
+                        log.includes('WARNING') ? 'text-yellow-400' :
+                          log.includes('成功') || log.includes('完成') ? 'text-green-400' :
+                            'text-gray-300'
+                      }`}
                   >
                     {log}
                   </div>
@@ -656,7 +655,7 @@ const ExtBoardSync = () => {
       {/* 板块热度计算 */}
       <div className="bg-gray-800 rounded-xl p-4 border border-gray-700">
         <h3 className="text-lg font-semibold text-white mb-4">板块热度计算 (ETL)</h3>
-        
+
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
           <div>
             <label className="block text-sm text-gray-400 mb-1">指定日期</label>
@@ -668,7 +667,7 @@ const ExtBoardSync = () => {
               disabled={heatRunning}
             />
           </div>
-          
+
           <div className="flex items-end gap-4">
             <label className="flex items-center text-sm text-gray-300">
               <input
@@ -681,7 +680,7 @@ const ExtBoardSync = () => {
               计算全部日期
             </label>
           </div>
-          
+
           <div className="flex items-end gap-4">
             <label className="flex items-center text-sm text-gray-300">
               <input
@@ -694,7 +693,7 @@ const ExtBoardSync = () => {
               强制重算
             </label>
           </div>
-          
+
           <div className="flex items-end gap-4">
             <label className="flex items-center text-sm text-gray-300">
               <input
@@ -708,7 +707,7 @@ const ExtBoardSync = () => {
             </label>
           </div>
         </div>
-        
+
         <div className="flex flex-wrap gap-3 mb-4">
           {!heatRunning ? (
             <button
@@ -740,18 +739,17 @@ const ExtBoardSync = () => {
               <span className="ml-1">热度计算日志</span>
               {heatRunning && <RefreshCw className="w-4 h-4 ml-2 animate-spin" />}
             </button>
-            
+
             {heatLogsExpanded && (
               <div className="bg-gray-900 rounded-lg p-3 max-h-64 overflow-y-auto font-mono text-sm">
                 {heatStatus?.logs?.map((log, index) => (
-                  <div 
+                  <div
                     key={index}
-                    className={`${
-                      log.includes('ERROR') || log.includes('❌') ? 'text-red-400' :
-                      log.includes('WARNING') || log.includes('⚠️') ? 'text-yellow-400' :
-                      log.includes('✅') || log.includes('完成') ? 'text-green-400' :
-                      'text-gray-300'
-                    }`}
+                    className={`${log.includes('ERROR') || log.includes('❌') ? 'text-red-400' :
+                        log.includes('WARNING') || log.includes('⚠️') ? 'text-yellow-400' :
+                          log.includes('✅') || log.includes('完成') ? 'text-green-400' :
+                            'text-gray-300'
+                      }`}
                   >
                     {log}
                   </div>
@@ -766,7 +764,7 @@ const ExtBoardSync = () => {
       {/* 同步历史 */}
       <div className="bg-gray-800 rounded-xl p-4 border border-gray-700">
         <h3 className="text-lg font-semibold text-white mb-4">同步历史</h3>
-        
+
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
@@ -791,13 +789,12 @@ const ExtBoardSync = () => {
                     <td className="py-3 pr-4">
                       <div className="flex items-center">
                         <StatusIcon status={item.status} />
-                        <span className={`ml-2 ${
-                          item.status === 'success' ? 'text-green-400' :
-                          item.status === 'failed' ? 'text-red-400' :
-                          'text-yellow-400'
-                        }`}>
+                        <span className={`ml-2 ${item.status === 'success' ? 'text-green-400' :
+                            item.status === 'failed' ? 'text-red-400' :
+                              'text-yellow-400'
+                          }`}>
                           {item.status === 'success' ? '成功' :
-                           item.status === 'failed' ? '失败' : '部分成功'}
+                            item.status === 'failed' ? '失败' : '部分成功'}
                         </span>
                       </div>
                     </td>

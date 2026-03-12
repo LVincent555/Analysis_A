@@ -42,17 +42,16 @@ import BoardDetailDialog from './components/BoardDetailDialog';
 import BoardAnalysisPage from './pages/BoardAnalysisPage';
 import { SignalConfigProvider, useSignalConfig } from './contexts/SignalConfigContext';
 import SignalConfigPanel from './components/SignalConfigPanel';
-import UpdateManager from './components/common/UpdateManager';
 import SessionExpiredDialog from './components/common/SessionExpiredDialog';
 
 // 将内容区域提取为组件，避免Props Drilling过深
 const ContentArea = ({ appState, openConfig }) => {
-  const { 
-    activeModule, selectedDate, 
+  const {
+    activeModule, selectedDate,
     hotSpotsState, queryState, sectorQueryState, rankJumpState, steadyRiseState, industryTrendState,
     navigateToDetail, refreshDates, setActiveModule
   } = appState;
-  
+
   // 板块分析页面状态
   const [analysisBoard, setAnalysisBoard] = React.useState(null);
 
@@ -61,7 +60,7 @@ const ContentArea = ({ appState, openConfig }) => {
     switch (activeModule) {
       case 'hot-spots':
         return (
-          <HotSpotsModule 
+          <HotSpotsModule
             selectedDate={selectedDate}
             boardType={hotSpotsState.boardType}
             selectedPeriod={hotSpotsState.selectedPeriod}
@@ -69,10 +68,10 @@ const ContentArea = ({ appState, openConfig }) => {
             refreshTrigger={hotSpotsState.refreshTrigger}
           />
         );
-      
+
       case 'stock-query':
         return (
-          <StockQueryModule 
+          <StockQueryModule
             stockCode={queryState.stockCode}
             setStockCode={queryState.setStockCode}
             onSearch={queryState.handleStockQuery}
@@ -91,14 +90,14 @@ const ContentArea = ({ appState, openConfig }) => {
 
       case 'industry-query':
         return (
-          <IndustryQueryModule 
+          <IndustryQueryModule
             onNavigate={navigateToDetail}
           />
         );
 
       case 'industry-trend':
         return (
-          <IndustryTrendModule 
+          <IndustryTrendModule
             selectedDate={selectedDate}
             topNLimit={industryTrendState.topNLimit}
             onNavigate={navigateToDetail}
@@ -107,7 +106,7 @@ const ContentArea = ({ appState, openConfig }) => {
 
       case 'industry-weighted':
         return (
-          <IndustryWeightedModule 
+          <IndustryWeightedModule
             selectedDate={selectedDate}
             onNavigate={navigateToDetail}
           />
@@ -118,7 +117,7 @@ const ContentArea = ({ appState, openConfig }) => {
 
       case 'rank-jump':
         return (
-          <RankJumpModule 
+          <RankJumpModule
             selectedDate={selectedDate}
             jumpBoardType={rankJumpState.boardType}
             jumpThreshold={rankJumpState.threshold}
@@ -127,14 +126,14 @@ const ContentArea = ({ appState, openConfig }) => {
 
       case 'steady-rise':
         return (
-          <SteadyRiseModule 
+          <SteadyRiseModule
             selectedDate={selectedDate}
             riseBoardType={steadyRiseState.boardType}
             risePeriod={steadyRiseState.period}
             minRankImprovement={steadyRiseState.minImprovement}
           />
         );
-        
+
       case 'needle-under-20':
         return (
           <NeedleUnder20Module selectedDate={selectedDate} />
@@ -150,7 +149,7 @@ const ContentArea = ({ appState, openConfig }) => {
         // 如果有分析板块，显示分析页面
         if (analysisBoard) {
           return (
-            <BoardAnalysisPage 
+            <BoardAnalysisPage
               board={analysisBoard}
               selectedDate={selectedDate}
               onBack={() => setAnalysisBoard(null)}
@@ -158,7 +157,7 @@ const ContentArea = ({ appState, openConfig }) => {
           );
         }
         return (
-          <ExtBoardHeat 
+          <ExtBoardHeat
             selectedDate={selectedDate}
             onNavigateToAnalysis={(board) => setAnalysisBoard(board)}
           />
@@ -173,7 +172,7 @@ const ContentArea = ({ appState, openConfig }) => {
       case 'operation-logs':
         return <OperationLogs />;
 
-        case 'system-config':
+      case 'system-config':
         return <SystemConfig />;
 
       case 'role-management':
@@ -187,7 +186,7 @@ const ContentArea = ({ appState, openConfig }) => {
 
       default:
         return (
-          <HotSpotsModule 
+          <HotSpotsModule
             selectedDate={selectedDate}
             boardType={hotSpotsState.boardType}
             period={hotSpotsState.selectedPeriod}
@@ -216,18 +215,18 @@ function AppContent({ user, onLogout }) {
   // 详情页模式
   if (appState.showDetailPage && appState.selectedIndustry) {
     return (
-      <IndustryDetailPage 
-        industryName={appState.selectedIndustry} 
-        selectedDate={appState.selectedDate} 
-        onBack={appState.backToMain} 
+      <IndustryDetailPage
+        industryName={appState.selectedIndustry}
+        selectedDate={appState.selectedDate}
+        onBack={appState.backToMain}
       />
     );
   }
-  
+
   return (
     <div className="min-h-screen bg-slate-50">
       {/* 顶部导航 */}
-      <Header 
+      <Header
         openConfig={openConfig}
         availableDates={appState.availableDates}
         selectedDate={appState.selectedDate}
@@ -238,8 +237,8 @@ function AppContent({ user, onLogout }) {
       />
 
       {/* 移动端抽屉导航 */}
-      <Drawer 
-        isOpen={appState.isDrawerOpen} 
+      <Drawer
+        isOpen={appState.isDrawerOpen}
         onClose={() => appState.setIsDrawerOpen(false)}
       >
         <div className="p-4">
@@ -290,7 +289,7 @@ function App() {
     const handleSessionExpired = () => {
       setShowSessionExpired(true);
     };
-    
+
     window.addEventListener('session-expired', handleSessionExpired);
     return () => {
       window.removeEventListener('session-expired', handleSessionExpired);
@@ -338,10 +337,9 @@ function App() {
   return (
     <SignalConfigProvider>
       <AppContent user={user} onLogout={handleLogout} />
-      <UpdateManager />
-      <SessionExpiredDialog 
-        isOpen={showSessionExpired} 
-        onConfirm={handleSessionExpiredConfirm} 
+      <SessionExpiredDialog
+        isOpen={showSessionExpired}
+        onConfirm={handleSessionExpiredConfirm}
       />
     </SignalConfigProvider>
   );

@@ -49,22 +49,26 @@ class DataFixConfig:
 class TurnoverRateFixer:
     """换手率修补器"""
     
-    def __init__(self, date_str: str, data_type: str = 'stock'):
+    def __init__(self, date_str: str, data_type: str = 'stock', state_manager: Optional[ImportStateManager] = None):
         """
         Args:
             date_str: 日期字符串 YYYYMMDD
             data_type: 数据类型（stock/sector）
+            state_manager: 外部传入的状态管理器（避免多实例竞争）
         """
         self.date_str = date_str
         self.data_type = data_type
         self.config = DataFixConfig.get_fix_config('turnover_rate')
         
         # 状态管理
-        state_file = (
-            "data_import_state.json" if data_type == 'stock' 
-            else "sector_import_state.json"
-        )
-        self.state_manager = ImportStateManager(state_file)
+        if state_manager:
+            self.state_manager = state_manager
+        else:
+            state_file = (
+                "data_import_state.json" if data_type == 'stock' 
+                else "sector_import_state.json"
+            )
+            self.state_manager = ImportStateManager(state_file)
         
         # 修补信息
         self.fix_info = {}

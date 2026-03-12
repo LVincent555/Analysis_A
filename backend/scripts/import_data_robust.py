@@ -194,19 +194,22 @@ def import_excel_file(file_path: Path, state_manager, progress_callback=None) ->
         
         # === 清理旧数据（如果状态是deleted/rolled_back，确保数据库干净） ===
         import_info = state_manager.state["imports"].get(date_str, {})
-        if import_info.get("status") in ["deleted", "rolled_back"]:
+        # === 清理旧数据（防止主键冲突） ===
+        # 无论之前状态如何，都先尝试清理该日期的数据，确保幂等性
+        if True:
             from sqlalchemy import func
             old_count = db_session.query(func.count(DailyStockData.id)).filter(
                 func.to_char(DailyStockData.date, 'YYYYMMDD') == date_str
             ).scalar()
             
             if old_count > 0:
-                logger.warning(f"⚠️  检测到 {old_count} 条旧数据残留，正在清理...")
+                logger.info(f"🔄 检测到 {old_count} 条旧数据，正在清理以确保幂等性...")
                 db_session.query(DailyStockData).filter(
                     func.to_char(DailyStockData.date, 'YYYYMMDD') == date_str
                 ).delete(synchronize_session=False)
-                db_session.commit()
-                logger.info(f"✅ 已清理 {old_count} 条旧数据")
+                # 必须立即Flush，否则后续插入可能仍报错
+                db_session.flush() 
+                logger.info(f"✅ 已清理旧数据")
         logger.info(f"📂 正在导入: {filename} (日期: {target_date})")
         
         # 读取Excel文件
@@ -233,7 +236,8 @@ def import_excel_file(file_path: Path, state_manager, progress_callback=None) ->
         # === 数据修补：换手率 ===
         from data_fixer import TurnoverRateFixer
         
-        turnover_fixer = TurnoverRateFixer(date_str, data_type='stock')
+        # 初始化换手率修补器（注入state_manager以避免状态竞态）
+        turnover_fixer = TurnoverRateFixer(date_str, data_type='stock', state_manager=state_manager)
         fix_config = state_manager.state.get('fix_config', {}).get('turnover_rate_fix', {})
         
         if fix_config.get('enabled', True) and fix_config.get('auto_fix', True):
@@ -370,6 +374,17 @@ def import_excel_file(file_path: Path, state_manager, progress_callback=None) ->
         
         return imported_count, skipped_count, True
         
+    except IntegrityError as e:
+        # === 唯一性约束冲突 (Commit Stage Capture) ===
+        db_session.rollback()
+        error_msg = f"唯一性约束冲突 (Commit Stage): {str(e.orig) if hasattr(e, 'orig') else str(e)}"
+        logger.error(f"❌ {error_msg}")
+        
+        # 标记为 rolled_back 并归类原因
+        state_manager.mark_rolled_back(date_str, f"Duplicate Key Violation: {error_msg}")
+        
+        return 0, 0, False
+
     except Exception as e:
         # === 任何错误都回滚整个事务 ===
         db_session.rollback()
@@ -418,6 +433,11 @@ def main():
     
     # 获取状态管理器
     state_manager = get_state_manager()
+    
+    # === 收敛超时任务 (Option A Requirement) ===
+    converged_count = state_manager.converge_in_progress_tasks(timeout_minutes=60)
+    if converged_count > 0:
+        logger.info(f"🔄 已自动回滚 {converged_count} 个超时/未完成的任务")
     
     # 获取待导入文件
     files = get_data_files()

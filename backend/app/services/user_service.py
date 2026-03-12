@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_, and_, func
 import bcrypt
 
-from ..db_models import User, UserSession, OperationLog
+from ..db_models import User, UserSession, OperationLog, Role, user_roles
 from ..crypto.aes_handler import generate_key, get_master_crypto
 
 logger = logging.getLogger(__name__)
@@ -154,6 +154,48 @@ class UserService:
         return result
     
     @staticmethod
+    def _get_role_mapping(role_name: str) -> str:
+        """
+        获取角色兼容映射
+        super_admin/admin -> 'admin' (在users.role字段)
+        user/readonly -> 'user' (在users.role字段)
+        """
+        if role_name in ('super_admin', 'admin'):
+            return 'admin'
+        return 'user'
+    
+    @staticmethod
+    def _validate_and_assign_role(
+        db: Session,
+        user: User,
+        role_name: str,
+        operator_id: int,
+        operator_name: str
+    ) -> None:
+        """
+        验证角色存在并分配给用户
+        - 验证role_name存在于roles表
+        - 清除该用户已有的角色关联（单角色约束）
+        - 添加新角色关联到user_roles
+        """
+        # 查找角色
+        role = db.query(Role).filter(Role.name == role_name, Role.is_active == True).first()
+        if not role:
+            logger.warning(f"角色 '{role_name}' 不存在于roles表，跳过user_roles写入")
+            return
+        
+        # 清除已有角色关联（单角色约束）
+        db.execute(user_roles.delete().where(user_roles.c.user_id == user.id))
+        
+        # 添加新角色关联
+        db.execute(user_roles.insert().values(
+            user_id=user.id,
+            role_id=role.id
+        ))
+        
+        logger.info(f"用户 {user.username} 已分配角色: {role_name} (role_id={role.id})")
+
+    @staticmethod
     def create_user(
         db: Session,
         username: str,
@@ -177,18 +219,29 @@ class UserService:
             username: 用户名
             password: 明文密码
             operator: 操作者
+            role: 角色名称 (super_admin/admin/user/readonly)
             其他参数: 用户信息
         
         Returns:
             创建的用户对象
         
         Raises:
-            ValueError: 用户名已存在
+            ValueError: 用户名已存在或角色无效
         """
         # 检查用户名是否存在
         existing = db.query(User).filter(User.username == username).first()
         if existing:
             raise ValueError(f"用户名 '{username}' 已存在")
+        
+        # 验证角色存在于roles表（如果roles表存在数据）
+        role_record = db.query(Role).filter(Role.name == role, Role.is_active == True).first()
+        if not role_record:
+            # 如果没找到，检查是否是传统的admin/user
+            if role not in ('admin', 'user'):
+                raise ValueError(f"角色 '{role}' 不存在")
+        
+        # 获取兼容的users.role值
+        mapped_role = UserService._get_role_mapping(role)
         
         # 生成密码哈希
         password_hash = bcrypt.hashpw(
@@ -201,7 +254,7 @@ class UserService:
         master_crypto = get_master_crypto()
         user_key_encrypted = master_crypto.encrypt_key(user_key)
         
-        # 创建用户
+        # 创建用户（users.role使用映射后的值）
         user = User(
             username=username,
             password_hash=password_hash,
@@ -209,7 +262,7 @@ class UserService:
             email=email,
             phone=phone,
             nickname=nickname or username,
-            role=role,
+            role=mapped_role,  # 使用映射后的值保持兼容
             is_active=True,
             allowed_devices=allowed_devices,
             offline_enabled=offline_enabled,
@@ -221,6 +274,17 @@ class UserService:
         )
         
         db.add(user)
+        db.flush()  # 获取user.id但不提交
+        
+        # 分配角色到user_roles表
+        UserService._validate_and_assign_role(
+            db=db,
+            user=user,
+            role_name=role,
+            operator_id=operator.id,
+            operator_name=operator.username
+        )
+        
         db.commit()
         db.refresh(user)
         
@@ -233,10 +297,10 @@ class UserService:
             target_type="user",
             target_id=user.id,
             target_name=user.username,
-            new_value={"username": username, "role": role}
+            new_value={"username": username, "role": role, "mapped_role": mapped_role}
         )
         
-        logger.info(f"用户创建成功: {username} (by {operator.username})")
+        logger.info(f"用户创建成功: {username} (role={role}, mapped={mapped_role}, by {operator.username})")
         return user
     
     @staticmethod
@@ -290,8 +354,38 @@ class UserService:
                     new_value[field] = str(new_val) if new_val else None
                     setattr(user, field, new_val)
         
+        # 特殊处理角色变更：同步到user_roles表
+        role_changed = False
+        original_role = None
+        if 'role' in kwargs and 'role' in new_value:
+            original_role = kwargs['role']  # 原始传入的角色名
+            mapped_role = UserService._get_role_mapping(original_role)
+            
+            # 验证角色存在于roles表
+            role_record = db.query(Role).filter(Role.name == original_role, Role.is_active == True).first()
+            if not role_record:
+                if original_role not in ('admin', 'user'):
+                    raise ValueError(f"角色 '{original_role}' 不存在")
+            
+            # 更新users.role为映射后的值
+            user.role = mapped_role
+            new_value['role'] = original_role  # 日志记录原始角色名
+            new_value['mapped_role'] = mapped_role
+            role_changed = True
+        
         if new_value:
             user.updated_at = datetime.utcnow()
+            
+            # 如果角色变更，同步到user_roles
+            if role_changed and original_role:
+                UserService._validate_and_assign_role(
+                    db=db,
+                    user=user,
+                    role_name=original_role,
+                    operator_id=operator.id,
+                    operator_name=operator.username
+                )
+            
             db.commit()
             db.refresh(user)
             

@@ -1,6 +1,6 @@
 {
   "name": "stock-analysis-client",
-  "version": "0.4.12",
+  "version": "0.6.2",
   "description": "A股分析系统桌面客户端",
   "private": true,
   "main": "electron/main.js",
@@ -71,7 +71,7 @@
     ],
     "win": {
       "target": "nsis",
-      "icon": "public/icon.ico",
+      "icon": "public/icon.png",
       "artifactName": "${productName}-Setup-${version}.${ext}"
     },
     "nsis": {

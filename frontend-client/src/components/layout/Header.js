@@ -8,10 +8,10 @@ import authService from '../../services/authService';
 // 检查是否在 Electron 环境
 const isElectron = window.electronAPI?.isElectron;
 
-const Header = ({ 
-  openConfig, 
-  availableDates, 
-  selectedDate, 
+const Header = ({
+  openConfig,
+  availableDates,
+  selectedDate,
   setSelectedDate,
   onMenuClick,
   user,
@@ -19,25 +19,41 @@ const Header = ({
 }) => {
   // 市场波动率数据
   const [volatilityData, setVolatilityData] = useState(null);
-  
+
   // 更新状态
   const [updateStatus, setUpdateStatus] = useState('idle'); // idle, checking, available, downloading, downloaded
   const [updateInfo, setUpdateInfo] = useState(null);
   const [downloadProgress, setDownloadProgress] = useState(0);
-  
+
   // 监听更新事件（仅用于手动检查更新时的状态同步）
-  // 注意：UpdateManager.js 已经处理了自动更新逻辑，这里只处理手动触发的更新
+  // 注意：已整合自动更新逻辑，登录后会自动检查一次
   useEffect(() => {
     if (!isElectron) return;
-    
+
     // 用于标记是否是手动检查触发的
     let isManualCheck = false;
-    
-    const handleUpdateAvailable = (info) => {
-      setUpdateStatus('available');
-      setUpdateInfo(info);
+    // 用于防止重复自动检查
+    let hasAutoChecked = false;
+
+    const handleUpdateAvailable = async (info) => {
+      try {
+        const currentVersion = await window.electronAPI.getVersion();
+        const remoteVersion = info.version;
+        
+        console.log(`自动检查: 本地=${currentVersion}, 远程=${remoteVersion}`);
+        
+        // 比较版本
+        if (compareVersions(remoteVersion, currentVersion) > 0) {
+          setUpdateStatus('available');
+          setUpdateInfo(info);
+        } else {
+          console.log('自动检查: 远程版本不高于本地版本，忽略更新');
+        }
+      } catch (e) {
+        console.error('版本检查失败:', e);
+      }
     };
-    
+
     const handleUpdateNotAvailable = () => {
       // 只有手动检查时才弹窗提示
       if (isManualCheck) {
@@ -45,16 +61,16 @@ const Header = ({
         isManualCheck = false;
       }
     };
-    
+
     const handleUpdateProgress = (progress) => {
       setDownloadProgress(progress.percent || 0);
     };
-    
+
     const handleUpdateDownloaded = () => {
       setUpdateStatus('downloaded');
       setDownloadProgress(100);
     };
-    
+
     const handleUpdateError = (err) => {
       if (isManualCheck) {
         setUpdateStatus('idle');
@@ -62,30 +78,69 @@ const Header = ({
         isManualCheck = false;
       }
     };
-    
+
     window.electronAPI.onUpdateAvailable?.(handleUpdateAvailable);
     window.electronAPI.onUpdateNotAvailable?.(handleUpdateNotAvailable);
     window.electronAPI.onUpdateProgress?.(handleUpdateProgress);
     window.electronAPI.onUpdateDownloaded?.(handleUpdateDownloaded);
     window.electronAPI.onUpdateError?.(handleUpdateError);
-    
+
     // 暴露设置手动检查标记的方法
     window.__setManualUpdateCheck = (val) => { isManualCheck = val; };
+
+    // 登录后自动检查更新（带Token，延迟3秒）
+    const autoCheckTimer = setTimeout(async () => {
+      if (hasAutoChecked) return;
+      hasAutoChecked = true;
+
+      try {
+        const token = authService.getToken();
+        if (token) {
+          console.log('📦 登录后自动检查更新...');
+          await window.electronAPI.checkForUpdates(token);
+        }
+      } catch (e) {
+        console.error('自动检查更新失败:', e);
+      }
+    }, 3000);
+
+    return () => {
+      clearTimeout(autoCheckTimer);
+    };
   }, []);
-  
+
+
+  // 辅助函数：比较版本号
+  // 返回 1 如果 v1 > v2
+  // 返回 -1 如果 v1 < v2
+  // 返回 0 如果相等
+  const compareVersions = (v1, v2) => {
+    if (!v1 || !v2) return 0;
+    const parts1 = v1.replace(/^v/, '').split('.').map(Number);
+    const parts2 = v2.replace(/^v/, '').split('.').map(Number);
+    
+    for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
+      const p1 = parts1[i] || 0;
+      const p2 = parts2[i] || 0;
+      if (p1 > p2) return 1;
+      if (p1 < p2) return -1;
+    }
+    return 0;
+  };
+
   // 检查更新（手动触发）
   const handleCheckUpdate = async () => {
     if (!isElectron) {
       alert('更新功能仅在桌面客户端可用');
       return;
     }
-    
+
     console.log('🔄 手动检查更新...');
     setUpdateStatus('checking');
-    
+
     // 标记为手动检查
     window.__setManualUpdateCheck?.(true);
-    
+
     // 15秒超时
     const timeoutId = setTimeout(() => {
       console.log('⏰ 更新检查超时');
@@ -93,20 +148,32 @@ const Header = ({
       window.__setManualUpdateCheck?.(false);
       alert('检查更新超时，请稍后重试');
     }, 15000);
-    
+
     try {
       const token = authService.getToken();
+      // 获取当前版本
+      const currentVersion = await window.electronAPI.getVersion();
       const result = await window.electronAPI.checkForUpdates(token);
       clearTimeout(timeoutId);
-      
+
       // 如果返回结果但没有触发事件，手动处理
       if (result && result.updateInfo) {
-        setUpdateStatus('available');
-        setUpdateInfo(result.updateInfo);
+        const remoteVersion = result.updateInfo.version;
+        console.log(`版本比较: 本地=${currentVersion}, 远程=${remoteVersion}`);
+        
+        // 只有远程版本大于本地版本才提示更新
+        if (compareVersions(remoteVersion, currentVersion) > 0) {
+          setUpdateStatus('available');
+          setUpdateInfo(result.updateInfo);
+        } else {
+          // 版本相同或更旧（可能是回滚）
+          setUpdateStatus('idle');
+          alert(`当前已是最新版本 (v${currentVersion})`);
+        }
       } else if (!result?.updateInfo) {
         // 没有更新
         setUpdateStatus('idle');
-        alert('当前已是最新版本');
+        alert(`当前已是最新版本 (v${currentVersion})`);
       }
       window.__setManualUpdateCheck?.(false);
     } catch (e) {
@@ -117,7 +184,7 @@ const Header = ({
       alert('检查更新失败: ' + e.message);
     }
   };
-  
+
   // 下载更新
   const handleDownloadUpdate = async () => {
     if (!isElectron) return;
@@ -129,13 +196,13 @@ const Header = ({
       setUpdateStatus('available');
     }
   };
-  
+
   // 安装更新
   const handleInstallUpdate = () => {
     if (!isElectron) return;
     window.electronAPI.installUpdate();
   };
-  
+
   // 当日期列表更新时，检查当前选中日期是否有效
   useEffect(() => {
     if (availableDates?.dates && selectedDate && setSelectedDate) {
@@ -157,13 +224,13 @@ const Header = ({
         console.error('获取市场波动率失败:', err);
       }
     };
-    
+
     fetchVolatility();
     // 每5分钟刷新一次
     const interval = setInterval(fetchVolatility, 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, []);
-  
+
   // 渲染趋势图标
   const renderTrendIcon = (trend) => {
     if (trend === 'up') {
@@ -173,7 +240,7 @@ const Header = ({
     }
     return <Minus className="h-3 w-3 text-gray-400" />;
   };
-  
+
   return (
     <header className="bg-white shadow-md z-10 relative sticky top-0">
       <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
@@ -181,7 +248,7 @@ const Header = ({
           {/* Logo区域 */}
           <div className="flex items-center space-x-3">
             {/* 移动端汉堡菜单 */}
-            <button 
+            <button
               onClick={onMenuClick}
               className="lg:hidden p-2 -ml-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
             >
@@ -200,7 +267,7 @@ const Header = ({
                 一个兴趣使然的股票分析系统
               </p>
             </div>
-            
+
             {/* 移动端显示三天波动率趋势 */}
             {volatilityData && volatilityData.days && volatilityData.days.length >= 3 && (
               <div className="sm:hidden flex items-center gap-1 bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200 rounded-lg px-2 py-1">
@@ -241,7 +308,7 @@ const Header = ({
                 </div>
               </div>
             )}
-            
+
             {/* 信号配置按钮 */}
             <button
               onClick={openConfig}
@@ -250,7 +317,7 @@ const Header = ({
               <Settings className="h-4 w-4" />
               <span className="font-medium text-sm">信号配置</span>
             </button>
-            
+
             {/* 移动端仅显示图标 */}
             <button
               onClick={openConfig}
@@ -258,7 +325,7 @@ const Header = ({
             >
               <Settings className="h-5 w-5" />
             </button>
-            
+
             {/* 日期选择器 */}
             {availableDates && selectedDate && (
               <div className="flex items-center space-x-2 bg-gray-50 rounded-lg px-3 py-2 border border-gray-200">
@@ -283,7 +350,7 @@ const Header = ({
                     </svg>
                   </div>
                 </div>
-                
+
                 {selectedDate === availableDates.latest_date && (
                   <span className="hidden md:inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-100 text-green-800">
                     最新
@@ -309,7 +376,7 @@ const Header = ({
                     <span className="hidden lg:inline">检查更新</span>
                   </button>
                 )}
-                
+
                 {/* 检查中 */}
                 {updateStatus === 'checking' && (
                   <div className="flex items-center gap-1.5 px-3 py-2 text-sm text-slate-500 bg-slate-100 rounded-xl">
@@ -317,7 +384,7 @@ const Header = ({
                     <span className="hidden lg:inline">检查中...</span>
                   </div>
                 )}
-                
+
                 {/* 发现新版本 */}
                 {updateStatus === 'available' && (
                   <button
@@ -329,21 +396,21 @@ const Header = ({
                     <span>更新 {updateInfo?.version || ''}</span>
                   </button>
                 )}
-                
+
                 {/* 下载中 */}
                 {updateStatus === 'downloading' && (
                   <div className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-gradient-to-r from-blue-500 to-indigo-500 text-white rounded-xl shadow-lg">
                     <RefreshCw className="w-4 h-4 animate-spin" />
                     <span>下载中 {downloadProgress.toFixed(0)}%</span>
                     <div className="w-16 h-1.5 bg-blue-300/50 rounded-full overflow-hidden">
-                      <div 
+                      <div
                         className="h-full bg-white rounded-full transition-all duration-300"
                         style={{ width: `${downloadProgress}%` }}
                       />
                     </div>
                   </div>
                 )}
-                
+
                 {/* 下载完成 */}
                 {updateStatus === 'downloaded' && (
                   <button

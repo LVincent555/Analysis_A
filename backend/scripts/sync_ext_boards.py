@@ -44,6 +44,31 @@ from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 
+
+# 静态黑名单：无分析价值或过宽泛的超大板块，直接跳过成分抓取
+BLACKLIST_BOARDS = [
+    '融资融券',
+    '深股通',
+    '沪股通',
+    '标普概念',
+    '富时罗素概念',
+    'MSCI概念',
+    '注册制次新股',
+    'GDR',
+    '电子后视镜',
+    '体育产业',
+    '单抗概念',
+    '专精特新',
+]
+
+
+def _resolve_blacklist_boards() -> set[str]:
+    env_raw = os.getenv("SYNC_EXT_BOARD_BLACKLIST", "").strip()
+    if not env_raw:
+        return set(BLACKLIST_BOARDS)
+    env_items = {x.strip() for x in env_raw.split(",") if x.strip()}
+    return set(BLACKLIST_BOARDS).union(env_items)
+
 # ============================================================
 # 91HTTP 代理管理器
 # ============================================================
@@ -272,8 +297,7 @@ class EastMoneyAPI:
                         time.sleep(2 + retry)  # 递增延迟
                 
                 if not page_success:
-                    logger.error(f"获取{board_type}板块第{page}页失败，跳过后续页面")
-                    break
+                    raise RuntimeError(f"获取{board_type}板块第{page}页失败")
                 
                 # 检查是否还有下一页
                 total = data.get("data", {}).get("total", 0)
@@ -421,13 +445,25 @@ except ImportError:
 
 
 def find_latest_trade_date(engine, target_date: date) -> Optional[date]:
-    sql = """
+    sql_legacy = """
     SELECT MAX(date) FROM daily_stock_data
     WHERE rank IS NOT NULL AND date <= :d
     """
+    sql_crawler = """
+    SELECT MAX(trade_date)::date FROM crawler.raw_stock_daily
+    WHERE trade_date <= :d
+    """
     with engine.connect() as conn:
-        row = conn.execute(text(sql), {"d": target_date}).fetchone()
-        return row[0] if row and row[0] else None
+        row = conn.execute(text(sql_legacy), {"d": target_date}).fetchone()
+        row2 = conn.execute(text(sql_crawler), {"d": target_date}).fetchone()
+
+        candidates = []
+        if row and row[0]:
+            candidates.append(row[0])
+        if row2 and row2[0]:
+            candidates.append(row2[0])
+
+        return max(candidates) if candidates else None
 
 
 # ============================================================
@@ -557,6 +593,7 @@ class ExtBoardSyncer:
         self.engine = create_engine(db_url)
         Session = sessionmaker(bind=self.engine)
         self.session = Session()
+        self.blacklist_boards = _resolve_blacklist_boards()
         
         # 请求间隔（秒）
         self.delay = delay
@@ -569,6 +606,16 @@ class ExtBoardSyncer:
         # 缓存已有股票代码
         self._stock_codes: set = set()
         self._load_stock_codes()
+
+    def _split_boards_by_blacklist(self, boards: List[tuple]) -> tuple[List[tuple], List[str]]:
+        kept: List[tuple] = []
+        skipped: List[str] = []
+        for board_id, board_name in boards:
+            if str(board_name) in self.blacklist_boards:
+                skipped.append(str(board_name))
+                continue
+            kept.append((board_id, board_name))
+        return kept, skipped
     
     def _load_providers(self):
         """加载数据源 ID"""
@@ -726,8 +773,15 @@ class ExtBoardSyncer:
             # 优先使用代理直连 API
             proxy_mgr = get_proxy_manager()
             if proxy_mgr:
-                df = _em_api.fetch_board_list('industry')
-                logger.info(f"已通过代理获取并缓存 {len(_em_api._industry_code_map)} 个行业板块代码")
+                try:
+                    df = _em_api.fetch_board_list('industry')
+                    logger.info(f"已通过代理获取并缓存 {len(_em_api._industry_code_map)} 个行业板块代码")
+                except Exception as proxy_exc:
+                    logger.warning(f"代理直连行业板块失败，回退 AKShare: {proxy_exc}")
+                    df = ak.stock_board_industry_name_em()
+                    if df is not None and not df.empty:
+                        cached = _em_api.cache_board_codes('industry', df)
+                        logger.info(f"已缓存 {cached} 个行业板块代码")
             else:
                 df = ak.stock_board_industry_name_em()
                 if df is not None and not df.empty:
@@ -763,8 +817,15 @@ class ExtBoardSyncer:
             # 优先使用代理直连 API
             proxy_mgr = get_proxy_manager()
             if proxy_mgr:
-                df = _em_api.fetch_board_list('concept')
-                logger.info(f"已通过代理获取并缓存 {len(_em_api._concept_code_map)} 个概念板块代码")
+                try:
+                    df = _em_api.fetch_board_list('concept')
+                    logger.info(f"已通过代理获取并缓存 {len(_em_api._concept_code_map)} 个概念板块代码")
+                except Exception as proxy_exc:
+                    logger.warning(f"代理直连概念板块失败，回退 AKShare: {proxy_exc}")
+                    df = ak.stock_board_concept_name_em()
+                    if df is not None and not df.empty:
+                        cached = _em_api.cache_board_codes('concept', df)
+                        logger.info(f"已缓存 {cached} 个概念板块代码")
             else:
                 df = ak.stock_board_concept_name_em()
                 if df is not None and not df.empty:
@@ -809,13 +870,18 @@ class ExtBoardSyncer:
         logger.info(f"获取东财{board_type}板块成分股（直连API）...")
         
         boards = self._get_boards(provider_id, board_type)
+        boards, skipped_blacklist = self._split_boards_by_blacklist(boards)
+        if skipped_blacklist:
+            logger.info(
+                f"{board_type} 黑名单跳过 {len(skipped_blacklist)} 个板块: {skipped_blacklist[:10]}"
+            )
         
         # 限制数量（测试用）
         if limit and limit > 0:
             boards = boards[:limit]
             logger.info(f"限制同步前 {limit} 个板块（测试模式）")
         
-        logger.info(f"共 {len(boards)} 个{board_type}板块需要同步成分股")
+        logger.info(f"共 {len(boards)} 个{board_type}板块需要同步成分股（黑名单跳过 {len(skipped_blacklist)}）")
         
         total_cons = 0
         failed_boards = []
@@ -872,7 +938,10 @@ class ExtBoardSyncer:
         
         pbar.close()
         self.session.commit()
-        logger.info(f"同步东财{board_type}板块成分股完成: {total_cons} 条, 失败 {len(failed_boards)} 个")
+        logger.info(
+            f"同步东财{board_type}板块成分股完成: success={len(boards)-len(failed_boards)}, "
+            f"skip={len(skipped_blacklist)}, fail={len(failed_boards)}, cons={total_cons}"
+        )
         
         return total_cons, failed_boards
     
@@ -892,12 +961,17 @@ class ExtBoardSyncer:
         """
         import queue
         
-        MAX_RETRY = 10  # 单个任务最大重试次数
+        MAX_RETRY = 20  # 单个任务最大重试次数
         
         logger.info(f"🚀 启动死磕模式: {workers}线程, TTL={ip_ttl}s, 最大重试={MAX_RETRY}次")
         
         # ============ 1. 任务装载 ============
         boards = self._get_boards(provider_id, board_type)
+        boards, skipped_blacklist = self._split_boards_by_blacklist(boards)
+        if skipped_blacklist:
+            logger.info(
+                f"{board_type} 黑名单跳过 {len(skipped_blacklist)} 个板块: {skipped_blacklist[:10]}"
+            )
         if limit and limit > 0:
             boards = boards[:limit]
         
@@ -915,7 +989,7 @@ class ExtBoardSyncer:
                 seen.add(b_id)
                 task_queue.put((0, b_id, b_name))  # 初始重试次数为 0
         
-        logger.info(f"共 {total_tasks} 个{board_type}板块，目标: 100% 成功")
+        logger.info(f"共 {total_tasks} 个{board_type}板块，目标: 100% 成功（黑名单跳过 {len(skipped_blacklist)}）")
         
         # ============ 2. 统一请求函数（集中处理所有错误） ============
         def fetch_board_members(session, board_name: str) -> dict:
@@ -944,12 +1018,28 @@ class ExtBoardSyncer:
                         "fltt": "2", "invt": "2", "fid": "f3",
                         "fs": f"b:{bk_code}+f:!50", "fields": "f12,f14"
                     }
-                    
-                    resp = session.get(
-                        "https://push2.eastmoney.com/api/qt/clist/get",
-                        params=params, timeout=12
-                    )
-                    resp.raise_for_status()
+
+                    resp = None
+                    for page_retry in range(3):
+                        try:
+                            resp = session.get(
+                                "https://push2.eastmoney.com/api/qt/clist/get",
+                                params=params,
+                                timeout=12,
+                            )
+                            resp.raise_for_status()
+                            break
+                        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
+                            if page_retry >= 2:
+                                raise
+                            time.sleep(0.8 + page_retry * 0.8 + random.random() * 0.4)
+                        except requests.exceptions.HTTPError:
+                            if page_retry >= 2:
+                                raise
+                            time.sleep(0.8 + page_retry * 0.8 + random.random() * 0.4)
+
+                    if resp is None:
+                        raise requests.exceptions.ConnectionError("empty response after page retries")
                     
                     # 安全解析 JSON
                     try:
@@ -975,7 +1065,7 @@ class ExtBoardSyncer:
                     if page * 100 >= total:
                         break
                     page += 1
-                    time.sleep(0.05)
+                    time.sleep(random.uniform(0.08, 0.18))
                 
                 return {'ok': True, 'data': all_records, 'error': None, 'error_type': None}
                 
@@ -1053,7 +1143,18 @@ class ExtBoardSyncer:
                             # 动态等待：2s, 5s, 5s...
                             time.sleep(2.0 if p_retry == 0 else 5.0)
                     
-                    # 如果实在拿不到 IP，任务回炉，线程休息
+                    # 无代理模式：直接建会话（仍遵守 req_delay 频控）
+                    if session is None and proxy_mgr is None:
+                        session = requests.Session()
+                        session.trust_env = False
+                        session.headers.update({
+                            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                            "Connection": "keep-alive"
+                        })
+                        proxy_start_time = time.time()
+                        current_ip = "direct"
+
+                    # 如果实在拿不到可用会话，任务回炉，线程休息
                     if session is None:
                         task_queue.put((retry_count, board_id, board_name))  # 原样放回
                         task_queue.task_done()
@@ -1187,11 +1288,15 @@ class ExtBoardSyncer:
         logger.info("=" * 50)
         logger.info(f"🏁 {board_type} 同步完成:")
         logger.info(f"   成功: {success_count}/{total_tasks} ({100*success_count/total_tasks:.1f}%)")
+        logger.info(f"   黑名单跳过: {len(skipped_blacklist)}")
         logger.info(f"   永久失败: {perm_fail_count}")
         logger.info(f"   成分股: {total_cons} 条")
         logger.info(f"   IP消耗: {ip_stats.get('total_ips_used', 0)}/{ip_stats.get('max_ips', 0)}")
         if retry_stats:
             logger.info(f"   错误分布: {retry_stats}")
+        logger.info(
+            f"   快照口径: success={success_count}, skip={len(skipped_blacklist)}, fail={perm_fail_count}"
+        )
         logger.info("=" * 50)
         
         return total_cons, perm_failed_boards
@@ -1284,7 +1389,8 @@ class ExtBoardSyncer:
         
         # 获取该类型的所有板块
         boards = self._get_boards(provider_id, board_type)
-        logger.info(f"共 {len(boards)} 个{board_type}板块需要同步成分股")
+        boards, skipped_blacklist = self._split_boards_by_blacklist(boards)
+        logger.info(f"共 {len(boards)} 个{board_type}板块需要同步成分股（黑名单跳过 {len(skipped_blacklist)}）")
         
         total_cons = 0
         failed_boards = []
@@ -1676,13 +1782,28 @@ def main():
     
     # 并发模式参数 (Manager-Worker 架构)
     parser.add_argument('--concurrent', action='store_true', help='启用并发模式（Manager-Worker 架构）')
-    parser.add_argument('--workers', type=int, default=10, help='并发线程数 (默认10)')
+    parser.add_argument('--workers', type=int, default=6, help='并发线程数 (默认6)')
     parser.add_argument('--max-ips', type=int, default=200, help='最大代理IP数量 (默认200，防止打穿号池)')
     parser.add_argument('--ip-ttl', type=float, default=50.0, help='单个IP复用时间秒数 (默认50，留10秒缓冲)')
     parser.add_argument('--req-delay-min', type=float, default=1.0, help='请求间最小延迟秒数 (默认1)')
     parser.add_argument('--req-delay-max', type=float, default=3.0, help='请求间最大延迟秒数 (默认3)')
     
     args = parser.parse_args()
+
+    # 频控保护：避免误设过高并发或过低延迟触发风控
+    if args.workers <= 0:
+        logger.warning(f"workers={args.workers} 非法，回退为 6")
+        args.workers = 6
+
+    if args.req_delay_min < 0.6:
+        logger.warning(f"req-delay-min={args.req_delay_min} 过小，回退为 0.6")
+        args.req_delay_min = 0.6
+
+    if args.req_delay_max < args.req_delay_min:
+        logger.warning(
+            f"req-delay-max({args.req_delay_max}) < req-delay-min({args.req_delay_min})，自动对齐"
+        )
+        args.req_delay_max = args.req_delay_min
     
     # 初始化代理
     if args.proxy:
