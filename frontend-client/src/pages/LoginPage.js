@@ -1,11 +1,11 @@
 /**
  * 登录页面
  */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Lock, User, Eye, EyeOff, Loader2, AlertCircle } from 'lucide-react';
 import authService from '../services/authService';
 import secureApi from '../services/secureApi';
-import { API_BASE_URL, SERVERS, switchServer, getCurrentServer } from '../constants/config';
+import { API_BASE_URL, switchServer, getCurrentServer } from '../constants/config';
 
 // 简单的加密/解密（用于本地存储，非完全安全但比明文好）
 const encodeCredential = (str) => btoa(encodeURIComponent(str));
@@ -27,22 +27,41 @@ const LoginPage = ({ onLoginSuccess }) => {
   const [appVersion, setAppVersion] = useState('0.4.0');
   const [isElectron, setIsElectron] = useState(false);
   const [serverStatus, setServerStatus] = useState('checking'); // checking, online, offline
+  const statusAbortRef = useRef(null);
+  const mountedRef = useRef(false);
 
   // 检测服务器状态
-  const checkServerStatus = async () => {
+  const checkServerStatus = useCallback(async () => {
+    statusAbortRef.current?.abort();
+    const controller = new AbortController();
+    statusAbortRef.current = controller;
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+
     try {
-      const response = await fetch(`${API_BASE_URL}/`, { 
+      const response = await fetch(`${API_BASE_URL}/`, {
         method: 'GET',
-        timeout: 5000 
+        cache: 'no-store',
+        signal: controller.signal
       });
-      setServerStatus(response.ok ? 'online' : 'offline');
+      if (mountedRef.current) {
+        setServerStatus(response.ok ? 'online' : 'offline');
+      }
     } catch (e) {
-      setServerStatus('offline');
+      if (mountedRef.current) {
+        setServerStatus('offline');
+      }
+    } finally {
+      clearTimeout(timeoutId);
+      if (statusAbortRef.current === controller) {
+        statusAbortRef.current = null;
+      }
     }
-  };
+  }, []);
 
   // 获取应用版本和检测Electron环境
   useEffect(() => {
+    mountedRef.current = true;
+
     // 检测是否Electron环境
     const electronAPI = window.electronAPI;
     if (electronAPI && electronAPI.isElectron === true) {
@@ -75,8 +94,12 @@ const LoginPage = ({ onLoginSuccess }) => {
       }
     }
     
-    return () => clearInterval(interval);
-  }, []);
+    return () => {
+      mountedRef.current = false;
+      clearInterval(interval);
+      statusAbortRef.current?.abort();
+    };
+  }, [checkServerStatus]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();

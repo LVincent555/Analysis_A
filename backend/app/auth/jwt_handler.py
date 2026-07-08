@@ -17,7 +17,8 @@ REFRESH_TOKEN_EXPIRE_DAYS = 7
 def create_access_token(
     user_id: int, 
     device_id: str = "default",
-    expires_hours: int = ACCESS_TOKEN_EXPIRE_HOURS
+    expires_hours: int = ACCESS_TOKEN_EXPIRE_HOURS,
+    token_version: Optional[int] = None
 ) -> str:
     """
     创建访问令牌
@@ -38,13 +39,16 @@ def create_access_token(
         "iat": datetime.utcnow(),
         "type": "access"
     }
+    if token_version is not None:
+        payload["ver"] = token_version
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 
 def create_refresh_token(
     user_id: int,
     device_id: str = "default",
-    expires_days: int = REFRESH_TOKEN_EXPIRE_DAYS
+    expires_days: int = REFRESH_TOKEN_EXPIRE_DAYS,
+    token_version: Optional[int] = None
 ) -> str:
     """
     创建刷新令牌
@@ -65,6 +69,8 @@ def create_refresh_token(
         "iat": datetime.utcnow(),
         "type": "refresh"
     }
+    if token_version is not None:
+        payload["ver"] = token_version
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 

@@ -2,7 +2,7 @@
  * 板块成分股详细分析页面 - Phase 6
  * 完整的板块分析页面，包含成分股列表、图表、对比功能
  */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import apiClient from '../services/api';
 import { 
   ArrowLeft, TrendingUp, Download, 
@@ -67,10 +67,14 @@ export default function IndustryDetailPage({ industryName, selectedDate, onBack 
   }, []);
   
   // 加载对比数据
-  const loadCompareData = async () => {
-    if (compareIndustries.length < 2) return;
+  const loadCompareData = useCallback(async () => {
+    if (compareIndustries.length < 2) {
+      setCompareData(null);
+      return;
+    }
     
     setCompareLoading(true);
+    setCompareData(null);
     try {
       const comparePayload = {
         industries: compareIndustries
@@ -85,14 +89,14 @@ export default function IndustryDetailPage({ industryName, selectedDate, onBack 
     } finally {
       setCompareLoading(false);
     }
-  };
+  }, [compareIndustries, selectedDate]);
   
   // 切换到对比标签页时加载数据
   useEffect(() => {
     if (activeTab === 'compare' && compareIndustries.length >= 2) {
       loadCompareData();
     }
-  }, [activeTab, compareIndustries]);
+  }, [activeTab, compareIndustries.length, loadCompareData]);
   
   // 加载板块详情和成分股数据
   useEffect(() => {
@@ -156,7 +160,9 @@ export default function IndustryDetailPage({ industryName, selectedDate, onBack 
   // 加载趋势数据
   useEffect(() => {
     if (activeTab === 'trend') {
+      let cancelled = false;
       const fetchTrend = async () => {
+        setTrendData(null);
         try {
           const trendParams = { period: 7 };
           if (selectedDate) {
@@ -182,17 +188,24 @@ export default function IndustryDetailPage({ industryName, selectedDate, onBack 
             avg_signal_strength: rawData.metrics_history.avg_signal_strength[index]
           }));
           
-          setTrendData({
-            ...rawData,
-            trend_data: trendArray
-          });
+          if (!cancelled) {
+            setTrendData({
+              ...rawData,
+              trend_data: trendArray
+            });
+          }
         } catch (err) {
-          console.error('获取趋势数据失败:', err);
+          if (!cancelled) {
+            console.error('获取趋势数据失败:', err);
+          }
         }
       };
       fetchTrend();
+      return () => {
+        cancelled = true;
+      };
     }
-  }, [activeTab, industryName]);
+  }, [activeTab, industryName, selectedDate]);
   
   // 分页处理
   const getPaginatedStocks = () => {

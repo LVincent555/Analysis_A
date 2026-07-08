@@ -21,6 +21,8 @@ import {
   TrendingUp
 } from 'lucide-react';
 import secureApi from '../services/secureApi';
+import authService from '../services/authService';
+import { API_BASE_URL } from '../constants';
 
 /**
  * 操作日志页面
@@ -148,15 +150,54 @@ const OperationLogs = () => {
   // 导出日志
   const handleExport = async () => {
     try {
+      setError(null);
+
       const params = new URLSearchParams();
       if (logType) params.append('log_type', logType);
       if (startDate) params.append('start_date', startDate);
       if (endDate) params.append('end_date', endDate);
       params.append('limit', '1000');
-      
-      // 直接打开下载链接
-      const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:8000';
-      window.open(`${baseUrl}/api/admin/logs/export/csv?${params.toString()}`, '_blank');
+
+      const token = authService.getToken();
+      if (!token) {
+        throw new Error('未登录，无法导出日志');
+      }
+
+      const response = await fetch(`${API_BASE_URL}/api/admin/logs/export/csv?${params.toString()}`, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          window.dispatchEvent(new CustomEvent('session-expired'));
+        }
+
+        let message = '导出失败';
+        const errorText = await response.text();
+        try {
+          const errorBody = JSON.parse(errorText);
+          message = errorBody.detail || message;
+        } catch {
+          if (errorText) message = errorText;
+        }
+        throw new Error(message);
+      }
+
+      const blob = await response.blob();
+      const disposition = response.headers.get('Content-Disposition') || '';
+      const filenameMatch = disposition.match(/filename="?([^"]+)"?/i);
+      const filename = filenameMatch?.[1] || `operation_logs_${new Date().toISOString().slice(0, 10)}.csv`;
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => window.URL.revokeObjectURL(downloadUrl), 0);
     } catch (err) {
       setError(err.message || '导出失败');
     }

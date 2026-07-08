@@ -2,7 +2,7 @@
 认证路由模块
 提供用户注册、登录、Token刷新等API
 """
-import os
+import logging
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -21,6 +21,7 @@ from ..auth.jwt_handler import (
 from ..auth.dependencies import get_current_user, set_session_key, remove_session_key
 from ..crypto.aes_handler import AESCrypto, generate_key, get_master_crypto
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/auth", tags=["认证"])
 
 
@@ -179,65 +180,96 @@ async def login(
         user.locked_until = None
     
     # 检查账户状态
+    if user.deleted_at:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="用户名或密码错误"
+        )
+
     if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="账户已被禁用"
         )
+
+    if user.expires_at and user.expires_at < datetime.utcnow():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="账户已过期"
+        )
     
     # [v2.2.1] 使用 PolicyEngine 获取会话策略
     session_policy = PolicyEngine.get_session_policy(user)
+
+    now = datetime.utcnow()
+    existing_session = db.query(UserSession).filter(
+        UserSession.user_id == user.id,
+        UserSession.device_id == req.device_id
+    ).first()
+
+    is_existing_active_session = (
+        existing_session is not None
+        and not existing_session.is_revoked
+        and existing_session.expires_at > now
+    )
     
     # 检查设备数量限制
     active_sessions = db.query(UserSession).filter(
         UserSession.user_id == user.id,
-        UserSession.expires_at > datetime.utcnow()
+        UserSession.is_revoked == False,
+        UserSession.expires_at > now
     ).count()
     
-    if active_sessions >= session_policy["max_devices"]:
-        # 删除最旧的会话
+    if not is_existing_active_session and active_sessions >= session_policy["max_devices"]:
+        # 删除最旧的有效会话，为新设备腾出位置
         oldest_session = db.query(UserSession).filter(
-            UserSession.user_id == user.id
+            UserSession.user_id == user.id,
+            UserSession.is_revoked == False,
+            UserSession.expires_at > now
         ).order_by(UserSession.last_active.asc()).first()
         
         if oldest_session:
+            remove_session_key(user.id, oldest_session.device_id)
             db.delete(oldest_session)
     
     # 生成会话密钥
     session_key = generate_key()
     
     # 用密码派生密钥加密会话密钥
-    from ..crypto.aes_handler import derive_key_from_password, key_to_base64
+    from ..crypto.aes_handler import derive_key_from_password
     password_derived_key = derive_key_from_password(req.password)
     password_crypto = AESCrypto(password_derived_key)
     session_key_encrypted = password_crypto.encrypt_key(session_key)
     
     # [v2.2.1] 使用动态 TTL 生成 Token
+    token_version = user.token_version or 1
     token = create_access_token(
         user.id,
         req.device_id,
         expires_hours=session_policy["access_token_hours"],
+        token_version=token_version,
     )
     refresh_token = create_refresh_token(
         user.id,
         req.device_id,
         expires_days=session_policy["refresh_token_days"],
+        token_version=token_version,
     )
     
-    # 计算过期时间（使用策略中的动态值）
-    expires_at = datetime.utcnow() + timedelta(hours=session_policy["access_token_hours"])
+    # access token 与数据库会话分别使用自己的生命周期
+    access_expires_at = datetime.utcnow() + timedelta(hours=session_policy["access_token_hours"])
+    session_expires_at = datetime.utcnow() + timedelta(days=session_policy["refresh_token_days"])
     
     # 创建或更新会话记录
-    existing_session = db.query(UserSession).filter(
-        UserSession.user_id == user.id,
-        UserSession.device_id == req.device_id
-    ).first()
-    
     if existing_session:
         existing_session.session_key_encrypted = session_key_encrypted
         existing_session.refresh_token = refresh_token
-        existing_session.expires_at = expires_at
+        existing_session.expires_at = session_expires_at
         existing_session.last_active = datetime.utcnow()
+        existing_session.current_status = "online"
+        existing_session.is_revoked = False
+        existing_session.revoked_at = None
+        existing_session.revoked_by = None
         if req.device_name:
             existing_session.device_name = req.device_name
     else:
@@ -247,7 +279,7 @@ async def login(
             device_name=req.device_name,
             session_key_encrypted=session_key_encrypted,
             refresh_token=refresh_token,
-            expires_at=expires_at
+            expires_at=session_expires_at
         )
         db.add(new_session)
     
@@ -256,13 +288,13 @@ async def login(
     db.commit()
     
     # 存储会话密钥到内存（用于后续请求解密）
-    set_session_key(user.id, session_key)
+    set_session_key(user.id, session_key, req.device_id)
     
     return LoginResponse(
         token=token,
         refresh_token=refresh_token,
         session_key=session_key_encrypted,
-        expires_at=expires_at.isoformat(),
+        expires_at=access_expires_at.isoformat(),
         user=user.to_dict()
     )
 
@@ -292,22 +324,58 @@ async def refresh_token(
             detail="需要刷新令牌"
         )
     
-    user_id = int(payload.get("sub"))
+    try:
+        user_id = int(payload.get("sub"))
+    except (TypeError, ValueError):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="无效的刷新令牌"
+        )
+
     device_id = payload.get("device", "default")
     
     # 查找用户
     user = db.query(User).filter(User.id == user_id).first()
-    if not user or not user.is_active:
+    now = datetime.utcnow()
+    if not user or user.deleted_at or not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="用户不存在或已禁用"
         )
+    if user.expires_at and user.expires_at < now:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="账户已过期"
+        )
+    if user.locked_until and user.locked_until > now:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="账户已锁定"
+        )
+
+    token_version = payload.get("ver")
+    if token_version is not None:
+        try:
+            payload_token_version = int(token_version)
+        except (TypeError, ValueError):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="无效的登录状态"
+            )
+
+        if payload_token_version != (user.token_version or 1):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="登录状态已失效，请重新登录"
+            )
     
     # 验证会话
     session = db.query(UserSession).filter(
         UserSession.user_id == user_id,
         UserSession.device_id == device_id,
-        UserSession.refresh_token == req.refresh_token
+        UserSession.refresh_token == req.refresh_token,
+        UserSession.is_revoked == False,
+        UserSession.expires_at > now
     ).first()
     
     if not session:
@@ -315,14 +383,6 @@ async def refresh_token(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="会话不存在或已失效"
-        )
-    
-    # 检查会话是否被撤销
-    if session.is_revoked:
-        logger.warning(f"刷新Token失败: 会话已被撤销 session_id={session.id}")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="会话已被撤销，请重新登录"
         )
     
     from ..services.policy_engine import PolicyEngine
@@ -333,17 +393,17 @@ async def refresh_token(
         user_id,
         device_id,
         expires_hours=session_policy["access_token_hours"],
+        token_version=user.token_version or 1,
     )
-    expires_at = datetime.utcnow() + timedelta(hours=session_policy["access_token_hours"])
+    access_expires_at = datetime.utcnow() + timedelta(hours=session_policy["access_token_hours"])
     
     # 更新会话活跃时间
     session.last_active = datetime.utcnow()
-    session.expires_at = expires_at
     db.commit()
     
     return {
         "token": new_token,
-        "expires_at": expires_at.isoformat()
+        "expires_at": access_expires_at.isoformat()
     }
 
 
@@ -357,11 +417,22 @@ async def logout(
     
     清除当前设备的会话
     """
-    # 从内存中移除会话密钥
-    remove_session_key(user.id)
-    
-    # 可选：删除数据库中的会话记录
-    # 这里保留会话记录，只是让Token自然过期
+    payload = getattr(user, "_auth_payload", {}) or {}
+    device_id = payload.get("device", "default")
+
+    db.query(UserSession).filter(
+        UserSession.user_id == user.id,
+        UserSession.device_id == device_id,
+        UserSession.is_revoked == False
+    ).update({
+        "is_revoked": True,
+        "revoked_at": datetime.utcnow(),
+        "revoked_by": user.id
+    }, synchronize_session=False)
+    db.commit()
+
+    # 从内存中移除当前设备会话密钥
+    remove_session_key(user.id, device_id)
     
     return {"success": True, "message": "已登出"}
 
@@ -436,6 +507,7 @@ async def get_user_sessions(
     """
     sessions = db.query(UserSession).filter(
         UserSession.user_id == user.id,
+        UserSession.is_revoked == False,
         UserSession.expires_at > datetime.utcnow()
     ).all()
     

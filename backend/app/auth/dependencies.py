@@ -4,6 +4,7 @@ FastAPI依赖注入模块
 
 v0.6.0: 会话密钥存储迁移到统一缓存系统
 """
+from datetime import datetime
 from typing import Optional
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -19,64 +20,142 @@ security = HTTPBearer(auto_error=False)
 
 # ==================== 会话密钥管理 (使用统一缓存系统) ====================
 
-def _get_session_store():
-    """获取会话缓存存储"""
+def _get_session_key_store():
+    """获取加密会话密钥缓存存储"""
     try:
         from ..core.caching.manager import UnifiedCache
-        if UnifiedCache.has_region("sessions"):
-            return UnifiedCache.session()
+        if UnifiedCache.has_region("session_keys"):
+            return UnifiedCache.get_region("session_keys")
     except ImportError:
         pass
     return None
 
 
-def set_session_key(user_id: int, session_key: bytes):
+def _session_key_cache_key(user_id: int, device_id: str = "default") -> str:
+    return f"{user_id}:{device_id or 'default'}"
+
+
+def set_session_key(user_id: int, session_key: bytes, device_id: str = "default"):
     """
     存储用户会话密钥
     
-    v0.6.0: 使用统一缓存系统 (Write-Behind 策略)
+    v0.6.0: 使用统一缓存系统
+    v2.2.2: 改为独立 session_keys 分区，并按 user_id:device_id 存储
     """
-    store = _get_session_store()
+    cache_key = _session_key_cache_key(user_id, device_id)
+    store = _get_session_key_store()
     if store:
-        # 存储到统一缓存系统
-        store.set(str(user_id), {"session_key": session_key})
+        store.set(cache_key, {"session_key": session_key})
     else:
         # 降级: 使用模块级变量 (兼容旧版本)
-        _fallback_session_keys[user_id] = session_key
+        _fallback_session_keys[(user_id, device_id or "default")] = session_key
 
 
-def get_session_key_by_user_id(user_id: int) -> Optional[bytes]:
+def get_session_key_by_user_id(user_id: int, device_id: str = "default") -> Optional[bytes]:
     """
     获取用户会话密钥
     
     v0.6.0: 优先从统一缓存系统读取
+    v2.2.2: 按 user_id:device_id 读取，避免多设备互相覆盖
     """
-    store = _get_session_store()
+    cache_key = _session_key_cache_key(user_id, device_id)
+    store = _get_session_key_store()
     if store:
-        data = store.get(str(user_id))
+        data = store.get(cache_key)
         if data and isinstance(data, dict):
             return data.get("session_key")
     
     # 降级: 从模块级变量读取
-    return _fallback_session_keys.get(user_id)
+    return _fallback_session_keys.get((user_id, device_id or "default"))
 
 
-def remove_session_key(user_id: int):
+def remove_session_key(user_id: int, device_id: Optional[str] = None):
     """
     移除用户会话密钥
     
     v0.6.0: 同时清理缓存和降级存储
+    v2.2.2: 支持按设备清理；device_id=None 时清理该用户所有设备
     """
-    store = _get_session_store()
+    store = _get_session_key_store()
     if store:
-        store.delete(str(user_id))
+        if device_id is not None:
+            store.delete(_session_key_cache_key(user_id, device_id))
+        elif hasattr(store, "keys"):
+            prefix = f"{user_id}:"
+            for key in list(store.keys()):
+                if key.startswith(prefix):
+                    store.delete(key)
     
     # 同时清理降级存储
-    _fallback_session_keys.pop(user_id, None)
+    if device_id is not None:
+        _fallback_session_keys.pop((user_id, device_id or "default"), None)
+    else:
+        for key in list(_fallback_session_keys.keys()):
+            if key[0] == user_id:
+                _fallback_session_keys.pop(key, None)
 
 
 # 降级存储 (缓存系统未初始化时使用)
-_fallback_session_keys: dict[int, bytes] = {}
+_fallback_session_keys: dict[tuple[int, str], bytes] = {}
+
+
+def _raise_unauthorized(detail: str) -> None:
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail=detail,
+        headers={"WWW-Authenticate": "Bearer"}
+    )
+
+
+def _get_payload_user_id(payload: dict) -> int:
+    try:
+        return int(payload.get("sub"))
+    except (TypeError, ValueError):
+        _raise_unauthorized("无效的Token主体")
+
+
+def _ensure_user_can_authenticate(user: User, payload: dict) -> None:
+    now = datetime.utcnow()
+
+    if user.deleted_at:
+        _raise_unauthorized("用户不存在")
+
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="账户已被禁用"
+        )
+
+    if user.expires_at and user.expires_at < now:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="账户已过期"
+        )
+
+    if user.locked_until and user.locked_until > now:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="账户已锁定"
+        )
+
+    token_version = payload.get("ver")
+    if token_version is not None:
+        try:
+            payload_token_version = int(token_version)
+        except (TypeError, ValueError):
+            _raise_unauthorized("无效的登录状态")
+
+        if payload_token_version != (user.token_version or 1):
+            _raise_unauthorized("登录状态已失效，请重新登录")
+
+
+def _get_active_user_session(db: Session, user_id: int, device_id: str) -> Optional[UserSession]:
+    return db.query(UserSession).filter(
+        UserSession.user_id == user_id,
+        UserSession.device_id == (device_id or "default"),
+        UserSession.is_revoked == False,
+        UserSession.expires_at > datetime.utcnow()
+    ).first()
 
 
 async def get_current_user(
@@ -99,45 +178,33 @@ async def get_current_user(
         HTTPException: Token无效或用户不存在时抛出401错误
     """
     if not credentials:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="未提供认证凭证",
-            headers={"WWW-Authenticate": "Bearer"}
-        )
+        _raise_unauthorized("未提供认证凭证")
     
     token = credentials.credentials
     payload = verify_token(token)
     
     if not payload:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="无效的Token或Token已过期",
-            headers={"WWW-Authenticate": "Bearer"}
-        )
+        _raise_unauthorized("无效的Token或Token已过期")
     
     # 检查Token类型
     if payload.get("type") != "access":
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="需要访问令牌，而非刷新令牌",
-            headers={"WWW-Authenticate": "Bearer"}
-        )
+        _raise_unauthorized("需要访问令牌，而非刷新令牌")
     
-    user_id = int(payload.get("sub"))
+    user_id = _get_payload_user_id(payload)
+    device_id = payload.get("device", "default")
     user = db.query(User).filter(User.id == user_id).first()
     
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="用户不存在",
-            headers={"WWW-Authenticate": "Bearer"}
-        )
-    
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="账户已被禁用"
-        )
+        _raise_unauthorized("用户不存在")
+
+    _ensure_user_can_authenticate(user, payload)
+
+    session = _get_active_user_session(db, user_id, device_id)
+    if not session:
+        _raise_unauthorized("会话不存在或已失效")
+
+    user._auth_payload = payload
+    user._auth_session = session
     
     return user
 
@@ -180,11 +247,13 @@ async def get_session_key(
     Raises:
         HTTPException: 会话密钥不存在时抛出401错误
     """
-    session_key = get_session_key_by_user_id(user.id)
+    payload = getattr(user, "_auth_payload", {}) or {}
+    device_id = payload.get("device", "default")
+    session_key = get_session_key_by_user_id(user.id, device_id)
     
     if not session_key:
         # 尝试从数据库恢复会话密钥（处理后端重启的情况）
-        session_key = await restore_session_key_from_db(user.id, db)
+        session_key = await restore_session_key_from_db(user.id, db, device_id)
         
     if not session_key:
         raise HTTPException(
@@ -196,18 +265,23 @@ async def get_session_key(
     return session_key
 
 
-async def restore_session_key_from_db(user_id: int, db: Session) -> Optional[bytes]:
+async def restore_session_key_from_db(
+    user_id: int,
+    db: Session,
+    device_id: str = "default"
+) -> Optional[bytes]:
     """
     从数据库恢复用户会话密钥到内存
     
     当后端重启后，内存中的会话密钥丢失，需要从数据库恢复
     """
     from datetime import datetime
-    from ..crypto.aes_handler import get_master_crypto
     
     # 查找用户最近的有效会话
     session = db.query(UserSession).filter(
         UserSession.user_id == user_id,
+        UserSession.device_id == (device_id or "default"),
+        UserSession.is_revoked == False,
         UserSession.expires_at > datetime.utcnow()
     ).order_by(UserSession.last_active.desc()).first()
     

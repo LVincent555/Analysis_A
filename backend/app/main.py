@@ -52,35 +52,42 @@ def init_cache_system():
     """
     import os
     
-    # 1. 注册会话缓存 (Write-Behind, 不自动过期)
-    # session_key 是 /api/secure 解密所需的运行时密钥；JWT 自身负责有效期控制。
-    # 若这里设置 1800 秒 TTL，客户端会在登录约 30 分钟后被迫重新登录。
+    # 1. 注册会话心跳缓存 (Write-Behind, 不自动过期)
+    # 仅用于 session_id -> last_active/status/ip 等高频心跳状态，后台同步到 user_sessions。
     UnifiedCache.register(
         "sessions",
         ObjectStore("sessions", WriteBehindPolicy(ttl=0, sync_interval=10))
     )
+
+    # 2. 注册加密会话密钥缓存 (Write-Through, 不自动过期)
+    # session_key 是 /api/secure 解密所需的运行时密钥，按 user_id:device_id 存储。
+    # 不放入 sessions 分区，避免被 Write-Behind 同步器误写到 user_sessions 表。
+    UnifiedCache.register(
+        "session_keys",
+        ObjectStore("session_keys", WriteThroughPolicy(ttl=0))
+    )
     
-    # 2. 注册用户缓存 (Cache-Aside, 1小时过期)
+    # 3. 注册用户缓存 (Cache-Aside, 1小时过期)
     UnifiedCache.register(
         "users",
         ObjectStore("users", CacheAsidePolicy(ttl=3600))
     )
     
-    # 3. [v2.2.1] 配置缓存改用 Write-Through (TTL=0 永不过期)
+    # 4. [v2.2.1] 配置缓存改用 Write-Through (TTL=0 永不过期)
     # 这样 reload_configs() 调用 set() 时会真正写入内存，而非删除
     UnifiedCache.register(
         "config",
         ObjectStore("config", WriteThroughPolicy(ttl=0))
     )
     
-    # 4. 注册 API 响应缓存 (磁盘, 200MB上限)
+    # 5. 注册 API 响应缓存 (磁盘, 200MB上限)
     cache_dir = os.path.join(os.path.dirname(__file__), ".cache", "api")
     UnifiedCache.register(
         "api_response",
         FileStore("api_response", cache_dir=cache_dir, size_limit_gb=0.2)
     )
     
-    # 5. 注册报表文件缓存 (磁盘, 500MB上限)
+    # 6. 注册报表文件缓存 (磁盘, 500MB上限)
     report_cache_dir = os.path.join(os.path.dirname(__file__), ".cache", "reports")
     UnifiedCache.register(
         "reports",

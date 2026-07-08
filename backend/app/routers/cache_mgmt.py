@@ -4,17 +4,22 @@
 
 v0.5.0: 使用统一缓存系统，移除旧的api_cache
 """
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from typing import Dict, Any
 import logging
 
+from ..auth.dependencies import require_admin
 from ..services.numpy_cache_middleware import numpy_cache
 from ..services.hot_spots_cache import HotSpotsCache
 from ..core.caching import cache as unified_cache
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/cache", tags=["cache"])
+router = APIRouter(
+    prefix="/api/cache",
+    tags=["cache"],
+    dependencies=[Depends(require_admin)]
+)
 
 
 @router.get("/stats")
