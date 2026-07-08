@@ -16,8 +16,7 @@ from ..auth.password import hash_password, verify_password
 from ..auth.jwt_handler import (
     create_access_token, 
     create_refresh_token, 
-    verify_token,
-    ACCESS_TOKEN_EXPIRE_HOURS
+    verify_token
 )
 from ..auth.dependencies import get_current_user, set_session_key, remove_session_key
 from ..crypto.aes_handler import AESCrypto, generate_key, get_master_crypto
@@ -214,8 +213,16 @@ async def login(
     session_key_encrypted = password_crypto.encrypt_key(session_key)
     
     # [v2.2.1] 使用动态 TTL 生成 Token
-    token = create_access_token(user.id, req.device_id)
-    refresh_token = create_refresh_token(user.id, req.device_id)
+    token = create_access_token(
+        user.id,
+        req.device_id,
+        expires_hours=session_policy["access_token_hours"],
+    )
+    refresh_token = create_refresh_token(
+        user.id,
+        req.device_id,
+        expires_days=session_policy["refresh_token_days"],
+    )
     
     # 计算过期时间（使用策略中的动态值）
     expires_at = datetime.utcnow() + timedelta(hours=session_policy["access_token_hours"])
@@ -318,9 +325,16 @@ async def refresh_token(
             detail="会话已被撤销，请重新登录"
         )
     
+    from ..services.policy_engine import PolicyEngine
+    session_policy = PolicyEngine.get_session_policy(user)
+
     # 生成新Token
-    new_token = create_access_token(user_id, device_id)
-    expires_at = datetime.utcnow() + timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)
+    new_token = create_access_token(
+        user_id,
+        device_id,
+        expires_hours=session_policy["access_token_hours"],
+    )
+    expires_at = datetime.utcnow() + timedelta(hours=session_policy["access_token_hours"])
     
     # 更新会话活跃时间
     session.last_active = datetime.utcnow()

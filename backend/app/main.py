@@ -52,10 +52,12 @@ def init_cache_system():
     """
     import os
     
-    # 1. 注册会话缓存 (Write-Behind, 30分钟过期)
+    # 1. 注册会话缓存 (Write-Behind, 不自动过期)
+    # session_key 是 /api/secure 解密所需的运行时密钥；JWT 自身负责有效期控制。
+    # 若这里设置 1800 秒 TTL，客户端会在登录约 30 分钟后被迫重新登录。
     UnifiedCache.register(
         "sessions",
-        ObjectStore("sessions", WriteBehindPolicy(ttl=1800, sync_interval=10))
+        ObjectStore("sessions", WriteBehindPolicy(ttl=0, sync_interval=10))
     )
     
     # 2. 注册用户缓存 (Cache-Aside, 1小时过期)
