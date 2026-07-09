@@ -72,16 +72,26 @@ def test_sync_task_schedules_executor_without_kwargs_error(monkeypatch, tmp_path
     assert "同步完成" in status["logs"]
 
 
-def test_run_process_blocking_timeout_resets_running_state(tmp_path) -> None:
+def test_external_board_process_timeout_resets_sync_status(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("EXT_BOARD_TASK_TIMEOUT_SECONDS", "1")
     status = {
-        "is_running": True,
+        "is_syncing": True,
+        "task_id": "unit-test",
         "process": None,
+        "task": None,
         "cancel_requested": False,
+        "start_time": None,
+        "provider": "em",
         "logs": [],
     }
+    cmd = [
+        sys.executable,
+        "-c",
+        "import time; print('started', flush=True); time.sleep(5)",
+    ]
 
     management._run_process_blocking(
-        [sys.executable, "-c", "import time; time.sleep(2)"],
+        cmd,
         str(tmp_path),
         status,
         done_message="done",
@@ -89,6 +99,7 @@ def test_run_process_blocking_timeout_resets_running_state(tmp_path) -> None:
         timeout_seconds=1,
     )
 
-    assert status["is_running"] is False
+    assert status["is_syncing"] is False
     assert status["process"] is None
+    assert status["cancel_requested"] is False
     assert any("超时" in line for line in status["logs"])

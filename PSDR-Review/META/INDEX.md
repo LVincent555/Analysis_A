@@ -91,6 +91,8 @@ PSDR-Review/
 | RES-033 | 后端缓存系统治理 Phase 5 实验运行态外部化落地结果 | `../RES/RES-033-后端缓存系统治理Phase5实验运行态外部化落地结果.md` | [SOLVED / EXPERIMENTAL] | Infra / Backend / Cache / Security / Runtime / Testing | 后端缓存, RuntimeStateStore, session_keys, replay nonce, diskcache | SUG-006, RES-026, RES-027, RES-028, RES-029, RES-032, PRB-001, SUG-001, DEC-002, RES-014 |
 | RES-034 | 本地前后端联调启动验证结果 | `../RES/RES-034-本地前后端联调启动验证结果.md` | [SOLVED] | Experiment / Infra / Backend / Frontend / Integration | 本地联调, secure-login, secure gateway, Numpy cache, HotSpots, IndustryTrend | DEC-002, DEC-004, SUG-004, SUG-006, PRB-002, RES-031 |
 | RES-035 | DevOps 脚本归拢与部署入口审核结果 | `../RES/RES-035-DevOps脚本归拢与部署入口审核结果.md` | [SOLVED] | Infra / DevOps / Documentation | devops, 部署脚本, 一键部署, 脚本治理 | DEC-001, RES-034 |
+| RES-036 | frontend-client 服务器公钥 Electron 目录包重打结果 | `../RES/RES-036-frontend-client服务器公钥Electron目录包重打结果.md` | [SOLVED] | Infra / Frontend / Electron / Packaging / Security | frontend-client, Electron, secure-login, 服务器公钥, win-unpacked | DEC-004, SUG-004, RES-034 |
+| RES-037 | 导入后缓存刷新与外部板块同步卡死修复结果 | `../RES/RES-037-导入后缓存刷新与外部板块同步卡死修复结果.md` | [SOLVED / UNIT-VERIFIED / INTEGRATION-BLOCKED-BY-DB] | Infra / Backend / Cache / Sync / Bugfix / Testing | 导入, 运行态缓存, NumpyCache, HotSpotsCache, 外部板块同步, 子进程超时 | SUG-006, DEC-002, RES-024, RES-033, RES-034 |
 
 ---
 
