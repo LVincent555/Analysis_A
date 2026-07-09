@@ -5,7 +5,7 @@ echo 🚀 推送代码到GitHub
 echo ============================================================
 echo.
 
-cd /d "%~dp0"
+cd /d "%~dp0\.."
 
 echo 📝 添加所有修改...
 git add .
@@ -19,7 +19,7 @@ git commit -m "feat: 添加前N个股票选择功能和行业趋势前N名功能
 - 前端: 排名跳变和稳步上升添加搜索功能
 - 后端: API添加top_n和limit参数支持
 - 后端: 优化缓存和日志机制
-- 已编译生产版本到frontend/build"
+- 已编译生产版本到frontend-client/build"
 echo.
 
 echo 📤 推送到GitHub...
@@ -34,6 +34,6 @@ echo 接下来在服务器上执行：
 echo   1. ssh root@60.205.251.109
 echo   2. cd /path/to/stock_analysis_app
 echo   3. git pull origin main
-echo   4. bash restart.sh
+echo   4. bash devops/restart.sh
 echo.
 pause

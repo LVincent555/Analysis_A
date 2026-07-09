@@ -9,11 +9,16 @@
 
 适用于：2核2G服务器
 """
+import os
+
 from sqlalchemy import create_engine, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
-DATABASE_URL = "postgresql://postgres:3.1415926@localhost:5432/db_20251106_analysis_a"
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "postgresql://postgres:replace-with-your-database-password@localhost:5432/db_20251106_analysis_a",
+)
 
 # 🔥 优化后的数据库引擎配置
 engine = create_engine(

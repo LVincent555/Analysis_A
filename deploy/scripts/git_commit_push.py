@@ -82,11 +82,11 @@ yarn-debug.log*
 yarn-error.log*
 
 # React
-frontend/build/
-frontend/.env.local
-frontend/.env.development.local
-frontend/.env.test.local
-frontend/.env.production.local
+frontend-client/build/
+frontend-client/.env.local
+frontend-client/.env.development.local
+frontend-client/.env.test.local
+frontend-client/.env.production.local
 
 # IDE
 .vscode/
@@ -127,7 +127,7 @@ backend/cache/
 cache/
 
 # Build outputs
-frontend/build/
+frontend-client/build/
 dist/
 
 # Deployment specific
@@ -191,7 +191,7 @@ def clear_git_cache():
     
     # 删除已跟踪但应该被忽略的文件
     patterns_to_remove = [
-        'frontend/node_modules',
+        'frontend-client/node_modules',
         'backend/venv',
         'backend/__pycache__',
         'data/*.xlsx',

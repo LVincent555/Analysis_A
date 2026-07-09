@@ -37,7 +37,7 @@ class ServiceManager:
             'backend': {
                 'name': '后端API服务',
                 'cwd': str(self.project_root / 'backend'),
-                'command': 'source venv/bin/activate && python -m uvicorn app.main:app --host 0.0.0.0 --port 8000',
+                'command': 'if [ -d .venv ]; then source .venv/bin/activate; elif [ -d venv ]; then source venv/bin/activate; fi; python -m uvicorn app.main:app --host 0.0.0.0 --port 8000',
                 'shell': True,
                 'port': 8000,
                 'log_file': 'backend.log',
@@ -46,7 +46,7 @@ class ServiceManager:
             },
             'frontend': {
                 'name': '前端Web服务',
-                'cwd': str(self.project_root / 'frontend'),
+                'cwd': str(self.project_root / 'frontend-client'),
                 'command': 'npm start',
                 'shell': True,
                 'port': 3000,
@@ -316,7 +316,7 @@ class ServiceManager:
 
 def main():
     """主函数"""
-    project_root = Path(__file__).parent
+    project_root = Path(__file__).resolve().parents[2]
     manager = ServiceManager(str(project_root))
     
     if len(sys.argv) < 2:

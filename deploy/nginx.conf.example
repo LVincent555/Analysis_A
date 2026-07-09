@@ -8,7 +8,7 @@ server {
 
     # 前端静态文件（使用本地编译的build目录）
     location / {
-        root /path/to/stock_analysis_app/frontend/build;  # 修改为实际路径
+        root /path/to/stock_analysis_app/frontend-client/build;  # 修改为实际路径
         try_files $uri $uri/ /index.html;
         
         # 禁用缓存，确保更新后立即生效
@@ -19,7 +19,7 @@ server {
 
     # 静态资源可以缓存
     location /static/ {
-        root /path/to/stock_analysis_app/frontend/build;  # 修改为实际路径
+        root /path/to/stock_analysis_app/frontend-client/build;  # 修改为实际路径
         expires 30d;
         add_header Cache-Control "public, immutable";
     }

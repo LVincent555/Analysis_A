@@ -10,6 +10,9 @@ import subprocess
 import shutil
 import platform
 
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, os.pardir))
+
 def print_header():
     """打印启动信息"""
     print("=" * 50)
@@ -52,7 +55,7 @@ def check_npm_installed():
 
 def check_dependencies():
     """检查是否需要安装依赖"""
-    frontend_dir = os.path.join(os.path.dirname(__file__), 'frontend')
+    frontend_dir = os.path.join(PROJECT_ROOT, 'frontend-client')
     node_modules = os.path.join(frontend_dir, 'node_modules')
     
     if not os.path.exists(node_modules):
@@ -65,7 +68,7 @@ def check_dependencies():
 def install_dependencies():
     """安装前端依赖"""
     print("\n正在安装前端依赖...")
-    frontend_dir = os.path.join(os.path.dirname(__file__), 'frontend')
+    frontend_dir = os.path.join(PROJECT_ROOT, 'frontend-client')
     
     if not os.path.exists(frontend_dir):
         print(f"❌ 错误: 找不到frontend目录: {frontend_dir}")
@@ -85,7 +88,7 @@ def start_frontend():
     print("🌟 启动前端开发服务器...")
     print("=" * 50)
     
-    frontend_dir = os.path.join(os.path.dirname(__file__), 'frontend')
+    frontend_dir = os.path.join(PROJECT_ROOT, 'frontend-client')
     
     if not os.path.exists(frontend_dir):
         print(f"❌ 错误: 找不到frontend目录: {frontend_dir}")

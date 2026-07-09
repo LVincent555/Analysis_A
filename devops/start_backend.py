@@ -9,6 +9,9 @@ import sys
 import subprocess
 import platform
 
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, os.pardir))
+
 def print_header():
     """打印启动信息"""
     print("=" * 50)
@@ -38,7 +41,7 @@ def check_dependencies():
 def install_dependencies():
     """安装Python依赖"""
     print("\n正在安装Python依赖...")
-    backend_dir = os.path.join(os.path.dirname(__file__), 'backend')
+    backend_dir = os.path.join(PROJECT_ROOT, 'backend')
     requirements_file = os.path.join(backend_dir, 'requirements.txt')
     
     if not os.path.exists(requirements_file):
@@ -58,7 +61,7 @@ def start_backend():
     print("🌟 启动后端服务器...")
     print("=" * 50)
     
-    backend_dir = os.path.join(os.path.dirname(__file__), 'backend')
+    backend_dir = os.path.join(PROJECT_ROOT, 'backend')
     
     if not os.path.exists(backend_dir):
         print(f"❌ 错误: 找不到backend目录: {backend_dir}")

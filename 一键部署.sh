@@ -13,6 +13,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
+DEVOPS_DIR="$PROJECT_DIR/devops"
 BACKUP_DIR="$HOME/backup_$(date +%Y%m%d_%H%M%S)"
 
 # 获取当前版本（从git tag）
@@ -270,8 +271,8 @@ echo "🛑 步骤 7/9: 停止现有服务"
 echo "============================================================"
 
 # 使用bash stop.sh脚本（如果存在）
-if [ -f "$PROJECT_DIR/stop.sh" ]; then
-    bash "$PROJECT_DIR/stop.sh"
+if [ -f "$DEVOPS_DIR/stop.sh" ]; then
+    bash "$DEVOPS_DIR/stop.sh"
 else
     # 手动停止
     BACKEND_PIDS=$(pgrep -f "uvicorn.*app.main" || true)
@@ -311,7 +312,7 @@ db.close()
 
 if [ "$USER_COUNT" = "0" ]; then
     echo "⚠️  用户表为空，正在初始化默认用户（随机密码）..."
-    python3 scripts/init_users.py --auto
+    python3 "$PROJECT_DIR/backend/scripts/init_users.py" --auto
     echo ""
     echo -e "${YELLOW}⚠️  请记录以上密码信息！${NC}"
 else
@@ -328,8 +329,8 @@ echo "▶️  步骤 9/9: 启动服务"
 echo "============================================================"
 
 # 使用bash start_all.sh脚本
-if [ -f "$PROJECT_DIR/start_all.sh" ]; then
-    bash "$PROJECT_DIR/start_all.sh"
+if [ -f "$DEVOPS_DIR/start_all.sh" ]; then
+    bash "$DEVOPS_DIR/start_all.sh"
 else
     echo -e "${YELLOW}⚠️  start_all.sh 不存在，手动启动服务${NC}"
     
@@ -392,8 +393,8 @@ fi
 echo ""
 echo "📝 常用命令:"
 echo "  • 查看后端日志: tail -f $PROJECT_DIR/logs/backend.log"
-echo "  • 停止服务: bash $PROJECT_DIR/stop.sh"
-echo "  • 重启服务: bash $PROJECT_DIR/start_all.sh"
+echo "  • 停止服务: bash $DEVOPS_DIR/stop.sh"
+echo "  • 重启服务: bash $DEVOPS_DIR/start_all.sh"
 echo "  • 查看进程: ps aux | grep uvicorn"
 echo ""
 

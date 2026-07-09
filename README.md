@@ -69,7 +69,7 @@ nano ../.env  # 修改数据库配置和运行密钥
 
 # 3. 启动后端
 cd ../..
-bash start_all.sh dev
+bash devops/start_all.sh dev
 
 # 4. 访问
 # 前端: http://localhost:3000
@@ -92,7 +92,7 @@ git pull origin main
 cp ~/database.py.backup backend/app/database.py
 
 # 4. 启动服务
-bash start_all.sh  # 默认生产模式
+bash devops/start_all.sh  # 默认生产模式
 ```
 
 详细部署指南：[服务器部署指南](docs/服务器部署指南.md)

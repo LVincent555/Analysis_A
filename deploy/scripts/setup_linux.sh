@@ -1,258 +1,131 @@
-#!/bin/bash
-# ==========================================
-# Linux服务器一键部署脚本（不使用Docker）
-# ==========================================
+#!/usr/bin/env bash
+set -euo pipefail
 
-set -e
+# Linux setup helper for stock_analysis_app.
+# It intentionally keeps operational entry scripts under devops/.
 
-# 颜色定义
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
-
-echo -e "${BLUE}=========================================="
-echo "🚀 股票分析系统 - Linux部署脚本"
-echo -e "==========================================${NC}"
-echo ""
-
-# 获取项目根目录
-PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 BACKEND_DIR="$PROJECT_ROOT/backend"
-FRONTEND_DIR="$PROJECT_ROOT/frontend"
+FRONTEND_DIR="$PROJECT_ROOT/frontend-client"
+DEVOPS_DIR="$PROJECT_ROOT/devops"
 DATA_DIR="$PROJECT_ROOT/data"
 
-echo -e "${BLUE}项目路径: $PROJECT_ROOT${NC}"
-echo ""
+info() {
+    printf '\033[0;34m[INFO]\033[0m %s\n' "$1"
+}
 
-# ==========================================
-# 检查系统依赖
-# ==========================================
-echo -e "${YELLOW}📋 检查系统依赖...${NC}"
+warn() {
+    printf '\033[1;33m[WARN]\033[0m %s\n' "$1"
+}
 
-# 检查Python
-if ! command -v python3 &> /dev/null; then
-    echo -e "${RED}❌ Python3 未安装${NC}"
+ok() {
+    printf '\033[0;32m[ OK ]\033[0m %s\n' "$1"
+}
+
+fail() {
+    printf '\033[0;31m[FAIL]\033[0m %s\n' "$1" >&2
     exit 1
-fi
-PYTHON_VERSION=$(python3 --version)
-echo -e "${GREEN}✓ $PYTHON_VERSION${NC}"
+}
 
-# 检查pip
-if ! command -v pip3 &> /dev/null; then
-    echo -e "${RED}❌ pip3 未安装${NC}"
-    exit 1
-fi
-echo -e "${GREEN}✓ pip3 已安装${NC}"
+need_cmd() {
+    command -v "$1" >/dev/null 2>&1 || fail "$1 is not installed"
+}
 
-# 检查Node.js
-if ! command -v node &> /dev/null; then
-    echo -e "${RED}❌ Node.js 未安装${NC}"
-    echo "请安装Node.js 16+: https://nodejs.org/"
-    exit 1
-fi
-NODE_VERSION=$(node --version)
-echo -e "${GREEN}✓ Node.js $NODE_VERSION${NC}"
+echo "=========================================="
+echo "stock_analysis_app Linux setup"
+echo "=========================================="
+info "Project root: $PROJECT_ROOT"
 
-# 检查npm
-if ! command -v npm &> /dev/null; then
-    echo -e "${RED}❌ npm 未安装${NC}"
-    exit 1
-fi
-NPM_VERSION=$(npm --version)
-echo -e "${GREEN}✓ npm $NPM_VERSION${NC}"
+need_cmd python3
+need_cmd node
+need_cmd npm
 
-# 检查PostgreSQL
-if ! command -v psql &> /dev/null; then
-    echo -e "${YELLOW}⚠  PostgreSQL客户端未安装${NC}"
-    echo "如果数据库在远程服务器，可以忽略此警告"
+if command -v psql >/dev/null 2>&1; then
+    ok "PostgreSQL client detected: $(psql --version)"
 else
-    echo -e "${GREEN}✓ PostgreSQL 已安装${NC}"
+    warn "PostgreSQL client is not installed. Skip this if the database is remote."
 fi
 
-echo ""
+[ -d "$BACKEND_DIR" ] || fail "Missing backend directory: $BACKEND_DIR"
+[ -d "$FRONTEND_DIR" ] || fail "Missing frontend directory: $FRONTEND_DIR"
+[ -d "$DEVOPS_DIR" ] || fail "Missing devops directory: $DEVOPS_DIR"
 
-# ==========================================
-# 配置后端
-# ==========================================
-echo -e "${YELLOW}🔧 配置后端...${NC}"
+mkdir -p "$DATA_DIR" "$PROJECT_ROOT/logs"
 
+info "Configuring backend"
 cd "$BACKEND_DIR"
-
-# 检查.env文件
 if [ ! -f .env ]; then
     if [ -f .env.example ]; then
-        echo -e "${YELLOW}⚠  .env 文件不存在，从模板创建...${NC}"
         cp .env.example .env
-        echo -e "${YELLOW}⚠  请编辑 backend/.env 文件配置数据库连接！${NC}"
-        read -p "按回车继续... " 
+        warn "Created backend/.env from .env.example. Review database settings before starting services."
     else
-        echo -e "${RED}❌ .env.example 不存在${NC}"
-        exit 1
+        warn "backend/.env and backend/.env.example are both missing."
     fi
 else
-    echo -e "${GREEN}✓ .env 配置文件存在${NC}"
+    ok "backend/.env exists"
 fi
 
-# 创建虚拟环境
-if [ ! -d "venv" ]; then
-    echo "创建Python虚拟环境..."
+if [ ! -d venv ]; then
     python3 -m venv venv
-    echo -e "${GREEN}✓ 虚拟环境已创建${NC}"
+    ok "Created backend/venv"
 else
-    echo -e "${GREEN}✓ 虚拟环境已存在${NC}"
+    ok "backend/venv exists"
 fi
 
-# 激活虚拟环境并安装依赖
-echo "安装Python依赖..."
 source venv/bin/activate
-pip install --upgrade pip
-pip install -r requirements.txt
-echo -e "${GREEN}✓ Python依赖已安装${NC}"
+python -m pip install --upgrade pip
+if [ -f requirements.txt ]; then
+    pip install -r requirements.txt
+else
+    warn "backend/requirements.txt is missing"
+fi
+deactivate
 
-echo ""
-
-# ==========================================
-# 配置前端
-# ==========================================
-echo -e "${YELLOW}🎨 配置前端...${NC}"
-
+info "Configuring frontend-client"
 cd "$FRONTEND_DIR"
-
-# 检查package.json
-if [ ! -f package.json ]; then
-    echo -e "${RED}❌ package.json 不存在${NC}"
-    exit 1
-fi
-
-# 安装npm依赖
-if [ ! -d "node_modules" ]; then
-    echo "安装npm依赖..."
+if [ ! -d node_modules ]; then
     npm install
-    echo -e "${GREEN}✓ npm依赖已安装${NC}"
 else
-    echo -e "${GREEN}✓ npm依赖已存在${NC}"
+    ok "frontend-client/node_modules exists"
 fi
 
-# 询问是否构建前端
-read -p "是否立即构建前端生产版本？(y/n) " -n 1 -r
-echo
-if [[ $REPLY =~ ^[Yy]$ ]]; then
-    echo "构建前端..."
+read -r -p "Build frontend-client now? [y/N] " build_frontend
+if [[ "$build_frontend" =~ ^[Yy]$ ]]; then
     npm run build
-    echo -e "${GREEN}✓ 前端构建完成${NC}"
+    ok "frontend-client build complete"
 else
-    echo -e "${YELLOW}⚠  跳过前端构建（开发模式需要单独启动）${NC}"
+    warn "Skipped frontend build"
 fi
 
-echo ""
-
-# ==========================================
-# 检查数据目录
-# ==========================================
-echo -e "${YELLOW}📊 检查数据目录...${NC}"
-
-if [ ! -d "$DATA_DIR" ]; then
-    mkdir -p "$DATA_DIR"
-    echo -e "${GREEN}✓ 创建data目录${NC}"
-fi
-
-XLSX_COUNT=$(ls -1 "$DATA_DIR"/*.xlsx 2>/dev/null | wc -l)
-if [ "$XLSX_COUNT" -eq "0" ]; then
-    echo -e "${YELLOW}⚠  data目录中没有Excel文件${NC}"
-    echo "请将Excel文件放到: $DATA_DIR"
+info "Checking data directory"
+xlsx_count="$(find "$DATA_DIR" -maxdepth 1 -type f -name '*.xlsx' | wc -l | tr -d ' ')"
+if [ "$xlsx_count" = "0" ]; then
+    warn "No Excel files found in $DATA_DIR"
 else
-    echo -e "${GREEN}✓ 找到 $XLSX_COUNT 个Excel文件${NC}"
+    ok "Found $xlsx_count Excel files in data/"
 fi
 
-echo ""
-
-# ==========================================
-# 数据库初始化
-# ==========================================
-echo -e "${YELLOW}🗄️  数据库初始化...${NC}"
-
+info "Checking database connection"
 cd "$BACKEND_DIR"
 source venv/bin/activate
-
-# 测试数据库连接
-echo "测试数据库连接..."
-if python -c "from app.database import test_connection; import sys; sys.exit(0 if test_connection() else 1)" 2>/dev/null; then
-    echo -e "${GREEN}✓ 数据库连接成功${NC}"
-    
-    # 询问是否导入数据
-    read -p "是否导入Excel数据到数据库？(y/n) " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        echo "开始导入数据..."
-        python scripts/import_data_robust.py
-        echo -e "${GREEN}✓ 数据导入完成${NC}"
-    else
-        echo -e "${YELLOW}⚠  跳过数据导入${NC}"
-    fi
+if python -c "from app.database import test_connection; import sys; sys.exit(0 if test_connection() else 1)" >/dev/null 2>&1; then
+    ok "Database connection succeeded"
 else
-    echo -e "${RED}❌ 数据库连接失败${NC}"
-    echo "请检查:"
-    echo "  1. PostgreSQL是否运行"
-    echo "  2. backend/.env 配置是否正确"
-    echo "  3. 数据库用户是否有权限"
+    warn "Database connection check failed. Review backend/.env before starting services."
 fi
+deactivate
 
-echo ""
+info "Ensuring devops scripts are executable"
+find "$DEVOPS_DIR" -maxdepth 1 -type f -name '*.sh' -exec chmod +x {} \;
+if [ -d "$DEVOPS_DIR/certs" ]; then
+    find "$DEVOPS_DIR/certs" -maxdepth 1 -type f -name '*.sh' -exec chmod +x {} \;
+fi
+ok "devops scripts are executable"
 
-# ==========================================
-# 创建启动脚本
-# ==========================================
-echo -e "${YELLOW}📝 创建启动脚本...${NC}"
-
-# 创建后端启动脚本
-cat > "$PROJECT_ROOT/start_backend_linux.sh" << 'EOF'
-#!/bin/bash
-cd "$(dirname "$0")/backend"
-source venv/bin/activate
-python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-EOF
-chmod +x "$PROJECT_ROOT/start_backend_linux.sh"
-echo -e "${GREEN}✓ 创建 start_backend_linux.sh${NC}"
-
-# 创建前端启动脚本（开发模式）
-cat > "$PROJECT_ROOT/start_frontend_linux.sh" << 'EOF'
-#!/bin/bash
-cd "$(dirname "$0")/frontend"
-npm start
-EOF
-chmod +x "$PROJECT_ROOT/start_frontend_linux.sh"
-echo -e "${GREEN}✓ 创建 start_frontend_linux.sh${NC}"
-
-echo ""
-
-# ==========================================
-# 完成
-# ==========================================
-echo -e "${GREEN}=========================================="
-echo "✅ 部署准备完成！"
-echo -e "==========================================${NC}"
-echo ""
-echo "📝 下一步："
-echo ""
-echo "1️⃣  配置数据库连接:"
-echo "   nano backend/.env"
-echo ""
-echo "2️⃣  启动后端（在一个终端）:"
-echo "   ./start_backend_linux.sh"
-echo "   或后台运行: nohup ./start_backend_linux.sh > backend.log 2>&1 &"
-echo ""
-echo "3️⃣  启动前端（在另一个终端，开发模式）:"
-echo "   ./start_frontend_linux.sh"
-echo ""
-echo "4️⃣  访问应用:"
-echo "   前端: http://localhost:3000"
-echo "   API:  http://localhost:8000/docs"
-echo ""
-echo "💡 生产环境部署:"
-echo "   阅读 LINUX_DEPLOY_GUIDE.md 配置 systemd + nginx"
-echo ""
-echo -e "${GREEN}=========================================="
-echo "🎉 祝你部署顺利！"
-echo -e "==========================================${NC}"
+echo
+echo "Next commands:"
+echo "  bash devops/start_all.sh dev"
+echo "  bash devops/start_all.sh"
+echo "  bash devops/stop.sh"
+echo
+echo "Setup complete."

@@ -4,7 +4,7 @@
 
 set -e  # 遇到错误立即退出
 
-PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 echo "============================================================"
 echo "🚀 服务器部署脚本 v0.2.4"
@@ -22,25 +22,25 @@ git pull origin main
 echo "✓ 代码更新完成"
 echo ""
 
-# 2. 检查frontend/build目录
+# 2. 检查frontend-client/build目录
 echo "============================================================"
 echo "🔍 步骤 2/5: 检查前端构建文件"
 echo "============================================================"
-if [ ! -d "frontend/build" ]; then
-    echo "✗ 错误: frontend/build目录不存在！"
+if [ ! -d "frontend-client/build" ]; then
+    echo "✗ 错误: frontend-client/build目录不存在！"
     echo "  请在本地执行："
-    echo "    cd frontend"
+    echo "    cd frontend-client"
     echo "    npm run build"
-    echo "    git add frontend/build"
+    echo "    git add frontend-client/build"
     echo "    git commit -m 'build: 更新前端构建文件'"
     echo "    git push"
     exit 1
 fi
 
-BUILD_FILES=$(find frontend/build -type f | wc -l)
+BUILD_FILES=$(find frontend-client/build -type f | wc -l)
 echo "✓ 前端构建文件已存在"
 echo "  文件数量: $BUILD_FILES"
-echo "  构建目录: $PROJECT_DIR/frontend/build"
+echo "  构建目录: $PROJECT_DIR/frontend-client/build"
 echo ""
 
 # 3. 安装/更新Python依赖

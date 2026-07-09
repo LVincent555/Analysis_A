@@ -22,7 +22,7 @@ class SmartDeployer:
         'DB_PORT': '5432',
         'DB_NAME': 'db_20251106_analysis_a',
         'DB_USER': 'postgres',
-        'DB_PASSWORD': '3.1415926',
+        'DB_PASSWORD': os.getenv('DB_PASSWORD', 'replace-with-your-database-password'),
         'SERVER_IP': '60.205.251.109',
         'BACKEND_PORT': '8000',
         'FRONTEND_PORT': '3000'
@@ -32,7 +32,8 @@ class SmartDeployer:
         self.project_root = Path(project_root)
         self.mode = mode.lower()
         self.backend_dir = self.project_root / 'backend'
-        self.frontend_dir = self.project_root / 'frontend'
+        self.frontend_dir = self.project_root / 'frontend-client'
+        self.devops_dir = self.project_root / 'devops'
         self.data_dir = self.project_root / 'data'
         
     def print_header(self):
@@ -111,6 +112,8 @@ class SmartDeployer:
             need_update = False
             for key, value in self.CONFIG.items():
                 if key.startswith('DB_') or key == 'SERVER_IP':
+                    if key == 'DB_PASSWORD':
+                        continue
                     if f"{key}=" not in content or f"{key}={value}" not in content:
                         need_update = True
                         break
@@ -177,7 +180,9 @@ DEBUG=True
         for line in lines:
             if '=' in line and not line.strip().startswith('#'):
                 key = line.split('=')[0].strip()
-                if key in self.CONFIG:
+                if key == 'DB_PASSWORD' and self.CONFIG[key] == 'replace-with-your-database-password':
+                    updated.append(line)
+                elif key in self.CONFIG:
                     updated.append(f"{key}={self.CONFIG[key]}\n")
                     keys_found.add(key)
                 else:
@@ -326,12 +331,12 @@ print(count)
         print("🚀 启动服务：")
         print()
         print("  方式1：前后台分别启动（推荐用screen/tmux）")
-        print("    ./start_backend.sh    # 后端")
-        print("    ./start_frontend.sh   # 前端")
+        print("    bash devops/start_backend.sh    # 后端")
+        print("    bash devops/start_frontend.sh   # 前端")
         print()
         print("  方式2：后台运行")
-        print("    nohup ./start_backend.sh > backend.log 2>&1 &")
-        print("    nohup ./start_frontend.sh > frontend.log 2>&1 &")
+        print("    nohup bash devops/start_backend.sh > backend.log 2>&1 &")
+        print("    nohup bash devops/start_frontend.sh > frontend.log 2>&1 &")
         print()
         print("🌐 访问地址：")
         print(f"  前端：http://{self.CONFIG['SERVER_IP']}:{self.CONFIG['FRONTEND_PORT']}")
@@ -370,25 +375,37 @@ print(count)
     def _create_dev_scripts(self):
         """创建开发模式启动脚本"""
         # 后端启动脚本
-        backend_script = self.project_root / 'start_backend.sh'
+        self.devops_dir.mkdir(exist_ok=True)
+
+        backend_script = self.devops_dir / 'start_backend.sh'
         backend_content = f"""#!/bin/bash
-cd "{self.backend_dir}"
-source venv/bin/activate
+set -e
+PROJECT_ROOT="$(cd "$(dirname "${{BASH_SOURCE[0]}}")/.." && pwd)"
+cd "$PROJECT_ROOT/backend"
+if [ -d .venv ]; then
+    source .venv/bin/activate
+elif [ -d venv ]; then
+    source venv/bin/activate
+fi
 python -m uvicorn app.main:app --host 0.0.0.0 --port {self.CONFIG['BACKEND_PORT']} --reload
 """
-        backend_script.write_text(backend_content)
+        if not backend_script.exists():
+            backend_script.write_text(backend_content)
         backend_script.chmod(0o755)
-        print(f"  ✓ 创建 start_backend.sh")
+        print(f"  ✓ devops/start_backend.sh 可执行")
         
         # 前端启动脚本
-        frontend_script = self.project_root / 'start_frontend.sh'
+        frontend_script = self.devops_dir / 'start_frontend.sh'
         frontend_content = f"""#!/bin/bash
-cd "{self.frontend_dir}"
+set -e
+PROJECT_ROOT="$(cd "$(dirname "${{BASH_SOURCE[0]}}")/.." && pwd)"
+cd "$PROJECT_ROOT/frontend-client"
 PORT={self.CONFIG['FRONTEND_PORT']} npm start
 """
-        frontend_script.write_text(frontend_content)
+        if not frontend_script.exists():
+            frontend_script.write_text(frontend_content)
         frontend_script.chmod(0o755)
-        print(f"  ✓ 创建 start_frontend.sh")
+        print(f"  ✓ devops/start_frontend.sh 可执行")
     
     def _setup_systemd(self):
         """配置Systemd服务"""
@@ -501,7 +518,7 @@ def main():
         sys.exit(1)
     
     mode = sys.argv[1]
-    project_root = Path(__file__).parent
+    project_root = Path(__file__).resolve().parents[2]
     
     deployer = SmartDeployer(str(project_root), mode)
     deployer.run()

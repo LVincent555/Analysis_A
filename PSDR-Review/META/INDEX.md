@@ -90,6 +90,7 @@ PSDR-Review/
 | RES-032 | 后端缓存系统治理 Phase 4 历史缓存收口落地结果 | `../RES/RES-032-后端缓存系统治理Phase4历史缓存收口落地结果.md` | [SOLVED] | Infra / Backend / Cache / Architecture / Testing | 后端缓存, UnifiedCache, NumpyCache, HotSpotsCache, logical region | SUG-006, RES-026, RES-027, RES-028, RES-029, PRB-001, SUG-001, DEC-002, RES-014 |
 | RES-033 | 后端缓存系统治理 Phase 5 实验运行态外部化落地结果 | `../RES/RES-033-后端缓存系统治理Phase5实验运行态外部化落地结果.md` | [SOLVED / EXPERIMENTAL] | Infra / Backend / Cache / Security / Runtime / Testing | 后端缓存, RuntimeStateStore, session_keys, replay nonce, diskcache | SUG-006, RES-026, RES-027, RES-028, RES-029, RES-032, PRB-001, SUG-001, DEC-002, RES-014 |
 | RES-034 | 本地前后端联调启动验证结果 | `../RES/RES-034-本地前后端联调启动验证结果.md` | [SOLVED] | Experiment / Infra / Backend / Frontend / Integration | 本地联调, secure-login, secure gateway, Numpy cache, HotSpots, IndustryTrend | DEC-002, DEC-004, SUG-004, SUG-006, PRB-002, RES-031 |
+| RES-035 | DevOps 脚本归拢与部署入口审核结果 | `../RES/RES-035-DevOps脚本归拢与部署入口审核结果.md` | [SOLVED] | Infra / DevOps / Documentation | devops, 部署脚本, 一键部署, 脚本治理 | DEC-001, RES-034 |
 
 ---
 

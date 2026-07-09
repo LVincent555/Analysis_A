@@ -39,8 +39,9 @@ class LinuxDeploymentPreparer:
             "backend",
             "backend/app",
             "backend/scripts",
-            "frontend",
-            "frontend/src",
+            "frontend-client",
+            "frontend-client/src",
+            "devops",
             "sql",
             "data"
         ]
@@ -90,7 +91,7 @@ class LinuxDeploymentPreparer:
         """检查前端配置"""
         print("🎨 检查前端配置...")
         
-        package_json = self.project_root / "frontend" / "package.json"
+        package_json = self.project_root / "frontend-client" / "package.json"
         if package_json.exists():
             print(f"   ✓ package.json 存在")
         else:
@@ -122,9 +123,9 @@ class LinuxDeploymentPreparer:
         print("🚀 检查启动脚本...")
         
         scripts = [
-            "start_backend.py",
-            "start_frontend.py",
-            "start_all.py"
+            "devops/start_backend.py",
+            "devops/start_frontend.py",
+            "devops/start_all.py"
         ]
         
         for script in scripts:
@@ -302,7 +303,7 @@ python scripts/import_data_robust.py
 ### 7. 安装前端依赖并构建
 
 ```bash
-cd ../frontend
+cd ../frontend-client
 npm install
 npm run build
 ```
@@ -317,14 +318,14 @@ npm run build
 cd /path/to/deploy/stock_analysis_app
 
 # 启动后端（在一个终端）
-python start_backend.py
+bash devops/start_backend.sh
 
 # 启动前端（在另一个终端）
-python start_frontend.py
+bash devops/start_frontend.sh
 
 # 或一键启动（后台运行）
-nohup python start_backend.py > backend.log 2>&1 &
-nohup python start_frontend.py > frontend.log 2>&1 &
+nohup bash devops/start_backend.sh > backend.log 2>&1 &
+nohup bash devops/start_frontend.sh > frontend.log 2>&1 &
 ```
 
 ### 方式二：使用系统服务（生产环境推荐）
@@ -402,7 +403,7 @@ server {
 
     # 前端静态文件
     location / {
-        root /path/to/stock_analysis_app/frontend/build;
+        root /path/to/stock_analysis_app/frontend-client/build;
         try_files $uri $uri/ /index.html;
     }
 
@@ -516,7 +517,7 @@ pg_dump -U stock_user -d stock_analysis > backup_$(date +%Y%m%d).sql
 
 def main():
     """主函数"""
-    project_root = Path(__file__).parent
+    project_root = Path(__file__).resolve().parents[2]
     
     print()
     preparer = LinuxDeploymentPreparer(project_root)
@@ -526,7 +527,7 @@ def main():
     print("📖 创建Linux部署指南...")
     print("=" * 70)
     
-    guide_file = project_root / "LINUX_DEPLOY_GUIDE.md"
+    guide_file = project_root / "deploy" / "LINUX_DEPLOY_GUIDE.md"
     guide_content = create_linux_deployment_guide()
     
     with open(guide_file, 'w', encoding='utf-8') as f:

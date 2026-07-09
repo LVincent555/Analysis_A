@@ -2,7 +2,7 @@
 # 一键启动所有服务（后端 + 前端）
 # 用法: ./start_all.sh [dev|prod]
 
-PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MODE=${1:-prod}  # 默认生产模式
 
 echo "============================================================"
@@ -50,7 +50,7 @@ if [ "$MODE" = "prod" ]; then
     # 生产模式：检查前端build目录
     echo ""
     echo "▶ 检查前端构建..."
-    cd "$PROJECT_DIR/frontend"
+    cd "$PROJECT_DIR/frontend-client"
     
     if [ ! -d "build" ]; then
         echo "  ✗ 前端build目录不存在！"
@@ -59,7 +59,7 @@ if [ "$MODE" = "prod" ]; then
         exit 1
     else
         echo "✓ 前端build目录已存在"
-        echo "  构建目录: $PROJECT_DIR/frontend/build"
+        echo "  构建目录: $PROJECT_DIR/frontend-client/build"
         echo "  📄 文件数: $(find build -type f | wc -l)"
     fi
     
@@ -68,7 +68,7 @@ else
     # 开发模式：启动开发服务器
     echo ""
     echo "▶ 启动前端开发服务器..."
-    cd "$PROJECT_DIR/frontend"
+    cd "$PROJECT_DIR/frontend-client"
     
     # 检查proxy配置
     if ! grep -q '"proxy"' package.json; then
@@ -113,7 +113,7 @@ if [ "$MODE" = "prod" ]; then
     echo "📝 Nginx配置示例:"
     echo "  server {"
     echo "    listen 80;"
-    echo "    root $PROJECT_DIR/frontend/build;"
+    echo "    root $PROJECT_DIR/frontend-client/build;"
     echo "    location /api { proxy_pass http://localhost:8000; }"
     echo "  }"
     echo ""
@@ -136,7 +136,7 @@ fi
 
 echo ""
 echo "🛑 停止服务:"
-echo "  ./stop.sh"
+echo "  bash $PROJECT_DIR/devops/stop.sh"
 if [ "$FRONTEND_PID" != "N/A" ]; then
     echo "  或者: kill $BACKEND_PID $FRONTEND_PID"
 fi

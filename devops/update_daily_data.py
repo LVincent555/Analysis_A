@@ -23,8 +23,10 @@ from pathlib import Path
 from datetime import datetime
 import logging
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
 # 配置日志
-log_dir = Path(__file__).parent / "logs"
+log_dir = PROJECT_ROOT / "logs"
 log_dir.mkdir(exist_ok=True)
 log_file = log_dir / f"update_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
 
@@ -40,8 +42,8 @@ logger = logging.getLogger(__name__)
 
 
 # 添加backend/scripts和backend到路径
-backend_scripts = Path(__file__).parent / "backend" / "scripts"
-backend_dir = Path(__file__).parent / "backend"
+backend_scripts = PROJECT_ROOT / "backend" / "scripts"
+backend_dir = PROJECT_ROOT / "backend"
 sys.path.insert(0, str(backend_scripts))
 sys.path.insert(0, str(backend_dir))
 

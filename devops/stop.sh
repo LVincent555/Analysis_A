@@ -3,9 +3,11 @@
 
 echo "🛑 停止所有服务..."
 
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
 # 方式1: 使用服务管理器
-if [ -f "deploy/scripts/service_manager.py" ]; then
-    python3 deploy/scripts/service_manager.py stop all
+if [ -f "$PROJECT_ROOT/deploy/scripts/service_manager.py" ]; then
+    python3 "$PROJECT_ROOT/deploy/scripts/service_manager.py" stop all
 fi
 
 # 方式2: 直接杀进程（确保停止）

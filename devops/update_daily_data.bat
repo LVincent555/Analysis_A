@@ -9,6 +9,8 @@ REM ############################################################################
 
 chcp 65001 >nul
 setlocal enabledelayedexpansion
+set "DEVOPS_DIR=%~dp0"
+cd /d "%DEVOPS_DIR%.."
 
 echo ═══════════════════════════════════════════════════════════════
 echo 🚀 每日数据更新任务
@@ -59,7 +61,7 @@ echo ─────────────────────────
 echo 执行 Python 更新脚本...
 echo.
 
-python update_daily_data.py
+python "%DEVOPS_DIR%update_daily_data.py"
 set EXIT_CODE=%errorlevel%
 
 echo.
