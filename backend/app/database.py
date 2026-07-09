@@ -1,0 +1,85 @@
+"""Database engine and SQLAlchemy session management.
+
+The module is versioned code. Runtime secrets belong in ``backend/.env`` or
+process environment variables.
+"""
+
+import logging
+import os
+
+from dotenv import load_dotenv
+from sqlalchemy import create_engine
+from sqlalchemy.orm import declarative_base, sessionmaker
+
+logger = logging.getLogger(__name__)
+
+
+def _load_env() -> None:
+    """Load .env with a Windows-friendly encoding fallback."""
+    if os.getenv("PYTHON_DOTENV_DISABLED"):
+        return
+
+    for encoding in ("utf-8-sig", "utf-8", "gbk"):
+        try:
+            load_dotenv(encoding=encoding)
+            return
+        except UnicodeDecodeError:
+            continue
+
+    logger.warning("Unable to parse .env encoding; skipped dotenv loading")
+
+
+_load_env()
+
+
+DB_HOST = os.getenv("DB_HOST", "localhost")
+DB_PORT = os.getenv("DB_PORT", "5432")
+DB_NAME = os.getenv("DB_NAME", "stock_analysis")
+DB_USER = os.getenv("DB_USER", "postgres")
+DB_PASSWORD = os.getenv("DB_PASSWORD", "")
+DB_POOL_SIZE = int(os.getenv("DB_POOL_SIZE", "10"))
+DB_MAX_OVERFLOW = int(os.getenv("DB_MAX_OVERFLOW", "20"))
+DB_POOL_RECYCLE = int(os.getenv("DB_POOL_RECYCLE", "3600"))
+DB_POOL_TIMEOUT = int(os.getenv("DB_POOL_TIMEOUT", "30"))
+DB_ECHO = os.getenv("DB_ECHO", "false").lower() == "true"
+
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}",
+)
+
+engine = create_engine(
+    DATABASE_URL,
+    pool_size=DB_POOL_SIZE,
+    max_overflow=DB_MAX_OVERFLOW,
+    pool_recycle=DB_POOL_RECYCLE,
+    pool_timeout=DB_POOL_TIMEOUT,
+    pool_pre_ping=True,
+    echo=DB_ECHO,
+)
+
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
+
+
+def get_db():
+    """Yield a database session for FastAPI dependency injection."""
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+def test_connection() -> bool:
+    """Check whether the configured database is reachable."""
+    try:
+        from sqlalchemy import text
+
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        logger.info("Database connection OK: %s:%s/%s", DB_HOST, DB_PORT, DB_NAME)
+        return True
+    except Exception as exc:
+        logger.error("Database connection failed: %s", exc)
+        return False

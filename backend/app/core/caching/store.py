@@ -8,12 +8,17 @@
 3. FileStore: DiskCache 封装，适合大文件/API响应
 """
 
+import logging
 import threading
 from typing import Any, Callable, Dict, Optional, Union
 from abc import ABC, abstractmethod
 
 from .entry import CacheEntry
+from .metrics import CacheMetrics
 from .policy import CachePolicy
+
+
+logger = logging.getLogger(__name__)
 
 
 class CacheRegion(ABC):
@@ -63,14 +68,25 @@ class ObjectStore(CacheRegion):
     - 线程安全: RLock 保护
     """
     
-    def __init__(self, name: str, policy: CachePolicy):
+    def __init__(
+        self,
+        name: str,
+        policy: CachePolicy,
+        max_entries: int | None = None,
+        eviction_policy: str = "lru",
+    ):
         """
         Args:
             name: 分区名称
             policy: 缓存策略 (WriteBehind/CacheAside/WriteThrough)
+            max_entries: 最大条目数，None 表示不限制
+            eviction_policy: 淘汰策略，目前支持 lru
         """
         self._name = name
         self.policy = policy
+        self.max_entries = max_entries
+        self.eviction_policy = eviction_policy
+        self.metrics = CacheMetrics()
         self.store: Dict[str, CacheEntry] = {}
         self._lock = threading.RLock()
     
@@ -78,7 +94,7 @@ class ObjectStore(CacheRegion):
     def name(self) -> str:
         return self._name
     
-    def get(self, key: str, loader: Callable = None) -> Any:
+    def get(self, key: str, loader: Optional[Callable[..., Any]] = None) -> Any:
         """
         读取缓存
         
@@ -86,10 +102,30 @@ class ObjectStore(CacheRegion):
             key: 缓存键
             loader: 回源加载函数 (仅Cache-Aside使用)
         """
+        def counted_loader() -> Any:
+            try:
+                return loader() if loader else None
+            except Exception as exc:
+                self.metrics.record_loader_error(exc)
+                raise
+
         with self._lock:
-            return self.policy.get(key, self.store, loader)
-    
-    def set(self, key: str, value: Any, persister: Callable = None, **kwargs) -> None:
+            entry = self.store.get(key)
+            was_hit = bool(entry and not entry.is_expired())
+            try:
+                value = self.policy.get(key, self.store, counted_loader if loader else None)
+            except Exception as exc:
+                self.metrics.record_operation_error(exc)
+                raise
+
+            if was_hit:
+                self.metrics.record_hit()
+            else:
+                self.metrics.record_miss()
+                self._evict_if_needed(protected_key=key)
+            return value
+
+    def set(self, key: str, value: Any, persister: Optional[Callable] = None, **kwargs) -> None:
         """
         写入缓存
         
@@ -98,18 +134,39 @@ class ObjectStore(CacheRegion):
             value: 缓存值
             persister: 持久化函数 (仅Write-Through/Cache-Aside使用)
         """
+        def counted_persister(persisted_value: Any) -> None:
+            if not persister:
+                return
+            try:
+                persister(persisted_value)
+            except Exception as exc:
+                self.metrics.record_persister_error(exc)
+                raise
+
         with self._lock:
-            self.policy.set(key, value, self.store, persister)
+            try:
+                self.policy.set(key, value, self.store, counted_persister if persister else None)
+            except Exception as exc:
+                self.metrics.record_operation_error(exc)
+                raise
+            self.metrics.record_set()
+            self._evict_if_needed(protected_key=key)
     
     def delete(self, key: str) -> bool:
         """删除缓存"""
         with self._lock:
-            return self.policy.delete(key, self.store)
+            deleted = self.policy.delete(key, self.store)
+            if deleted:
+                self.metrics.record_delete()
+            return deleted
     
     def clear(self) -> None:
         """清空所有缓存"""
         with self._lock:
+            cleared_count = len(self.store)
             self.store.clear()
+            if cleared_count:
+                self.metrics.record_delete(cleared_count)
     
     def clear_expired(self) -> int:
         """
@@ -122,7 +179,26 @@ class ObjectStore(CacheRegion):
             expired_keys = [k for k, v in self.store.items() if v.is_expired()]
             for k in expired_keys:
                 del self.store[k]
+            self.metrics.record_expired_cleanup(len(expired_keys))
             return len(expired_keys)
+
+    def _evict_if_needed(self, protected_key: str | None = None) -> None:
+        """Evict least-recently-used entries when the region exceeds its limit."""
+        if self.max_entries is None or self.max_entries < 0:
+            return
+
+        while len(self.store) > self.max_entries:
+            candidates = [(key, entry) for key, entry in self.store.items() if key != protected_key]
+            if not candidates:
+                break
+
+            if self.eviction_policy != "lru":
+                raise ValueError(f"Unsupported eviction policy: {self.eviction_policy}")
+
+            evict_key, _ = min(candidates, key=lambda item: item[1].last_access)
+            if not self.policy.delete(evict_key, self.store):
+                del self.store[evict_key]
+            self.metrics.record_eviction()
     
     def keys(self) -> list:
         """获取所有键"""
@@ -153,10 +229,15 @@ class ObjectStore(CacheRegion):
             return {
                 "name": self._name,
                 "type": "object",
+                "policy": self.policy.__class__.__name__,
+                "ttl_seconds": self.policy.ttl,
+                "max_entries": self.max_entries,
+                "eviction_policy": self.eviction_policy if self.max_entries is not None else None,
                 "total": total,
                 "expired": expired,
                 "dirty": dirty,
-                "active": total - expired
+                "active": total - expired,
+                "metrics": self.metrics.to_dict(),
             }
 
 
@@ -185,7 +266,7 @@ class VectorStore(CacheRegion):
     def name(self) -> str:
         return self._name
     
-    def get(self, key: str, loader: Callable = None) -> Any:
+    def get(self, key: str, loader: Optional[Callable[..., Any]] = None) -> Any:
         """
         VectorStore 不支持单Key查询
         请使用 query() 方法
@@ -221,20 +302,81 @@ class VectorStore(CacheRegion):
     
     def stats(self) -> dict:
         """统计信息"""
+        if hasattr(self.core, "get_memory_stats"):
+            memory_stats = self.core.get_memory_stats()
+            return {
+                "name": self._name,
+                "type": "vector",
+                "policy": "ReadOnly NumpyCache",
+                "initialized": memory_stats.get("initialized"),
+                "total_mb": memory_stats.get("total_mb"),
+                "stocks_count": memory_stats.get("stocks_count"),
+                "sectors_count": memory_stats.get("sectors_count"),
+                "daily_records": (memory_stats.get("daily_data") or {}).get("n_records"),
+                "sector_records": (memory_stats.get("sector_data") or {}).get("n_records"),
+                "memory_stats": memory_stats,
+            }
+
         memory_mb = "N/A"
         rows = "N/A"
-        
+
         if hasattr(self.core, 'get_memory_usage'):
             memory_mb = self.core.get_memory_usage()
-        
+
         if hasattr(self.core, 'data') and self.core.data is not None:
             rows = len(self.core.data)
-        
+
         return {
             "name": self._name,
             "type": "vector",
             "memory_mb": memory_mb,
             "rows": rows
+        }
+
+
+class HotSpotsStore(CacheRegion):
+    """Logical region adapter for the legacy HotSpotsCache class."""
+
+    def __init__(self, hot_spots_cache, name: str = "hot_spots"):
+        self.core = hot_spots_cache
+        self._name = name
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    def get(self, key: str, loader: Optional[Callable[..., Any]] = None) -> Any:
+        """Return full hot-spots data for a YYYYMMDD date key."""
+        return self.core.get_full_data(key)
+
+    def set(self, key: str, value: Any, **kwargs) -> None:
+        raise NotImplementedError("HotSpotsStore is managed by HotSpotsCache")
+
+    def delete(self, key: str) -> bool:
+        cache = getattr(self.core, "_cache", None)
+        if isinstance(cache, dict) and key in cache:
+            del cache[key]
+            return True
+        return False
+
+    def clear(self) -> None:
+        self.core.clear_cache()
+
+    def reload(self, days: int = 3) -> None:
+        self.core.clear_cache()
+        self.core.preload_recent_dates(days=days)
+
+    def stats(self) -> dict:
+        hot_spots_stats = self.core.get_cache_stats()
+        return {
+            "name": self._name,
+            "type": "logical_hotspots",
+            "policy": "HotSpotsCache TTL",
+            "ttl_seconds": getattr(self.core, "_ttl", None),
+            "max_entries": getattr(self.core, "_max_days", None),
+            "cached_dates": hot_spots_stats.get("cached_dates", []),
+            "total_dates": hot_spots_stats.get("total_dates", 0),
+            "memory_kb": hot_spots_stats.get("memory_usage_kb", 0),
         }
 
 
@@ -266,6 +408,7 @@ class FileStore(CacheRegion):
         self.cache_dir = cache_dir
         self.size_limit_gb = size_limit_gb
         self.core = None  # 延迟初始化
+        self.metrics = CacheMetrics()
     
     def _ensure_initialized(self):
         """确保 DiskCache 已初始化"""
@@ -285,12 +428,57 @@ class FileStore(CacheRegion):
                 )
             except ImportError:
                 raise ImportError("diskcache is required for FileStore. Install with: pip install diskcache")
+
+    def _is_corruption_error(self, exc: Exception) -> bool:
+        """判断是否为 SQLite 缓存损坏错误。"""
+        msg = str(exc).lower()
+        markers = [
+            "database disk image is malformed",
+            "file is not a database",
+            "malformed database schema",
+        ]
+        return any(m in msg for m in markers)
+
+    def _rebuild_cache(self) -> None:
+        """重建损坏的磁盘缓存目录。"""
+        import os
+        import shutil
+
+        if self.core is not None:
+            try:
+                self.core.close()
+            except Exception:
+                pass
+            finally:
+                self.core = None
+
+        shutil.rmtree(self.cache_dir, ignore_errors=True)
+        os.makedirs(self.cache_dir, exist_ok=True)
+        self._ensure_initialized()
+
+    def _with_recovery(self, fn: Callable[[], Any], op_name: str) -> Any:
+        """执行缓存操作，遇到 SQLite 损坏时自动重建并重试一次。"""
+        try:
+            return fn()
+        except Exception as exc:
+            if not self._is_corruption_error(exc):
+                self.metrics.record_operation_error(exc)
+                raise
+            logger.warning(
+                "Disk cache corrupted on %s (%s): %s; rebuilding...",
+                op_name,
+                self.cache_dir,
+                exc,
+            )
+            self._rebuild_cache()
+            self.metrics.record_recovery()
+            return fn()
     
     @property
     def name(self) -> str:
         return self._name
     
-    def get(self, key: str, loader: Optional[Callable] = None) -> Any:
+    def get(self, key: str, loader: Optional[Callable[..., Any]] = None) -> Any:
         """
         读取缓存 (支持 Cache-Aside 模式)
         
@@ -299,8 +487,15 @@ class FileStore(CacheRegion):
             loader: 未命中时的加载函数
         """
         self._ensure_initialized()
-        
-        val = self.core.get(key)
+        core = self.core
+        if core is None:
+            raise RuntimeError("Disk cache not initialized")
+
+        val = self._with_recovery(lambda: core.get(key), "get")
+        if val is None:
+            self.metrics.record_miss()
+        else:
+            self.metrics.record_hit()
         
         # 未命中，尝试回源
         if val is None and loader:
@@ -308,8 +503,10 @@ class FileStore(CacheRegion):
                 val = loader()
                 if val is not None:
                     # 默认缓存 5 分钟
-                    self.core.set(key, val, expire=300)
-            except Exception:
+                    self._with_recovery(lambda: core.set(key, val, expire=300), "set")
+                    self.metrics.record_set()
+            except Exception as exc:
+                self.metrics.record_loader_error(exc)
                 pass  # 容错：加载失败返回 None
         
         return val
@@ -324,26 +521,56 @@ class FileStore(CacheRegion):
             ttl: 过期时间 (秒)，0=使用默认24小时
         """
         self._ensure_initialized()
+        core = self.core
+        if core is None:
+            raise RuntimeError("Disk cache not initialized")
         expire = ttl if ttl > 0 else 86400  # 默认24小时
-        self.core.set(key, value, expire=expire)
+        self._with_recovery(lambda: core.set(key, value, expire=expire), "set")
+        self.metrics.record_set()
     
     def delete(self, key: str) -> bool:
         """删除缓存"""
         self._ensure_initialized()
-        return self.core.delete(key)
+        core = self.core
+        if core is None:
+            raise RuntimeError("Disk cache not initialized")
+        deleted = self._with_recovery(lambda: core.delete(key), "delete")
+        if deleted:
+            self.metrics.record_delete()
+        return deleted
     
     def clear(self) -> None:
         """清空整个分区"""
         self._ensure_initialized()
-        self.core.clear()
+        core = self.core
+        if core is None:
+            raise RuntimeError("Disk cache not initialized")
+        self._with_recovery(lambda: core.clear(), "clear")
+
+    def close(self) -> None:
+        """Close the underlying disk cache handle."""
+        if self.core is not None:
+            self.core.close()
+            self.core = None
     
     def stats(self) -> dict:
         """统计信息"""
         self._ensure_initialized()
+        core = self.core
+        if core is None:
+            raise RuntimeError("Disk cache not initialized")
+        size_mb = self._with_recovery(
+            lambda: round(core.volume() / (1024 * 1024), 2),
+            "stats.volume",
+        )
+        count_raw = self._with_recovery(lambda: core.__len__(), "stats.len")
+        count = count_raw if isinstance(count_raw, int) else 0
         return {
             "name": self._name,
             "type": "disk",
-            "size_mb": round(self.core.volume() / (1024 * 1024), 2),
-            "count": len(self.core),
-            "directory": self.cache_dir
+            "size_mb": size_mb,
+            "count": count,
+            "directory": self.cache_dir,
+            "size_limit_gb": self.size_limit_gb,
+            "metrics": self.metrics.to_dict(),
         }

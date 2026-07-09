@@ -15,10 +15,13 @@ Cache-Aside (旁路缓存) 策略
 优点: 读多写少场景性能好，数据一致性较好
 """
 
+import logging
 from typing import Any, Callable, Dict, Optional
 
 from ..policy import CachePolicy
 from ..entry import CacheEntry
+
+logger = logging.getLogger(__name__)
 
 
 class CacheAsidePolicy(CachePolicy):
@@ -75,8 +78,8 @@ class CacheAsidePolicy(CachePolicy):
                 if value is not None:
                     store[key] = CacheEntry(value, self.ttl)
                 return value
-            except Exception:
-                # 回源失败，返回 None
+            except Exception as exc:
+                logger.warning("Cache loader failed for key %s: %s", key, exc)
                 return None
         
         return None

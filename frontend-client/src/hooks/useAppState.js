@@ -1,6 +1,5 @@
 ﻿import { useState, useEffect, useCallback } from 'react';
-import apiClient from '../services/api';
-import { API_BASE_URL } from '../constants/config';
+import { useAvailableDatesQuery } from '../features/analysis';
 
 /**
  * 全局应用状态管理 Hook
@@ -12,8 +11,12 @@ export const useAppState = () => {
   const [expandedMenu, setExpandedMenu] = useState('hot-spots');
   
   // 日期相关
-  const [availableDates, setAvailableDates] = useState(null);
   const [selectedDate, setSelectedDate] = useState(null);
+  const {
+    data: availableDates = null,
+    error: availableDatesError,
+    refetch: refetchAvailableDates
+  } = useAvailableDatesQuery();
 
   // 详情页状态 (Phase 6)
   const [showDetailPage, setShowDetailPage] = useState(false);
@@ -28,7 +31,7 @@ export const useAppState = () => {
   const [boardType, setBoardType] = useState('main');
   const [selectedPeriod, setSelectedPeriod] = useState(2);
   const [topN, setTopN] = useState(100);
-  const [loading, setLoading] = useState(false);
+  const [loading] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0); // 添加刷新触发器
 
   // 2. 查询系统模块
@@ -56,23 +59,24 @@ export const useAppState = () => {
 
   // ==================== 核心逻辑 ====================
 
-  // 获取日期函数
-  const fetchAvailableDates = useCallback(async (updateSelected = false) => {
-    try {
-      const response = await apiClient.get(`/api/dates`);
-      setAvailableDates(response);
-      if (updateSelected && response && response.latest_date) {
-        setSelectedDate(response.latest_date);
-      }
-    } catch (err) {
-      console.error('获取日期失败:', err);
-    }
-  }, []);
-
-  // 初始化获取日期
   useEffect(() => {
-    fetchAvailableDates(true);
-  }, [fetchAvailableDates]);
+    if (!selectedDate && availableDates?.latest_date) {
+      setSelectedDate(availableDates.latest_date);
+    }
+  }, [availableDates, selectedDate]);
+
+  useEffect(() => {
+    if (availableDatesError) {
+      console.error('获取日期失败:', availableDatesError);
+    }
+  }, [availableDatesError]);
+
+  const refreshDates = useCallback(async () => {
+    const result = await refetchAvailableDates();
+    if (result.data?.latest_date) {
+      setSelectedDate(result.data.latest_date);
+    }
+  }, [refetchAvailableDates]);
 
   // 切换菜单展开状态
   const toggleMenu = (menuName) => {
@@ -126,7 +130,7 @@ export const useAppState = () => {
     expandedMenu, toggleMenu,
     availableDates, 
     selectedDate, setSelectedDate,
-    refreshDates: () => fetchAvailableDates(true), // 刷新日期并更新选中日期
+    refreshDates,
     showDetailPage, selectedIndustry,
     navigateToDetail, backToMain,
     isDrawerOpen, setIsDrawerOpen, // 暴露 Drawer 状态

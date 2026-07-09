@@ -13,11 +13,11 @@
 import gc
 from typing import Dict, Union
 
-from .store import ObjectStore, VectorStore, FileStore, CacheRegion
+from .store import ObjectStore, VectorStore, FileStore, HotSpotsStore, CacheRegion
 
 
 # 类型别名
-CacheRegionType = Union[ObjectStore, VectorStore, FileStore]
+CacheRegionType = Union[ObjectStore, VectorStore, FileStore, HotSpotsStore]
 
 
 class UnifiedCache:
@@ -111,6 +111,11 @@ class UnifiedCache:
     def stock(cls) -> VectorStore:
         """访问股票数据分区 (内存/Numpy)"""
         return cls.get_region("stock_market")
+
+    @classmethod
+    def hot_spots(cls) -> HotSpotsStore:
+        """访问热点榜 logical region"""
+        return cls.get_region("hot_spots")
     
     @classmethod
     def config(cls) -> ObjectStore:
@@ -159,6 +164,8 @@ class UnifiedCache:
                 result[name] = region.clear_expired()
             elif isinstance(region, FileStore):
                 result[name] = "auto-eviction"  # DiskCache 自动 LRU
+            elif isinstance(region, HotSpotsStore):
+                result[name] = "ttl-managed"
             else:
                 result[name] = "skipped"
         
@@ -179,6 +186,9 @@ class UnifiedCache:
                 region.clear()
                 result[name] = "cleared"
             elif isinstance(region, FileStore):
+                region.clear()
+                result[name] = "cleared"
+            elif isinstance(region, HotSpotsStore):
                 region.clear()
                 result[name] = "cleared"
             elif isinstance(region, VectorStore):

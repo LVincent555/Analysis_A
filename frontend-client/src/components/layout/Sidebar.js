@@ -1,9 +1,14 @@
 import React from 'react';
 import {
-  BarChart2, Search, TrendingUp, TrendingDown,
-  ChevronUp, ChevronDown, RefreshCw, Activity,
-  Settings, Upload, Users, Shield, UserCog, Monitor, FileText, Lock, Database
+  ChevronUp, ChevronDown, RefreshCw, Activity
 } from 'lucide-react';
+import {
+  adminNavigationSections,
+  industryNavigationItems,
+  navigationGroups,
+  queryNavigationItems,
+  strategyNavigationItems
+} from '../../app/navigationConfig';
 
 /**
  * 侧边栏导航组件
@@ -29,8 +34,8 @@ const Sidebar = ({
   const isAdmin = user?.role === 'admin';
 
   // 辅助函数：渲染菜单项
-  const MenuItem = ({ id, icon: Icon, label, children, colorClass = "indigo" }) => {
-    const isActive = activeModule === id || (id === 'query-system' && (activeModule === 'stock-query' || activeModule === 'industry-query'));
+  const MenuItem = ({ id, icon: Icon, label, children, colorClass = "indigo", activeIds = [], containerOnly = false }) => {
+    const isActive = activeModule === id || activeIds.includes(activeModule);
     const isExpanded = expandedMenu === id;
 
     // 颜色映射
@@ -48,11 +53,9 @@ const Sidebar = ({
       <div className="mb-2">
         <button
           onClick={() => {
-            // 无论是否有子菜单，点击主项都切换模块（除非是仅仅作为容器的 query-system）
-            if (id !== 'query-system') {
+            if (!containerOnly) {
               setActiveModule(id);
             } else if (children) {
-              // 仅对于容器类菜单，点击只切换展开状态
               toggleMenu(id);
               return;
             }
@@ -111,6 +114,42 @@ const Sidebar = ({
     );
   };
 
+  const ModuleButton = ({ item, colorClass = "purple", context = {}, showIcon = false }) => {
+    const active = activeModule === item.id;
+    const activeColors = {
+      indigo: 'bg-indigo-100 text-indigo-700',
+      purple: 'bg-purple-100 text-purple-700',
+      green: 'bg-green-100 text-green-700',
+      orange: 'bg-orange-100 text-orange-700',
+      blue: 'bg-blue-100 text-blue-700',
+      cyan: 'bg-cyan-100 text-cyan-700',
+      amber: 'bg-amber-100 text-amber-700',
+      rose: 'bg-rose-50 text-rose-700 border border-rose-200'
+    };
+    const Icon = item.icon;
+    const selectedClass = item.activeClassName || activeColors[item.colorClass || colorClass] || activeColors.purple;
+    const idleClass = colorClass === 'amber' ? 'text-gray-600 hover:bg-amber-50' : 'text-gray-600 hover:bg-gray-50';
+
+    return (
+      <button
+        onClick={() => {
+          item.onBeforeNavigate?.({ ...context, setActiveModule });
+          setActiveModule(item.id);
+        }}
+        className={`w-full text-left py-2 px-3 rounded text-sm font-medium transition-colors ${showIcon ? 'flex items-center space-x-2' : ''} ${active ? selectedClass : idleClass}`}
+      >
+        {showIcon && Icon && <Icon className="h-4 w-4" />}
+        <span>
+          {item.prefix ? `${item.prefix} ` : ''}{item.label}
+        </span>
+        {item.suffix && <span className="text-xs text-gray-400 ml-1">{item.suffix}</span>}
+        {item.badge && <span className="ml-2 text-xs bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded">{item.badge}</span>}
+      </button>
+    );
+  };
+
+  const AdminIcon = navigationGroups.admin.icon;
+
   return (
     <aside className="w-full lg:w-72 flex-shrink-0">
       <div className="bg-white rounded-lg shadow-md overflow-hidden sticky top-4">
@@ -123,7 +162,7 @@ const Sidebar = ({
 
         <nav className="p-2 max-h-[calc(100vh-160px)] overflow-y-auto custom-scrollbar">
           {/* 1. 最新热点 */}
-          <MenuItem id="hot-spots" icon={BarChart2} label="最新热点" colorClass="indigo">
+          <MenuItem {...navigationGroups.hotSpots}>
             <div className="text-xs font-semibold text-gray-500 uppercase mb-2">板块类型</div>
             <FilterButton
               active={hotSpotsState.boardType === 'main'}
@@ -180,117 +219,45 @@ const Sidebar = ({
           </MenuItem>
 
           {/* 2. 查询系统 */}
-          <MenuItem id="query-system" icon={Search} label="查询系统" colorClass="purple">
-            {/* 股票查询 */}
-            <button
-              onClick={() => {
-                setActiveModule('stock-query');
-                queryState.setQuerySubModule('stock');
-              }}
-              className={`w-full text-left py-2 px-3 rounded text-sm font-medium transition-colors ${activeModule === 'stock-query'
-                ? 'bg-purple-100 text-purple-700'
-                : 'text-gray-600 hover:bg-gray-50'
-                }`}
-            >
-              🔍 股票查询
-            </button>
-
-            {/* 板块查询 */}
-            <FilterButton
-              active={activeModule === 'industry-query'}
-              onClick={() => {
-                setActiveModule('industry-query');
-                queryState.setQuerySubModule('industry');
-              }}
-              label="📊 板块查询" colorClass="purple"
-            />
-
-            {/* 当日DC数据 */}
-            <button
-              onClick={() => setActiveModule('sector-query')}
-              className={`w-full text-left py-2 px-3 rounded text-sm font-medium transition-colors ${activeModule === 'sector-query'
-                ? 'bg-purple-100 text-purple-700'
-                : 'text-gray-600 hover:bg-gray-50'
-                }`}
-            >
-              📋 当日DC数据
-            </button>
-
-            {/* 当日股票排名 */}
-            <button
-              onClick={() => setActiveModule('stock-ranking')}
-              className={`w-full text-left py-2 px-3 rounded text-sm font-medium transition-colors ${activeModule === 'stock-ranking'
-                ? 'bg-purple-100 text-purple-700'
-                : 'text-gray-600 hover:bg-gray-50'
-                }`}
-            >
-              📈 当日股票排名
-            </button>
+          <MenuItem {...navigationGroups.query}>
+            {queryNavigationItems.map((item) => (
+              <ModuleButton
+                key={item.id}
+                item={item}
+                colorClass="purple"
+                context={{ queryState }}
+              />
+            ))}
           </MenuItem>
 
           {/* 3. 行业趋势 */}
-          <MenuItem id="industry-trend" icon={TrendingUp} label="行业趋势分析" colorClass="green">
-            {/* 数量统计 */}
-            <FilterButton
-              active={activeModule === 'industry-trend'}
-              onClick={() => setActiveModule('industry-trend')}
-              label="📊 股票板块-直接数量统计" colorClass="green"
-            />
-            {activeModule === 'industry-trend' && (
-              <div className="mt-2 ml-2 space-y-2">
-                <div className="text-xs font-semibold text-gray-500 uppercase mb-2">数据范围</div>
-                <div className="grid grid-cols-3 gap-2">
-                  {[1000, 2000, 3000].map(limit => (
-                    <button
-                      key={limit}
-                      onClick={() => industryTrendState.setTopNLimit(limit)}
-                      className={`py-2 px-2 rounded text-sm font-medium transition-colors ${industryTrendState.topNLimit === limit ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                        }`}
-                    >
-                      前{limit}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* 权值热度 */}
-            <button
-              onClick={() => setActiveModule('industry-weighted')}
-              className={`w-full text-left py-2 px-3 rounded text-sm font-medium transition-colors ${activeModule === 'industry-weighted'
-                ? 'bg-gradient-to-r from-green-100 to-indigo-100 text-indigo-700 border-l-4 border-indigo-500'
-                : 'text-gray-600 hover:bg-gray-50'
-                }`}
-            >
-              🔥 股票板块-权值热度
-            </button>
-
-            {/* 板块数据 */}
-            <button
-              onClick={() => setActiveModule('sector-trend')}
-              className={`w-full text-left py-2 px-3 rounded text-sm font-medium transition-colors ${activeModule === 'sector-trend'
-                ? 'bg-gradient-to-r from-blue-100 to-cyan-100 text-cyan-700 border-l-4 border-cyan-500'
-                : 'text-gray-600 hover:bg-gray-50'
-                }`}
-            >
-              📈 dc板块数据分析
-            </button>
-
-            {/* 东财板块热度榜 */}
-            <button
-              onClick={() => setActiveModule('ext-board-heat')}
-              className={`w-full text-left py-2 px-3 rounded text-sm font-medium transition-colors ${activeModule === 'ext-board-heat'
-                ? 'bg-gradient-to-r from-orange-100 to-red-100 text-orange-700 border-l-4 border-orange-500'
-                : 'text-gray-600 hover:bg-gray-50'
-                }`}
-            >
-              🔥 东财板块热度榜
-              <span className="ml-2 text-xs bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded">NEW</span>
-            </button>
+          <MenuItem {...navigationGroups.industry}>
+            {industryNavigationItems.map((item) => (
+              <React.Fragment key={item.id}>
+                <ModuleButton item={item} colorClass="green" />
+                {item.id === 'industry-trend' && activeModule === 'industry-trend' && (
+                  <div className="mt-2 ml-2 space-y-2">
+                    <div className="text-xs font-semibold text-gray-500 uppercase mb-2">数据范围</div>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[1000, 2000, 3000].map(limit => (
+                        <button
+                          key={limit}
+                          onClick={() => industryTrendState.setTopNLimit(limit)}
+                          className={`py-2 px-2 rounded text-sm font-medium transition-colors ${industryTrendState.topNLimit === limit ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            }`}
+                        >
+                          前{limit}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </React.Fragment>
+            ))}
           </MenuItem>
 
           {/* 4. 排名跳变 */}
-          <MenuItem id="rank-jump" icon={TrendingUp} label="排名跳变" colorClass="orange">
+          <MenuItem {...navigationGroups.rankJump}>
             <div className="text-xs font-semibold text-gray-500 uppercase mb-2">板块类型</div>
             <FilterButton active={rankJumpState.boardType === 'main'} onClick={() => rankJumpState.setBoardType('main')} label="主板" colorClass="orange" />
             <FilterButton active={rankJumpState.boardType === 'all'} onClick={() => rankJumpState.setBoardType('all')} label="全部" colorClass="orange" />
@@ -310,7 +277,7 @@ const Sidebar = ({
           </MenuItem>
 
           {/* 5. 稳步上升 */}
-          <MenuItem id="steady-rise" icon={TrendingDown} label="稳步上升" colorClass="blue">
+          <MenuItem {...navigationGroups.steadyRise}>
             <div className="text-xs font-semibold text-gray-500 uppercase mb-2">板块类型</div>
             <FilterButton active={steadyRiseState.boardType === 'main'} onClick={() => steadyRiseState.setBoardType('main')} label="主板" colorClass="blue" />
             <FilterButton active={steadyRiseState.boardType === 'all'} onClick={() => steadyRiseState.setBoardType('all')} label="全部" colorClass="blue" />
@@ -340,20 +307,25 @@ const Sidebar = ({
           </MenuItem>
 
           {/* 6. 策略：单针下二十 */}
-          <div className="mb-2">
-            <button
-              onClick={() => setActiveModule('needle-under-20')}
-              className={`w-full flex items-center justify-between p-3 rounded-lg font-medium transition-all ${activeModule === 'needle-under-20'
-                ? 'bg-rose-50 text-rose-700 border border-rose-200'
-                : 'text-gray-700 hover:bg-gray-50'
-                }`}
-            >
-              <div className="flex items-center space-x-2">
-                <TrendingDown className="h-5 w-5 text-rose-500" />
-                <span>单针下二十策略</span>
+          {strategyNavigationItems.map((item) => {
+            const Icon = item.icon;
+            return (
+              <div className="mb-2" key={item.id}>
+                <button
+                  onClick={() => setActiveModule(item.id)}
+                  className={`w-full flex items-center justify-between p-3 rounded-lg font-medium transition-all ${activeModule === item.id
+                    ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                    : 'text-gray-700 hover:bg-gray-50'
+                    }`}
+                >
+                  <div className="flex items-center space-x-2">
+                    <Icon className="h-5 w-5 text-rose-500" />
+                    <span>{item.label}</span>
+                  </div>
+                </button>
               </div>
-            </button>
-          </div>
+            );
+          })}
 
           {/* 7. 系统管理 - 仅 admin 可见 */}
           {isAdmin && (
@@ -362,21 +334,21 @@ const Sidebar = ({
               <div className="mb-2">
                 {/* 系统管理主菜单 */}
                 <button
-                  onClick={() => toggleMenu('system-admin')}
-                  className={`w-full flex items-center justify-between p-3 rounded-lg font-medium transition-all ${['admin', 'user-management', 'session-management', 'operation-logs', 'system-config', 'role-management', 'user-security-settings'].includes(activeModule)
+                  onClick={() => toggleMenu(navigationGroups.admin.id)}
+                  className={`w-full flex items-center justify-between p-3 rounded-lg font-medium transition-all ${navigationGroups.admin.activeIds.includes(activeModule)
                     ? 'bg-amber-50 text-amber-700 border border-amber-200'
                     : 'text-gray-700 hover:bg-gray-50'
                     }`}
                 >
                   <div className="flex items-center space-x-2">
-                    <Shield className="h-5 w-5 text-amber-500" />
-                    <span>系统管理</span>
+                    <AdminIcon className="h-5 w-5 text-amber-500" />
+                    <span>{navigationGroups.admin.label}</span>
                   </div>
                   <div className="flex items-center space-x-2">
                     <span className="text-xs bg-amber-100 text-amber-600 px-2 py-0.5 rounded-full">
                       管理员
                     </span>
-                    {expandedMenu === 'system-admin' ? (
+                    {expandedMenu === navigationGroups.admin.id ? (
                       <ChevronUp className="h-4 w-4" />
                     ) : (
                       <ChevronDown className="h-4 w-4" />
@@ -385,103 +357,25 @@ const Sidebar = ({
                 </button>
 
                 {/* 子菜单 */}
-                {expandedMenu === 'system-admin' && (
+                {expandedMenu === navigationGroups.admin.id && (
                   <div className="mt-2 ml-4 space-y-3 border-l-2 border-amber-200 pl-3">
-                    {/* 数据管理 */}
-                    <button
-                      onClick={() => setActiveModule('admin')}
-                      className={`w-full text-left py-2 px-3 rounded text-sm font-medium transition-colors flex items-center space-x-2 ${activeModule === 'admin'
-                        ? 'bg-amber-100 text-amber-700'
-                        : 'text-gray-600 hover:bg-amber-50'
-                        }`}
-                    >
-                      <Upload className="h-4 w-4" />
-                      <span>数据管理</span>
-                    </button>
-
-                    {/* 外部板块同步 */}
-                    <button
-                      onClick={() => setActiveModule('ext-board-sync')}
-                      className={`w-full text-left py-2 px-3 rounded text-sm font-medium transition-colors flex items-center space-x-2 ${activeModule === 'ext-board-sync'
-                        ? 'bg-amber-100 text-amber-700'
-                        : 'text-gray-600 hover:bg-amber-50'
-                        }`}
-                    >
-                      <Database className="h-4 w-4" />
-                      <span>外部板块同步</span>
-                    </button>
-
-                    {/* 用户中心分组 */}
-                    <div className="text-xs text-amber-600 font-semibold mt-2">用户中心</div>
-                    <div className="space-y-1">
-                      <button
-                        onClick={() => setActiveModule('user-management')}
-                        className={`w-full text-left py-2 px-3 rounded text-sm font-medium transition-colors flex items-center space-x-2 ${activeModule === 'user-management'
-                          ? 'bg-amber-100 text-amber-700'
-                          : 'text-gray-600 hover:bg-amber-50'
-                          }`}
-                      >
-                        <UserCog className="h-4 w-4" />
-                        <span>用户管理</span>
-                      </button>
-
-                      <button
-                        onClick={() => setActiveModule('role-management')}
-                        className={`w-full text-left py-2 px-3 rounded text-sm font-medium transition-colors flex items-center space-x-2 ${activeModule === 'role-management'
-                          ? 'bg-amber-100 text-amber-700'
-                          : 'text-gray-600 hover:bg-amber-50'
-                          }`}
-                      >
-                        <Shield className="h-4 w-4" />
-                        <span>角色管理</span>
-                      </button>
-
-                      <button
-                        onClick={() => setActiveModule('session-management')}
-                        className={`w-full text-left py-2 px-3 rounded text-sm font-medium transition-colors flex items-center space-x-2 ${activeModule === 'session-management'
-                          ? 'bg-amber-100 text-amber-700'
-                          : 'text-gray-600 hover:bg-amber-50'
-                          }`}
-                      >
-                        <Monitor className="h-4 w-4" />
-                        <span>会话管理</span>
-                      </button>
-
-                      <button
-                        onClick={() => setActiveModule('operation-logs')}
-                        className={`w-full text-left py-2 px-3 rounded text-sm font-medium transition-colors flex items-center space-x-2 ${activeModule === 'operation-logs'
-                          ? 'bg-amber-100 text-amber-700'
-                          : 'text-gray-600 hover:bg-amber-50'
-                          }`}
-                      >
-                        <FileText className="h-4 w-4" />
-                        <span>操作日志</span>
-                        <span className="text-xs text-gray-400 ml-1">(含登录记录)</span>
-                      </button>
-                    </div>
-
-                    {/* 系统配置分组 - [v2.2.1] 将"安全策略"移到这里 */}
-                    <div className="text-xs text-amber-600 font-semibold mt-3">系统配置</div>
-                    <button
-                      onClick={() => setActiveModule('user-security-settings')}
-                      className={`w-full text-left py-2 px-3 rounded text-sm font-medium transition-colors flex items-center space-x-2 ${activeModule === 'user-security-settings'
-                        ? 'bg-amber-100 text-amber-700'
-                        : 'text-gray-600 hover:bg-amber-50'
-                        }`}
-                    >
-                      <Lock className="h-4 w-4" />
-                      <span>安全策略</span>
-                    </button>
-                    <button
-                      onClick={() => setActiveModule('system-config')}
-                      className={`w-full text-left py-2 px-3 rounded text-sm font-medium transition-colors flex items-center space-x-2 ${activeModule === 'system-config'
-                        ? 'bg-amber-100 text-amber-700'
-                        : 'text-gray-600 hover:bg-amber-50'
-                        }`}
-                    >
-                      <Settings className="h-4 w-4" />
-                      <span>系统设置</span>
-                    </button>
+                    {adminNavigationSections.map((section, index) => (
+                      <div key={section.title || `admin-section-${index}`} className={section.title ? 'space-y-1' : 'space-y-3'}>
+                        {section.title && (
+                          <div className="text-xs text-amber-600 font-semibold mt-2">
+                            {section.title}
+                          </div>
+                        )}
+                        {section.items.map((item) => (
+                          <ModuleButton
+                            key={item.id}
+                            item={item}
+                            colorClass="amber"
+                            showIcon
+                          />
+                        ))}
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>

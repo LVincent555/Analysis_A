@@ -1,0 +1,43 @@
+[project]
+name = "stock-analysis-backend"
+version = "0.7.0"
+description = "Backend service for stock_analysis_app"
+requires-python = ">=3.11"
+dependencies = [
+    "bcrypt>=4.1.0",
+    "cryptography>=41.0.0",
+    "diskcache>=5.6.0",
+    "fastapi>=0.100.0",
+    "httpx>=0.28.1",
+    "psutil>=5.9.0",
+    "psycopg2-binary>=2.9.0",
+    "pydantic>=2.0.0",
+    "python-dotenv>=1.0.0",
+    "python-jose[cryptography]>=3.3.0",
+    "python-multipart>=0.0.6",
+    "sqlalchemy>=2.0.0",
+    "uvicorn>=0.23.0",
+]
+
+[project.optional-dependencies]
+analysis = [
+    "akshare>=1.14.0",
+    "numpy>=1.26.0",
+    "openpyxl>=3.1.0",
+    "pandas>=2.0.0",
+    "pywencai>=0.9.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+pythonpath = ["."]
+testpaths = ["tests/unit"]
+filterwarnings = [
+    "ignore::DeprecationWarning:passlib.*",
+]

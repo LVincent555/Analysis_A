@@ -1,17 +1,13 @@
-"""
-JWT Token处理模块
-提供Token的生成和验证功能
-"""
-import os
-from datetime import datetime, timedelta
-from typing import Optional
-from jose import jwt, JWTError
+"""Compatibility entrypoint for JWT token handling."""
 
-# 配置
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-super-secret-jwt-key-change-in-production-32chars")
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_HOURS = 24
-REFRESH_TOKEN_EXPIRE_DAYS = 7
+from datetime import datetime
+from typing import Optional
+
+from ..contexts.identity.infrastructure.jwt_tokens import (
+    ACCESS_TOKEN_EXPIRE_HOURS,
+    REFRESH_TOKEN_EXPIRE_DAYS,
+    jwt_token_issuer,
+)
 
 
 def create_access_token(
@@ -31,17 +27,12 @@ def create_access_token(
     Returns:
         JWT Token字符串
     """
-    expire = datetime.utcnow() + timedelta(hours=expires_hours)
-    payload = {
-        "sub": str(user_id),
-        "device": device_id,
-        "exp": expire,
-        "iat": datetime.utcnow(),
-        "type": "access"
-    }
-    if token_version is not None:
-        payload["ver"] = token_version
-    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+    return jwt_token_issuer.create_access_token(
+        user_id=user_id,
+        device_id=device_id,
+        expires_hours=expires_hours,
+        token_version=token_version,
+    )
 
 
 def create_refresh_token(
@@ -61,17 +52,12 @@ def create_refresh_token(
     Returns:
         JWT Refresh Token字符串
     """
-    expire = datetime.utcnow() + timedelta(days=expires_days)
-    payload = {
-        "sub": str(user_id),
-        "device": device_id,
-        "exp": expire,
-        "iat": datetime.utcnow(),
-        "type": "refresh"
-    }
-    if token_version is not None:
-        payload["ver"] = token_version
-    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+    return jwt_token_issuer.create_refresh_token(
+        user_id=user_id,
+        device_id=device_id,
+        expires_days=expires_days,
+        token_version=token_version,
+    )
 
 
 def verify_token(token: str) -> Optional[dict]:
@@ -84,12 +70,7 @@ def verify_token(token: str) -> Optional[dict]:
     Returns:
         解码后的payload字典，验证失败返回None
     """
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        return payload
-    except JWTError as e:
-        print(f"JWT验证失败: {e}")
-        return None
+    return jwt_token_issuer.verify_token(token)
 
 
 def get_token_expiry(token: str) -> Optional[datetime]:
@@ -102,7 +83,4 @@ def get_token_expiry(token: str) -> Optional[datetime]:
     Returns:
         过期时间，无效Token返回None
     """
-    payload = verify_token(token)
-    if payload and "exp" in payload:
-        return datetime.fromtimestamp(payload["exp"])
-    return None
+    return jwt_token_issuer.get_token_expiry(token)

@@ -230,6 +230,36 @@ find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 find . -name "*.pyc" -delete 2>/dev/null || true
 
 echo "✅ Python缓存已清除"
+
+# 清理统一缓存系统的磁盘缓存（防止 diskcache SQLite 损坏）
+CACHE_ROOT="$PROJECT_DIR/backend/app/.cache"
+API_CACHE_DB="$CACHE_ROOT/api/cache.db"
+REPORT_CACHE_DB="$CACHE_ROOT/reports/cache.db"
+
+if [ -d "$CACHE_ROOT" ]; then
+    echo "🧹 检查并重建磁盘缓存目录..."
+
+    CACHE_BACKUP_DIR="$BACKUP_DIR/cache_db_backup"
+    mkdir -p "$CACHE_BACKUP_DIR"
+
+    # 仅备份 cache.db（如存在），再重建目录
+    if [ -f "$API_CACHE_DB" ]; then
+        cp "$API_CACHE_DB" "$CACHE_BACKUP_DIR/api_cache.db" 2>/dev/null || true
+        echo "  ℹ️ 已备份: api/cache.db"
+    fi
+    if [ -f "$REPORT_CACHE_DB" ]; then
+        cp "$REPORT_CACHE_DB" "$CACHE_BACKUP_DIR/reports_cache.db" 2>/dev/null || true
+        echo "  ℹ️ 已备份: reports/cache.db"
+    fi
+
+    rm -rf "$CACHE_ROOT/api" "$CACHE_ROOT/reports"
+    mkdir -p "$CACHE_ROOT/api" "$CACHE_ROOT/reports"
+    echo "✅ 磁盘缓存目录已重建"
+else
+    mkdir -p "$CACHE_ROOT/api" "$CACHE_ROOT/reports"
+    echo "✅ 已初始化磁盘缓存目录"
+fi
+
 echo ""
 
 # ============================================================

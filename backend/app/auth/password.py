@@ -1,8 +1,6 @@
-"""
-密码处理模块
-使用bcrypt进行密码哈希和验证
-"""
-import bcrypt
+"""Compatibility entrypoint for password hashing."""
+
+from ..contexts.identity.infrastructure.password_hasher import password_hasher
 
 
 def hash_password(password: str) -> str:
@@ -15,9 +13,7 @@ def hash_password(password: str) -> str:
     Returns:
         哈希后的密码字符串
     """
-    salt = bcrypt.gensalt(rounds=12)  # 12轮，安全性和性能的平衡
-    hashed = bcrypt.hashpw(password.encode('utf-8'), salt)
-    return hashed.decode('utf-8')
+    return password_hasher.hash(password)
 
 
 def verify_password(password: str, hashed: str) -> bool:
@@ -31,7 +27,4 @@ def verify_password(password: str, hashed: str) -> bool:
     Returns:
         密码是否匹配
     """
-    try:
-        return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
-    except Exception:
-        return False
+    return password_hasher.verify(password, hashed)

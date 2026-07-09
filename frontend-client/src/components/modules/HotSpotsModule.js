@@ -2,10 +2,9 @@
  * 最新热点分析模块 - 完整版
  */
 import React, { useState, useEffect, useMemo } from 'react';
-import { TrendingUp, RefreshCw, Calendar, BarChart3, ChevronLeft, ChevronRight, AlertCircle, Info } from 'lucide-react';
-import apiClient from '../../services/api';
+import { RefreshCw, BarChart3, ChevronLeft, ChevronRight, AlertCircle, Info } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { API_BASE_URL, COLORS } from '../../constants';
+import { COLORS } from '../../constants';
 import { formatDate } from '../../utils';
 import SearchBar from '../common/SearchBar';
 import HighlightText from '../common/HighlightText';
@@ -13,14 +12,11 @@ import StockDetailPopup from '../common/StockDetailPopup';
 import { useSignalConfig } from '../../contexts/SignalConfigContext';
 import BoardSignalBadge from '../BoardSignalBadge';
 import boardHeatService from '../../services/boardHeatService';
+import { usePeriodAnalysisQuery } from '../../features/analysis';
 
 export default function HotSpotsModule({ boardType, selectedPeriod, topN, selectedDate, refreshTrigger }) {
-  const [analysisData, setAnalysisData] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10); // 默认每页10条
-  const [top1000Industry, setTop1000Industry] = useState(null);
   const [boardSignals, setBoardSignals] = useState({}); // 板块信号缓存
   
   // 获取信号配置
@@ -32,56 +28,30 @@ export default function HotSpotsModule({ boardType, selectedPeriod, topN, select
   // 详情弹窗状态
   const [detailPopup, setDetailPopup] = useState({ isOpen: false, stockCode: null, stockName: null });
 
-  // 获取分析数据
-  useEffect(() => {
-    const fetchData = async () => {
-      if (!selectedPeriod || !boardType || !topN || !selectedDate) return;
-      
-      setLoading(true);
-      setError(null);
-      setAnalysisData(null);
-      try {
-        let url = `/api/analyze/${selectedPeriod}?board_type=${boardType}&top_n=${topN}`;
-        if (selectedDate) {
-          url += `&date=${selectedDate}`;
-        }
-        // 加上时间戳防止缓存
-        url += `&_t=${Date.now()}`;
-        
-        const response = await apiClient.get(url);
-        setAnalysisData(response);
-      } catch (err) {
-        console.error('获取分析数据失败:', err);
-        const errorMsg = err.code === 'ERR_NETWORK' 
-          ? '无法连接到后端服务，请确保后端服务正在运行'
-          : (err.response?.data?.detail || '获取数据失败，请稍后重试');
-        setError(errorMsg);
-        setAnalysisData(null);
-      } finally {
-        setLoading(false);
-      }
-    };
+  const {
+    data: analysisData = null,
+    error: analysisError,
+    isFetching: loading
+  } = usePeriodAnalysisQuery({
+    period: selectedPeriod,
+    boardType,
+    topN,
+    date: selectedDate,
+    refreshTrigger
+  });
 
-    fetchData();
-  }, [selectedPeriod, boardType, topN, selectedDate, refreshTrigger]);
-
-  // 获取前1000名行业数据
   useEffect(() => {
-    const fetchTop1000Industry = async () => {
-      if (!selectedDate) return;
-      try {
-        let url = `/api/industry/top1000?limit=1000`;
-        if (selectedDate) {
-          url += `&date=${selectedDate}`;
-        }
-        const response = await apiClient.get(url);
-        setTop1000Industry(response);
-      } catch (err) {
-        console.error('获取前1000名行业数据失败:', err);
-      }
-    };
-    fetchTop1000Industry();
-  }, [selectedDate]);
+    if (analysisError) {
+      console.error('获取分析数据失败:', analysisError);
+    }
+  }, [analysisError]);
+
+  const error = useMemo(() => {
+    if (!analysisError) return null;
+    return analysisError.code === 'ERR_NETWORK'
+      ? '无法连接到后端服务，请确保后端服务正在运行'
+      : (analysisError.response?.data?.detail || analysisError.message || '获取数据失败，请稍后重试');
+  }, [analysisError]);
 
   // 批量获取板块信号（仅在东财模式下）
   useEffect(() => {

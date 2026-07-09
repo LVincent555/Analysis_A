@@ -77,15 +77,13 @@ class WriteThroughPolicy(CachePolicy):
         写入缓存 (同步直写)
         
         逻辑:
-        1. 更新内存
-        2. 同步执行持久化 (如果提供)
+        1. 同步执行持久化 (如果提供)
+        2. 持久化成功后更新内存
         """
-        # 1. 更新内存
-        store[key] = CacheEntry(value, self.ttl)
-        
-        # 2. 同步持久化
         if persister:
             persister(value)
+
+        store[key] = CacheEntry(value, self.ttl)
     
     def delete(
         self,

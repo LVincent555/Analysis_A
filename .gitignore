@@ -81,7 +81,7 @@ deploy/*.conf.bak
 deploy/server_config.local.py
 backend/app/config.local.py
 backend/app/database_config.py
-backend/app/database.py
+backend/app/database.local.py
 backend/database.env
 backend/.env
 .env.production

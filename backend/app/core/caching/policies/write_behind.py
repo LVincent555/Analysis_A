@@ -105,17 +105,28 @@ class WriteBehindPolicy(CachePolicy):
         with self._lock:
             self.dirty_keys.add(key)
     
+    def peek_dirty_keys(self) -> Set[str]:
+        """获取脏数据键集合副本，但不清空，供同步前快照使用。"""
+        with self._lock:
+            return self.dirty_keys.copy()
+
+    def ack_dirty_keys(self, keys: Set[str]) -> None:
+        """确认一批脏数据已经成功落库。"""
+        with self._lock:
+            self.dirty_keys.difference_update(keys)
+
+    def requeue_dirty_keys(self, keys: Set[str]) -> None:
+        """将一批脏数据重新放回待同步集合。"""
+        with self._lock:
+            self.dirty_keys.update(keys)
+
     def get_dirty_keys(self) -> Set[str]:
         """
-        获取并清空脏数据键集合 (Syncer调用)
-        
-        Returns:
-            脏数据键的副本
+        兼容旧调用名：仅返回脏数据快照，不再隐式清空。
+
+        同步器必须在持久化成功后调用 ack_dirty_keys()。
         """
-        with self._lock:
-            keys = self.dirty_keys.copy()
-            self.dirty_keys.clear()
-            return keys
+        return self.peek_dirty_keys()
     
     def has_dirty(self) -> bool:
         """是否有脏数据"""

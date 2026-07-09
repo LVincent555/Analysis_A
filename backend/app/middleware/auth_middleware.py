@@ -10,6 +10,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from ..config import API_REQUIRE_AUTH
 from ..auth.jwt_handler import verify_token
+from ..shared.gateway_signing import GATEWAY_HEADER, verify_internal_gateway_headers
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +22,8 @@ PUBLIC_PATHS = [
     "/redoc",               # ReDoc文档（如启用）
     "/openapi.json",        # OpenAPI规范（如启用）
     "/api/auth/login",      # 登录
+    "/api/auth/secure-login",  # 加密登录
+    "/api/auth/secure-refresh",  # 加密刷新Token
     "/api/auth/register",   # 注册
     "/api/auth/refresh",    # 刷新Token
     "/api/auth/logout",     # 登出
@@ -64,16 +67,33 @@ class AuthMiddleware(BaseHTTPMiddleware):
         if self._is_public_path(path):
             return await call_next(request)
         
-        # 强制只允许通过加密网关访问API（secure网关转发会带 x-secure-gateway:1）
-        if FORCE_SECURE_API and path.startswith("/api/") and request.headers.get("x-secure-gateway") != "1":
-            return JSONResponse(
-                status_code=403,
-                content={
-                    "detail": "禁止直接访问API，请通过加密网关 /api/secure 访问",
-                    "code": "DIRECT_API_FORBIDDEN",
-                    "hint": "所有API调用必须通过加密通道"
-                }
-            )
+        # 强制只允许通过加密网关访问API。
+        if FORCE_SECURE_API and path.startswith("/api/"):
+            if request.headers.get(GATEWAY_HEADER):
+                body = await request.body()
+                if not verify_internal_gateway_headers(
+                    method=method,
+                    path=path,
+                    headers=request.headers,
+                    body=body,
+                ):
+                    return JSONResponse(
+                        status_code=403,
+                        content={
+                            "detail": "无效的加密网关内部签名",
+                            "code": "INVALID_SECURE_GATEWAY",
+                            "hint": "不能伪造 x-secure-gateway 直接访问内部API",
+                        },
+                    )
+            else:
+                return JSONResponse(
+                    status_code=403,
+                    content={
+                        "detail": "禁止直接访问API，请通过加密网关 /api/secure 访问",
+                        "code": "DIRECT_API_FORBIDDEN",
+                        "hint": "所有API调用必须通过加密通道"
+                    }
+                )
         
         # 如果不要求认证，直接放行
         if not API_REQUIRE_AUTH:

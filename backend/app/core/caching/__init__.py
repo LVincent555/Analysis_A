@@ -20,6 +20,20 @@
     hotspot = cache.hotspot_daily("2024-01-15", loader=lambda: analyze())
 """
 
+from .bootstrap import init_default_cache_regions
 from .facade import cache, PublicCache, KeyBuilder
+from .metrics import CacheMetrics
+from .registry import CacheRegionSpec, DEFAULT_REGION_SPECS
+from .store import HotSpotsStore, VectorStore
 
-__all__ = ["cache", "PublicCache", "KeyBuilder"]
+__all__ = [
+    "cache",
+    "PublicCache",
+    "KeyBuilder",
+    "CacheRegionSpec",
+    "CacheMetrics",
+    "HotSpotsStore",
+    "VectorStore",
+    "DEFAULT_REGION_SPECS",
+    "init_default_cache_regions",
+]

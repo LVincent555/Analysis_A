@@ -6,6 +6,7 @@ import { Lock, User, Eye, EyeOff, Loader2, AlertCircle } from 'lucide-react';
 import authService from '../services/authService';
 import secureApi from '../services/secureApi';
 import { API_BASE_URL, switchServer, getCurrentServer } from '../constants/config';
+import electronBridge from '../shared/electron/electronBridge';
 
 // 简单的加密/解密（用于本地存储，非完全安全但比明文好）
 const encodeCredential = (str) => btoa(encodeURIComponent(str));
@@ -62,17 +63,11 @@ const LoginPage = ({ onLoginSuccess }) => {
   useEffect(() => {
     mountedRef.current = true;
 
-    // 检测是否Electron环境
-    const electronAPI = window.electronAPI;
-    if (electronAPI && electronAPI.isElectron === true) {
+    if (electronBridge.isElectron()) {
       setIsElectron(true);
-      
-      // 异步获取版本
-      if (typeof electronAPI.getVersion === 'function') {
-        electronAPI.getVersion()
-          .then(version => setAppVersion(version || '0.4.0'))
-          .catch(e => console.log('获取版本失败:', e));
-      }
+      electronBridge.getVersion()
+        .then(version => setAppVersion(version || '0.4.0'))
+        .catch(e => console.log('获取版本失败:', e));
     }
     
     // 检测服务器状态

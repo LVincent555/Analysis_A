@@ -1,0 +1,1 @@
+"""Board heat domain model."""

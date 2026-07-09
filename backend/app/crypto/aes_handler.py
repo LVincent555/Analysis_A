@@ -11,8 +11,9 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
+from ..core.security_settings import get_master_encryption_key
+
 # 主密钥（从环境变量读取，用于加密用户密钥）
-_MASTER_KEY_ENV = os.getenv("MASTER_ENCRYPTION_KEY")
 _master_crypto = None
 
 # PBKDF2参数（必须与前端一致）
@@ -211,13 +212,7 @@ def get_master_crypto() -> AESCrypto:
     global _master_crypto
     
     if _master_crypto is None:
-        if _MASTER_KEY_ENV:
-            master_key = base64_to_key(_MASTER_KEY_ENV)
-        else:
-            # 开发环境：使用固定密钥（生产环境必须设置环境变量）
-            print("⚠️  警告: 未设置MASTER_ENCRYPTION_KEY环境变量，使用默认密钥（仅限开发）")
-            master_key = b'dev-master-key-32bytes-long!!!!!'  # 正好32字节
-        
+        master_key = get_master_encryption_key()
         _master_crypto = AESCrypto(master_key)
     
     return _master_crypto

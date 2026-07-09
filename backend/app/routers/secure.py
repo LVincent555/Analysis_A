@@ -18,6 +18,8 @@ from starlette.datastructures import Headers, QueryParams
 from ..auth.dependencies import get_current_user, get_session_key
 from ..crypto.aes_handler import AESCrypto
 from ..db_models import User
+from ..shared.gateway_signing import build_internal_gateway_headers
+from ..shared.replay_nonce_store import secure_nonce_store
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +72,7 @@ async def secure_gateway(
         params = decrypted.get("params", {})
         body = decrypted.get("body")
         timestamp = decrypted.get("timestamp", 0)
+        nonce = decrypted.get("nonce")
         
         if not path:
             raise HTTPException(400, "缺少请求路径")
@@ -81,17 +84,34 @@ async def secure_gateway(
         current_time = time.time() * 1000
         if abs(current_time - timestamp) > 300000:
             raise HTTPException(400, "请求已过期")
+
+        if not nonce:
+            raise HTTPException(400, "缺少请求nonce")
+
+        payload = getattr(user, "_auth_payload", {}) or {}
+        device_id = payload.get("device", "default")
+        nonce_key = f"secure:{user.id}:{device_id}:{nonce}"
+        if not secure_nonce_store.mark_once(nonce_key, 300):
+            raise HTTPException(409, "请求nonce已被使用")
         
         # 4. 内部路由调用（使用 httpx ASGI 客户端，确保依赖注入生效）
         app = request.app
 
         # 透传原始认证头，避免二次认证失败
         auth_header = request.headers.get("authorization")
+        body_bytes = None
+        if body is not None:
+            body_bytes = json.dumps(
+                body,
+                ensure_ascii=False,
+                separators=(",", ":"),
+            ).encode("utf-8")
+
         headers = {
             "content-type": "application/json",
             "x-forwarded-user": str(user.id),
-            "x-secure-gateway": "1",  # 标记为网关内部调用，绕过 FORCE_SECURE_API
         }
+        headers.update(build_internal_gateway_headers(method, path, body_bytes))
         if auth_header:
             headers["authorization"] = auth_header
 
@@ -101,7 +121,7 @@ async def secure_gateway(
                 method,
                 path,
                 params=params or None,
-                json=body if body is not None else None,
+                content=body_bytes,
                 headers=headers,
             )
 

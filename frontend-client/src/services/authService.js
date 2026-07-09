@@ -5,6 +5,8 @@
 import axios from 'axios';
 import { API_BASE_URL } from '../constants';
 import AESCrypto, { deriveKeyFromPassword } from '../utils/crypto';
+import { createSecureLoginEnvelope } from '../utils/loginEnvelope';
+import electronBridge from '../shared/electron/electronBridge';
 
 // Token存储键名
 const TOKEN_KEY = 'auth_token';
@@ -33,6 +35,37 @@ class AuthService {
     }
 
     try {
+      const result = await this.secureLogin(username, password, deviceId);
+      return result;
+    } catch (error) {
+      if (process.env.REACT_APP_ALLOW_PLAINTEXT_LOGIN === 'true') {
+        console.warn('secure-login失败，按配置回退明文登录:', error);
+        return this.plainLogin(username, password, deviceId);
+      }
+
+      const message = error.response?.data?.detail || error.message || '登录失败，请检查网络连接';
+      return {
+        success: false,
+        message
+      };
+    }
+  }
+
+  async secureLogin(username, password, deviceId) {
+    const envelope = createSecureLoginEnvelope({
+      username,
+      password,
+      device_id: deviceId,
+      device_name: this.getDeviceName(),
+      timestamp: Date.now()
+    });
+
+    const response = await axios.post(`${API_BASE_URL}/api/auth/secure-login`, envelope.request);
+    return this.applyLoginResponse(envelope.decryptResponse(response.data), password);
+  }
+
+  async plainLogin(username, password, deviceId) {
+    try {
       const response = await axios.post(`${API_BASE_URL}/api/auth/login`, {
         username,
         password,
@@ -40,37 +73,7 @@ class AuthService {
         device_name: this.getDeviceName()
       });
 
-      const { token, refresh_token, session_key: encryptedSessionKey, user } = response.data;
-
-      // 用密码派生密钥解密会话密钥（node-forge，同步）
-      let decryptedSessionKey = null;
-      try {
-        const passwordKey = deriveKeyFromPassword(password);
-        const passwordCrypto = new AESCrypto(passwordKey);
-        const decryptedData = passwordCrypto.decrypt(encryptedSessionKey);
-        decryptedSessionKey = decryptedData.key || decryptedData;
-        console.log('会话密钥解密成功');
-      } catch (e) {
-        console.error('会话密钥解密失败:', e);
-        // 降级：直接使用（开发模式）
-        decryptedSessionKey = encryptedSessionKey;
-      }
-
-      // 存储认证信息
-      this.token = token;
-      this.refreshToken = refresh_token;
-      this.sessionKey = decryptedSessionKey;
-      this.user = user;
-
-      localStorage.setItem(TOKEN_KEY, token);
-      localStorage.setItem(REFRESH_TOKEN_KEY, refresh_token);
-      localStorage.setItem(SESSION_KEY, decryptedSessionKey);
-      localStorage.setItem(USER_KEY, JSON.stringify(user));
-
-      return {
-        success: true,
-        user
-      };
+      return this.applyLoginResponse(response.data, password);
     } catch (error) {
       const message = error.response?.data?.detail || '登录失败，请检查网络连接';
       return {
@@ -78,6 +81,40 @@ class AuthService {
         message
       };
     }
+  }
+
+  applyLoginResponse(loginData, password) {
+    const { token, refresh_token, session_key: encryptedSessionKey, user } = loginData;
+
+    // 用密码派生密钥解密会话密钥（node-forge，同步）
+    let decryptedSessionKey = null;
+    try {
+      const passwordKey = deriveKeyFromPassword(password);
+      const passwordCrypto = new AESCrypto(passwordKey);
+      const decryptedData = passwordCrypto.decrypt(encryptedSessionKey);
+      decryptedSessionKey = decryptedData.key || decryptedData;
+      console.log('会话密钥解密成功');
+    } catch (e) {
+      console.error('会话密钥解密失败:', e);
+      // 降级：直接使用（开发模式）
+      decryptedSessionKey = encryptedSessionKey;
+    }
+
+    // 存储认证信息
+    this.token = token;
+    this.refreshToken = refresh_token;
+    this.sessionKey = decryptedSessionKey;
+    this.user = user;
+
+    localStorage.setItem(TOKEN_KEY, token);
+    localStorage.setItem(REFRESH_TOKEN_KEY, refresh_token);
+    localStorage.setItem(SESSION_KEY, decryptedSessionKey);
+    localStorage.setItem(USER_KEY, JSON.stringify(user));
+
+    return {
+      success: true,
+      user
+    };
   }
 
   /**
@@ -109,6 +146,25 @@ class AuthService {
   async refreshAccessToken() {
     if (!this.refreshToken) {
       return false;
+    }
+
+    try {
+      const envelope = createSecureLoginEnvelope({
+        refresh_token: this.refreshToken,
+        timestamp: Date.now()
+      });
+      const response = await axios.post(`${API_BASE_URL}/api/auth/secure-refresh`, envelope.request);
+      const { token } = envelope.decryptResponse(response.data);
+      this.token = token;
+      localStorage.setItem(TOKEN_KEY, token);
+      return true;
+    } catch (error) {
+      if (process.env.REACT_APP_ALLOW_PLAINTEXT_LOGIN !== 'true') {
+        console.error('安全刷新Token失败:', error);
+        this.logout();
+        return false;
+      }
+      console.warn('安全刷新Token失败，按配置回退明文刷新:', error);
     }
 
     try {
@@ -201,12 +257,10 @@ class AuthService {
    */
   async resolveDeviceId() {
     try {
-      if (window.electronAPI && window.electronAPI.getDeviceId) {
-        const id = await window.electronAPI.getDeviceId();
-        if (id) {
-          localStorage.setItem('device_id', id); // 兼容 Web 存储
-          return id;
-        }
+      const id = await electronBridge.getDeviceId();
+      if (id) {
+        localStorage.setItem('device_id', id); // 兼容 Web 存储
+        return id;
       }
     } catch (e) {
       console.warn('获取设备ID失败，使用本地存储ID:', e);
@@ -218,9 +272,9 @@ class AuthService {
    * 获取设备名称
    */
   getDeviceName() {
-    // 尝试从Electron获取
-    if (window.electronAPI && window.electronAPI.platform) {
-      return `${window.electronAPI.platform} Client`;
+    const platform = electronBridge.platform();
+    if (platform) {
+      return `${platform} Client`;
     }
     return navigator.userAgent.substring(0, 50);
   }

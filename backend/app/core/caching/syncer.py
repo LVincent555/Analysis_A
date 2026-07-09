@@ -92,12 +92,13 @@ class DatabaseSyncer(threading.Thread):
             if not isinstance(policy, WriteBehindPolicy):
                 return
             
-            dirty_keys = policy.get_dirty_keys()
+            dirty_keys = policy.peek_dirty_keys()
             if not dirty_keys:
                 return
             
             # 构建批量更新数据
             mappings = []
+            mapped_entries = {}
             with store._lock:
                 for key in dirty_keys:
                     entry = store.store.get(key)
@@ -109,11 +110,30 @@ class DatabaseSyncer(threading.Thread):
                             "current_status": self._status_to_str(v.get("status")),
                             "ip_address": v.get("ip_address", "")
                         })
-                        entry.clear_dirty()
+                        mapped_entries[key] = entry
             
-            if mappings:
-                self._bulk_update_sessions(mappings)
-                logger.info(f"[Syncer] Synced {len(mappings)} sessions")
+            if not mappings:
+                with store._lock:
+                    stale_keys = {
+                        key
+                        for key in dirty_keys
+                        if key not in store.store or not store.store[key].value
+                    }
+                    policy.ack_dirty_keys(stale_keys)
+                return
+
+            if not self._bulk_update_sessions(mappings):
+                return
+
+            ack_keys = set()
+            with store._lock:
+                for key, synced_entry in mapped_entries.items():
+                    if store.store.get(key) is synced_entry:
+                        synced_entry.clear_dirty()
+                        ack_keys.add(key)
+                policy.ack_dirty_keys(ack_keys)
+
+            logger.info(f"[Syncer] Synced {len(ack_keys)} sessions")
         
         except Exception as e:
             logger.error(f"[Syncer] Session sync error: {e}")
@@ -122,7 +142,7 @@ class DatabaseSyncer(threading.Thread):
         """状态码转字符串"""
         return {1: "online", 2: "idle", 3: "locked"}.get(status, "online")
     
-    def _bulk_update_sessions(self, mappings: List[dict]):
+    def _bulk_update_sessions(self, mappings: List[dict]) -> bool:
         """批量更新会话到数据库"""
         try:
             from ...database import SessionLocal
@@ -138,12 +158,15 @@ class DatabaseSyncer(threading.Thread):
                 
                 db.bulk_update_mappings(UserSession, mappings)
                 db.commit()
+                return True
             finally:
                 db.close()
         except ImportError:
             logger.warning("[Syncer] Database module not available, skipping sync")
+            return False
         except Exception as e:
             logger.error(f"[Syncer] DB update error: {e}")
+            return False
     
     def _sync_audit_logs(self):
         """同步审计日志到DB"""

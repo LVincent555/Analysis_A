@@ -1,79 +1,68 @@
+"""Example database engine and SQLAlchemy session management.
+
+Copy this file only if you need a local experiment. The real versioned module
+is ``backend/app/database.py`` and runtime secrets belong in ``backend/.env`` or
+process environment variables.
 """
-数据库连接和会话管理
 
-⚠️ 重要提示：
-1. 复制此文件为 database.py
-2. 修改数据库连接配置
-3. database.py 不会被提交到Git
-
-📝 配置说明：
-
-【生产环境】（服务器部署）
-- DB_HOST = "localhost"  # 服务器上数据库使用localhost
-- DB_NAME = "db_20251106_analysis_a"  # 生产数据库名
-- DB_PASSWORD = "your_production_password"  # 生产密码
-
-【本地开发】
-- DB_HOST = "localhost"  # 本地数据库地址
-- DB_NAME = "stock_analysis"  # 本地测试数据库
-- DB_PASSWORD = "your_local_password"  # 本地密码
-
-💡 使用环境变量配置（推荐）：
-创建 backend/.env 文件：
-DB_HOST=your_host
-DB_PORT=5432
-DB_NAME=your_database
-DB_USER=your_user
-DB_PASSWORD=your_password
-
-🔍 历史日期查看功能：
-系统支持查看历史日期的数据，所有API都支持date参数(YYYYMMDD格式)
-前端有全局日期选择器，可以选择任意历史日期进行分析
-"""
-import os
-from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
-from dotenv import load_dotenv
 import logging
+import os
 
-# 加载环境变量
-load_dotenv()
+from dotenv import load_dotenv
+from sqlalchemy import create_engine
+from sqlalchemy.orm import declarative_base, sessionmaker
 
 logger = logging.getLogger(__name__)
 
-# 数据库连接配置
-# ⚠️ 修改为你的服务器配置
-DB_HOST = os.getenv("DB_HOST", "localhost")  # 数据库服务器地址
-DB_PORT = os.getenv("DB_PORT", "5432")        # 数据库端口
-DB_NAME = os.getenv("DB_NAME", "stock_analysis")  # 数据库名称
-DB_USER = os.getenv("DB_USER", "postgres")   # 数据库用户名
-DB_PASSWORD = os.getenv("DB_PASSWORD", "")   # 数据库密码
 
-# 构建数据库URL
-DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+def _load_env() -> None:
+    if os.getenv("PYTHON_DOTENV_DISABLED"):
+        return
 
-# 创建数据库引擎
-engine = create_engine(
-    DATABASE_URL,
-    pool_size=10,  # 连接池大小
-    max_overflow=20,  # 最大溢出连接数
-    pool_pre_ping=True,  # 检查连接是否有效
-    echo=False  # 是否打印SQL语句
+    for encoding in ("utf-8-sig", "utf-8", "gbk"):
+        try:
+            load_dotenv(encoding=encoding)
+            return
+        except UnicodeDecodeError:
+            continue
+
+    logger.warning("Unable to parse .env encoding; skipped dotenv loading")
+
+
+_load_env()
+
+
+DB_HOST = os.getenv("DB_HOST", "localhost")
+DB_PORT = os.getenv("DB_PORT", "5432")
+DB_NAME = os.getenv("DB_NAME", "stock_analysis")
+DB_USER = os.getenv("DB_USER", "postgres")
+DB_PASSWORD = os.getenv("DB_PASSWORD", "")
+DB_POOL_SIZE = int(os.getenv("DB_POOL_SIZE", "10"))
+DB_MAX_OVERFLOW = int(os.getenv("DB_MAX_OVERFLOW", "20"))
+DB_POOL_RECYCLE = int(os.getenv("DB_POOL_RECYCLE", "3600"))
+DB_POOL_TIMEOUT = int(os.getenv("DB_POOL_TIMEOUT", "30"))
+DB_ECHO = os.getenv("DB_ECHO", "false").lower() == "true"
+
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}",
 )
 
-# 创建会话工厂
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+engine = create_engine(
+    DATABASE_URL,
+    pool_size=DB_POOL_SIZE,
+    max_overflow=DB_MAX_OVERFLOW,
+    pool_recycle=DB_POOL_RECYCLE,
+    pool_timeout=DB_POOL_TIMEOUT,
+    pool_pre_ping=True,
+    echo=DB_ECHO,
+)
 
-# 创建Base类
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 
 def get_db():
-    """
-    获取数据库会话
-    用于FastAPI依赖注入
-    """
     db = SessionLocal()
     try:
         yield db
@@ -81,16 +70,14 @@ def get_db():
         db.close()
 
 
-def test_connection():
-    """
-    测试数据库连接
-    """
+def test_connection() -> bool:
     try:
         from sqlalchemy import text
+
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
-        logger.info(f"数据库连接成功: {DB_HOST}:{DB_PORT}/{DB_NAME}")
+        logger.info("Database connection OK: %s:%s/%s", DB_HOST, DB_PORT, DB_NAME)
         return True
-    except Exception as e:
-        logger.error(f"数据库连接失败: {str(e)}")
+    except Exception as exc:
+        logger.error("Database connection failed: %s", exc)
         return False
