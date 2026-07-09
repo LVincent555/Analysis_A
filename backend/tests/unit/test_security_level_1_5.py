@@ -118,6 +118,18 @@ def test_gateway_signature_accepts_internal_request():
     )
 
 
+def test_gateway_signature_canonicalizes_encoded_unicode_path():
+    encoded_path = "/api/industry/%E5%8D%8A%E5%AF%BC%E4%BD%93/detail"
+    decoded_path = "/api/industry/半导体/detail"
+    headers = build_internal_gateway_headers("GET", encoded_path)
+
+    assert verify_internal_gateway_headers(
+        method="GET",
+        path=decoded_path,
+        headers=headers,
+    )
+
+
 @pytest.mark.asyncio
 async def test_auth_middleware_rejects_spoofed_secure_gateway_header(monkeypatch):
     monkeypatch.setattr("app.middleware.auth_middleware.FORCE_SECURE_API", True)

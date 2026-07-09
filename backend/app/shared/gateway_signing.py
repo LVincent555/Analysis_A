@@ -6,6 +6,7 @@ import hashlib
 import hmac
 import time
 from collections.abc import Mapping
+from urllib.parse import unquote
 
 from ..core.security_settings import get_internal_gateway_secret
 
@@ -20,8 +21,13 @@ def body_hash(body: bytes | None) -> str:
     return hashlib.sha256(body or b"").hexdigest()
 
 
+def canonical_gateway_path(path: str) -> str:
+    """Normalize encoded URL paths before signing internal gateway requests."""
+    return unquote(path)
+
+
 def gateway_signature(method: str, path: str, timestamp_ms: str, body_sha256: str) -> str:
-    message = f"{method.upper()}\n{path}\n{timestamp_ms}\n{body_sha256}".encode("utf-8")
+    message = f"{method.upper()}\n{canonical_gateway_path(path)}\n{timestamp_ms}\n{body_sha256}".encode("utf-8")
     secret = get_internal_gateway_secret().encode("utf-8")
     return hmac.new(secret, message, hashlib.sha256).hexdigest()
 
