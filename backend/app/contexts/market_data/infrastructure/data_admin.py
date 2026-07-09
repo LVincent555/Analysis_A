@@ -41,9 +41,19 @@ import_status: dict[str, Any] = {
     "progress": 0,
     "last_import": None,
     "last_result": None,
+    "cache_refresh": {
+        "is_refreshing": False,
+        "started_at": None,
+        "finished_at": None,
+        "success": None,
+        "error": None,
+        "reason": None,
+    },
     "history": [],
     "logs": [],
 }
+
+_cache_refresh_lock = threading.Lock()
 
 
 def _add_log(message: str, level: str = "info") -> None:
@@ -69,12 +79,73 @@ def _validate_filename(filename: str) -> None:
         raise InvalidDataAdminRequestError("无效的文件名")
 
 
-def _reload_runtime_caches() -> None:
-    from ....core.startup import preload_cache
+def _preload_days() -> int:
+    try:
+        return max(1, int(os.getenv("NUMPY_PRELOAD_DAYS", "30")))
+    except ValueError:
+        return 30
+
+
+def _perform_runtime_cache_reload() -> None:
+    from ....core.startup import _preload_hotspots
+    from ....services.numpy_cache_middleware import numpy_cache
 
     cache.clear_api_cache()
     HotSpotsCache.clear_cache()
-    preload_cache()
+    numpy_cache.reload(days=_preload_days())
+    _preload_hotspots(days=3)
+
+
+def _reload_runtime_caches(reason: str = "direct_call") -> threading.Thread | None:
+    return _schedule_runtime_cache_reload(reason)
+
+
+def _schedule_runtime_cache_reload(reason: str) -> threading.Thread | None:
+    if import_status["cache_refresh"].get("is_refreshing"):
+        _add_log("运行态缓存刷新已在执行中，跳过重复调度", "warning")
+        return None
+
+    def run_refresh() -> None:
+        if not _cache_refresh_lock.acquire(blocking=False):
+            _add_log("运行态缓存刷新锁被占用，跳过重复刷新", "warning")
+            return
+
+        import_status["cache_refresh"] = {
+            "is_refreshing": True,
+            "started_at": datetime.now().isoformat(),
+            "finished_at": None,
+            "success": None,
+            "error": None,
+            "reason": reason,
+        }
+        _add_log("正在后台刷新运行态缓存...")
+        try:
+            _perform_runtime_cache_reload()
+            import_status["cache_refresh"].update(
+                {
+                    "is_refreshing": False,
+                    "finished_at": datetime.now().isoformat(),
+                    "success": True,
+                    "error": None,
+                }
+            )
+            _add_log("运行态缓存刷新完成，新数据已生效")
+        except Exception as cache_error:
+            import_status["cache_refresh"].update(
+                {
+                    "is_refreshing": False,
+                    "finished_at": datetime.now().isoformat(),
+                    "success": False,
+                    "error": str(cache_error),
+                }
+            )
+            _add_log(f"运行态缓存刷新失败: {cache_error}", "error")
+        finally:
+            _cache_refresh_lock.release()
+
+    thread = threading.Thread(target=run_refresh, name="market-data-cache-refresh", daemon=True)
+    thread.start()
+    return thread
 
 
 class MarketDataAdminAdapter:
@@ -122,6 +193,7 @@ class MarketDataAdminAdapter:
             "progress": import_status["progress"],
             "last_import": import_status["last_import"],
             "last_result": import_status["last_result"],
+            "cache_refresh": import_status["cache_refresh"],
             "history": import_status["history"],
             "logs": import_status["logs"],
         }
@@ -361,14 +433,17 @@ class MarketDataAdminAdapter:
             _add_log(f"✅ {result['message']}")
             _add_log(f"👤 操作用户: {username}")
 
-            _add_log("🔄 正在重载内存缓存...")
-            import_status["current_file"] = "重载缓存..."
+            _add_log("正在提交运行态缓存后台刷新...")
+            import_status["current_file"] = "刷新缓存..."
             import_status["progress"] = 90
             try:
-                _reload_runtime_caches()
-                _add_log("✅ 内存缓存重载完成！新数据已生效 (含统一缓存)")
+                refresh_thread = _reload_runtime_caches("market_data_import")
+                if refresh_thread is None:
+                    _add_log("运行态缓存刷新已在执行，本次导入复用现有刷新任务", "warning")
+                else:
+                    _add_log("运行态缓存刷新已在后台启动，完成后新数据生效")
             except Exception as cache_error:
-                _add_log(f"⚠️ 缓存重载失败: {cache_error}", "warning")
+                _add_log(f"缓存刷新调度失败: {cache_error}", "warning")
         except Exception as exc:
             _add_log(f"❌ 导入失败: {exc}", "error")
         finally:

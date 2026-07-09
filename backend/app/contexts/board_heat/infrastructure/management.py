@@ -5,9 +5,12 @@ from __future__ import annotations
 import asyncio
 import json
 import locale
+import os
 import subprocess
 import sys
 import traceback
+import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
@@ -80,14 +83,21 @@ def _heat_script_path() -> Path:
     return BACKEND_ROOT / "scripts" / "task_board_heat.py"
 
 
-def _run_process_blocking(cmd: list[str], cwd: str, status: dict[str, Any], *, done_message: str, fail_message: str) -> None:
+def _run_process_blocking_legacy(
+    cmd: list[str],
+    cwd: str,
+    status: dict[str, Any],
+    *,
+    done_message: str,
+    fail_message: str,
+) -> None:
     try:
         process = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             cwd=cwd,
-            bufsize=1,
+            bufsize=0,
             creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
         )
         status["process"] = process
@@ -126,6 +136,113 @@ def _run_process_blocking(cmd: list[str], cwd: str, status: dict[str, Any], *, d
         tb = traceback.format_exc()
         if tb:
             status["logs"].append("\n".join(tb.strip().splitlines()[-20:]))
+    finally:
+        if "is_syncing" in status:
+            status["is_syncing"] = False
+        if "is_running" in status:
+            status["is_running"] = False
+        status["process"] = None
+        status["cancel_requested"] = False
+
+
+def _task_timeout_seconds() -> float:
+    try:
+        return max(1.0, float(os.getenv("EXT_BOARD_TASK_TIMEOUT_SECONDS", "1800")))
+    except ValueError:
+        return 1800.0
+
+
+def _append_task_log(status: dict[str, Any], message: str) -> None:
+    if len(status["logs"]) > 100:
+        status["logs"] = status["logs"][-50:]
+    status["logs"].append(message)
+
+
+def _stop_process(process: subprocess.Popen, status: dict[str, Any], reason: str) -> None:
+    _append_task_log(status, f"[{_timestamp()}] {reason}")
+    try:
+        process.terminate()
+        process.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        _append_task_log(status, f"[{_timestamp()}] 进程未按时退出，强制结束")
+        try:
+            process.kill()
+            process.wait(timeout=5)
+        except Exception as exc:
+            _append_task_log(status, f"[{_timestamp()}] [ERROR] 强制结束进程失败: {exc}")
+
+
+def _run_process_blocking(cmd: list[str], cwd: str, status: dict[str, Any], *, done_message: str, fail_message: str) -> None:
+    process: subprocess.Popen | None = None
+    timed_out = False
+    cancelled = False
+
+    try:
+        timeout_seconds = _task_timeout_seconds()
+        _append_task_log(status, f"[{_timestamp()}] 任务超时限制: {timeout_seconds:.0f}s")
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            cwd=cwd,
+            bufsize=0,
+            creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
+        )
+        status["process"] = process
+
+        if status.get("cancel_requested"):
+            cancelled = True
+            _stop_process(process, status, "任务已取消（启动后）")
+            return
+
+        encoding = locale.getpreferredencoding(False) or "utf-8"
+        assert process.stdout is not None
+
+        def read_output() -> None:
+            assert process is not None
+            assert process.stdout is not None
+            for line in iter(process.stdout.readline, b""):
+                try:
+                    decoded_line = line.decode("utf-8").strip()
+                except UnicodeDecodeError:
+                    decoded_line = line.decode(encoding, errors="replace").strip()
+
+                if decoded_line:
+                    _append_task_log(status, decoded_line)
+
+        reader = threading.Thread(target=read_output, name="board-heat-task-output", daemon=True)
+        reader.start()
+
+        started_at = time.monotonic()
+        while process.poll() is None:
+            if status.get("cancel_requested"):
+                cancelled = True
+                _stop_process(process, status, "用户取消任务")
+                break
+
+            if time.monotonic() - started_at > timeout_seconds:
+                timed_out = True
+                _stop_process(process, status, f"任务执行超过 {timeout_seconds:.0f}s，已自动终止")
+                break
+
+            time.sleep(0.5)
+
+        process.wait()
+        reader.join(timeout=2)
+        exit_code = process.returncode
+        if timed_out:
+            _append_task_log(status, f"[{_timestamp()}] [ERROR] {fail_message}，任务超时，退出码: {exit_code}")
+        elif cancelled:
+            _append_task_log(status, f"[{_timestamp()}] 任务已取消，退出码: {exit_code}")
+        elif exit_code == 0:
+            _append_task_log(status, f"[{_timestamp()}] {done_message}，退出码: {exit_code}")
+        else:
+            _append_task_log(status, f"[{_timestamp()}] [ERROR] {fail_message}，退出码: {exit_code}")
+    except Exception as exc:
+        _append_task_log(status, f"[ERROR] {fail_message}: {exc}")
+        tb = traceback.format_exc()
+        if tb:
+            _append_task_log(status, "\n".join(tb.strip().splitlines()[-20:]))
     finally:
         if "is_syncing" in status:
             status["is_syncing"] = False
