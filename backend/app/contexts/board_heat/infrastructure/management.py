@@ -5,11 +5,15 @@ from __future__ import annotations
 import asyncio
 import json
 import locale
+import os
 import subprocess
 import sys
+import threading
+import time
 import traceback
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +33,14 @@ STATE_FILE = PROJECT_ROOT / "data" / "ext_board_sync_state.json"
 
 _sync_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="sync_task")
 _heat_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="heat_task")
+
+
+def _task_timeout_seconds() -> int:
+    raw = os.getenv("EXT_BOARD_TASK_TIMEOUT_SECONDS", "1800")
+    try:
+        return max(1, int(raw))
+    except (TypeError, ValueError):
+        return 1800
 
 _sync_task_status: dict[str, Any] = {
     "is_syncing": False,
@@ -63,6 +75,12 @@ def _timestamp() -> str:
     return datetime.now().strftime("%H:%M:%S")
 
 
+def _append_task_log(status: dict[str, Any], message: str) -> None:
+    if len(status["logs"]) > 100:
+        status["logs"] = status["logs"][-50:]
+    status["logs"].append(message)
+
+
 def _load_state() -> dict[str, Any]:
     if STATE_FILE.exists():
         try:
@@ -80,43 +98,84 @@ def _heat_script_path() -> Path:
     return BACKEND_ROOT / "scripts" / "task_board_heat.py"
 
 
-def _run_process_blocking(cmd: list[str], cwd: str, status: dict[str, Any], *, done_message: str, fail_message: str) -> None:
+def _read_process_output(process: subprocess.Popen, status: dict[str, Any]) -> None:
+    encoding = locale.getpreferredencoding(False) or "utf-8"
+    if process.stdout is None:
+        return
+
+    for line in iter(process.stdout.readline, b""):
+        try:
+            decoded_line = line.decode("utf-8").strip()
+        except UnicodeDecodeError:
+            decoded_line = line.decode(encoding, errors="replace").strip()
+
+        if decoded_line:
+            _append_task_log(status, decoded_line)
+
+
+def _terminate_process(process: subprocess.Popen, status: dict[str, Any], reason: str) -> None:
+    if process.poll() is not None:
+        return
+
+    _append_task_log(status, f"[{_timestamp()}] {reason}，正在终止子进程")
+    try:
+        process.terminate()
+        process.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        _append_task_log(status, f"[{_timestamp()}] 子进程未及时退出，强制 kill")
+        process.kill()
+        process.wait(timeout=10)
+
+
+def _run_process_blocking(
+    cmd: list[str],
+    cwd: str,
+    status: dict[str, Any],
+    *,
+    done_message: str,
+    fail_message: str,
+    timeout_seconds: int | None = None,
+) -> None:
+    timed_out = False
     try:
         process = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             cwd=cwd,
-            bufsize=1,
             creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
         )
         status["process"] = process
 
         if status.get("cancel_requested"):
-            process.terminate()
+            _terminate_process(process, status, "任务已取消（启动后）")
             return
 
-        encoding = locale.getpreferredencoding(False) or "utf-8"
-        assert process.stdout is not None
-        for line in iter(process.stdout.readline, b""):
+        output_thread = threading.Thread(target=_read_process_output, args=(process, status), daemon=True)
+        output_thread.start()
+        deadline = time.monotonic() + (timeout_seconds or _task_timeout_seconds())
+
+        while True:
             if status.get("cancel_requested"):
-                process.terminate()
-                status["logs"].append(f"[{_timestamp()}] 用户取消任务")
+                _terminate_process(process, status, "用户取消任务")
+                break
+
+            if time.monotonic() >= deadline:
+                timed_out = True
+                _terminate_process(process, status, f"任务超过 {timeout_seconds or _task_timeout_seconds()} 秒超时")
                 break
 
             try:
-                decoded_line = line.decode("utf-8").strip()
-            except UnicodeDecodeError:
-                decoded_line = line.decode(encoding, errors="replace").strip()
+                process.wait(timeout=0.5)
+                break
+            except subprocess.TimeoutExpired:
+                continue
 
-            if decoded_line:
-                if len(status["logs"]) > 100:
-                    status["logs"] = status["logs"][-50:]
-                status["logs"].append(decoded_line)
-
-        process.wait()
+        output_thread.join(timeout=2)
         exit_code = process.returncode
-        if not status.get("cancel_requested"):
+        if timed_out:
+            status["logs"].append(f"[{_timestamp()}] [ERROR] {fail_message}: 任务超时")
+        elif not status.get("cancel_requested"):
             if exit_code == 0:
                 status["logs"].append(f"[{_timestamp()}] {done_message}，退出码: {exit_code}")
             else:
@@ -180,6 +239,13 @@ class BoardHeatManagementAdapter:
                 _sync_task_status["logs"].append(f"[{_timestamp()}] 用户取消同步任务")
             except Exception:
                 pass
+        else:
+            task = _sync_task_status.get("task")
+            if task and not task.done():
+                task.cancel()
+            _sync_task_status["logs"].append(f"[{_timestamp()}] 用户取消同步任务（尚未启动子进程）")
+            _sync_task_status["is_syncing"] = False
+            _sync_task_status["cancel_requested"] = False
         return {"success": True, "message": "已取消同步任务"}
 
     async def start_heat_calculation(self, command: CalculateBoardHeatCommand) -> dict[str, Any]:
@@ -193,11 +259,12 @@ class BoardHeatManagementAdapter:
             "is_running": True,
             "task_id": task_id,
             "process": None,
+            "task": None,
             "cancel_requested": False,
             "start_time": datetime.now().isoformat(),
             "logs": [],
         }
-        asyncio.create_task(self._run_heat_task(command))
+        _heat_task_status["task"] = asyncio.create_task(self._run_heat_task(command))
         return {"success": True, "message": "热度计算任务已启动", "task_id": task_id}
 
     def get_heat_status(self) -> dict[str, Any]:
@@ -219,6 +286,13 @@ class BoardHeatManagementAdapter:
                 _heat_task_status["logs"].append(f"[{_timestamp()}] 用户取消热度计算任务")
             except Exception:
                 pass
+        else:
+            task = _heat_task_status.get("task")
+            if task and not task.done():
+                task.cancel()
+            _heat_task_status["logs"].append(f"[{_timestamp()}] 用户取消热度计算任务（尚未启动子进程）")
+            _heat_task_status["is_running"] = False
+            _heat_task_status["cancel_requested"] = False
         return {"success": True, "message": "已取消热度计算任务"}
 
     def auto_mapping(self) -> dict[str, Any]:
@@ -438,16 +512,24 @@ class BoardHeatManagementAdapter:
             _sync_task_status["is_syncing"] = False
             return
 
-        loop = asyncio.get_event_loop()
-        loop.run_in_executor(
-            _sync_executor,
-            _run_process_blocking,
-            cmd,
-            str(BACKEND_ROOT),
-            _sync_task_status,
-            done_message="同步完成",
-            fail_message="同步失败",
-        )
+        loop = asyncio.get_running_loop()
+        try:
+            loop.run_in_executor(
+                _sync_executor,
+                partial(
+                    _run_process_blocking,
+                    cmd,
+                    str(BACKEND_ROOT),
+                    _sync_task_status,
+                    done_message="同步完成",
+                    fail_message="同步失败",
+                    timeout_seconds=_task_timeout_seconds(),
+                ),
+            )
+        except Exception as exc:
+            _sync_task_status["logs"].append(f"[ERROR] 同步任务启动失败: {exc}")
+            _sync_task_status["is_syncing"] = False
+            _sync_task_status["cancel_requested"] = False
 
     async def _run_heat_task(self, command: CalculateBoardHeatCommand) -> None:
         script_path = _heat_script_path()
@@ -475,16 +557,24 @@ class BoardHeatManagementAdapter:
             _heat_task_status["is_running"] = False
             return
 
-        loop = asyncio.get_event_loop()
-        loop.run_in_executor(
-            _heat_executor,
-            _run_process_blocking,
-            cmd,
-            str(BACKEND_ROOT),
-            _heat_task_status,
-            done_message="热度计算完成",
-            fail_message="热度计算失败",
-        )
+        loop = asyncio.get_running_loop()
+        try:
+            loop.run_in_executor(
+                _heat_executor,
+                partial(
+                    _run_process_blocking,
+                    cmd,
+                    str(BACKEND_ROOT),
+                    _heat_task_status,
+                    done_message="热度计算完成",
+                    fail_message="热度计算失败",
+                    timeout_seconds=_task_timeout_seconds(),
+                ),
+            )
+        except Exception as exc:
+            _heat_task_status["logs"].append(f"[ERROR] 热度计算任务启动失败: {exc}")
+            _heat_task_status["is_running"] = False
+            _heat_task_status["cancel_requested"] = False
 
     def _require_db(self) -> Session:
         if self.db is None:

@@ -317,6 +317,39 @@ def test_file_store_basic_operations() -> None:
         shutil.rmtree(cache_dir, ignore_errors=True)
 
 
+def test_file_store_recovery_retries_with_rebuilt_core(monkeypatch) -> None:
+    cache_dir = tempfile.mkdtemp(prefix="stock-cache-test-")
+    store = FileStore("test_api", cache_dir, size_limit_gb=0.01)
+
+    class BrokenCore:
+        def get(self, key):
+            raise RuntimeError("database disk image is malformed")
+
+        def close(self):
+            pass
+
+    class WorkingCore:
+        def get(self, key):
+            return "ok"
+
+        def close(self):
+            pass
+
+    try:
+        store.core = BrokenCore()
+
+        def rebuild_cache() -> None:
+            store.core = WorkingCore()
+
+        monkeypatch.setattr(store, "_rebuild_cache", rebuild_cache)
+
+        assert store.get("key1") == "ok"
+        assert store.metrics.recoveries == 1
+    finally:
+        store.close()
+        shutil.rmtree(cache_dir, ignore_errors=True)
+
+
 def test_key_builder_and_safe_cache_call() -> None:
     assert KeyBuilder.api("daily", "abc123") == "api:daily:abc123"
     assert KeyBuilder.hotspot("2024-01-15") == "hotspot:2024-01-15"

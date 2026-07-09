@@ -416,16 +416,35 @@ class FileStore(CacheRegion):
             try:
                 from diskcache import Cache
                 import os
+                import shutil
                 
                 # 确保目录存在
                 os.makedirs(self.cache_dir, exist_ok=True)
                 
-                self.core = Cache(
-                    directory=self.cache_dir,
-                    size_limit=int(self.size_limit_gb * 1024 * 1024 * 1024),
-                    eviction_policy='least-recently-used',
-                    tag_index=False  # 关闭标签索引节省性能
-                )
+                try:
+                    self.core = Cache(
+                        directory=self.cache_dir,
+                        size_limit=int(self.size_limit_gb * 1024 * 1024 * 1024),
+                        eviction_policy='least-recently-used',
+                        tag_index=False  # 关闭标签索引节省性能
+                    )
+                except Exception as exc:
+                    if not self._is_corruption_error(exc):
+                        raise
+                    logger.warning(
+                        "Disk cache corrupted during init (%s): %s; rebuilding...",
+                        self.cache_dir,
+                        exc,
+                    )
+                    shutil.rmtree(self.cache_dir, ignore_errors=True)
+                    os.makedirs(self.cache_dir, exist_ok=True)
+                    self.metrics.record_recovery()
+                    self.core = Cache(
+                        directory=self.cache_dir,
+                        size_limit=int(self.size_limit_gb * 1024 * 1024 * 1024),
+                        eviction_policy='least-recently-used',
+                        tag_index=False
+                    )
             except ImportError:
                 raise ImportError("diskcache is required for FileStore. Install with: pip install diskcache")
 
@@ -473,6 +492,11 @@ class FileStore(CacheRegion):
             self._rebuild_cache()
             self.metrics.record_recovery()
             return fn()
+
+    def _require_core(self):
+        if self.core is None:
+            raise RuntimeError("Disk cache not initialized")
+        return self.core
     
     @property
     def name(self) -> str:
@@ -487,11 +511,7 @@ class FileStore(CacheRegion):
             loader: 未命中时的加载函数
         """
         self._ensure_initialized()
-        core = self.core
-        if core is None:
-            raise RuntimeError("Disk cache not initialized")
-
-        val = self._with_recovery(lambda: core.get(key), "get")
+        val = self._with_recovery(lambda: self._require_core().get(key), "get")
         if val is None:
             self.metrics.record_miss()
         else:
@@ -503,7 +523,7 @@ class FileStore(CacheRegion):
                 val = loader()
                 if val is not None:
                     # 默认缓存 5 分钟
-                    self._with_recovery(lambda: core.set(key, val, expire=300), "set")
+                    self._with_recovery(lambda: self._require_core().set(key, val, expire=300), "set")
                     self.metrics.record_set()
             except Exception as exc:
                 self.metrics.record_loader_error(exc)
@@ -521,20 +541,14 @@ class FileStore(CacheRegion):
             ttl: 过期时间 (秒)，0=使用默认24小时
         """
         self._ensure_initialized()
-        core = self.core
-        if core is None:
-            raise RuntimeError("Disk cache not initialized")
         expire = ttl if ttl > 0 else 86400  # 默认24小时
-        self._with_recovery(lambda: core.set(key, value, expire=expire), "set")
+        self._with_recovery(lambda: self._require_core().set(key, value, expire=expire), "set")
         self.metrics.record_set()
     
     def delete(self, key: str) -> bool:
         """删除缓存"""
         self._ensure_initialized()
-        core = self.core
-        if core is None:
-            raise RuntimeError("Disk cache not initialized")
-        deleted = self._with_recovery(lambda: core.delete(key), "delete")
+        deleted = self._with_recovery(lambda: self._require_core().delete(key), "delete")
         if deleted:
             self.metrics.record_delete()
         return deleted
@@ -542,10 +556,7 @@ class FileStore(CacheRegion):
     def clear(self) -> None:
         """清空整个分区"""
         self._ensure_initialized()
-        core = self.core
-        if core is None:
-            raise RuntimeError("Disk cache not initialized")
-        self._with_recovery(lambda: core.clear(), "clear")
+        self._with_recovery(lambda: self._require_core().clear(), "clear")
 
     def close(self) -> None:
         """Close the underlying disk cache handle."""
@@ -556,14 +567,11 @@ class FileStore(CacheRegion):
     def stats(self) -> dict:
         """统计信息"""
         self._ensure_initialized()
-        core = self.core
-        if core is None:
-            raise RuntimeError("Disk cache not initialized")
         size_mb = self._with_recovery(
-            lambda: round(core.volume() / (1024 * 1024), 2),
+            lambda: round(self._require_core().volume() / (1024 * 1024), 2),
             "stats.volume",
         )
-        count_raw = self._with_recovery(lambda: core.__len__(), "stats.len")
+        count_raw = self._with_recovery(lambda: self._require_core().__len__(), "stats.len")
         count = count_raw if isinstance(count_raw, int) else 0
         return {
             "name": self._name,
