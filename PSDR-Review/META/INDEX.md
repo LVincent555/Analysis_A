@@ -49,6 +49,7 @@ PSDR-Review/
 | SUG-004 | HTTP 环境登录加密与安全网关加固方案 | `../SUG/SUG-004-HTTP环境登录加密与安全网关加固方案.md` | [ACCEPTED / IMPLEMENTED] | Infra / Backend / Frontend / Security / Architecture | HTTP, secure-login, secure-refresh, JWT, nonce, gateway, Electron | DEC-002, DEC-003, SUG-001, RES-003, RES-005, RES-012, RES-013, RES-034 |
 | SUG-005 | frontend-client 架构现代化与模块化重构方案 | `../SUG/SUG-005-frontend-client架构现代化与模块化重构方案.md` | [ACCEPTED] | Infra / Frontend / Architecture / Refactor | 前端架构, Electron, React Router, TanStack Query, Vite, feature 分层 | PRB-002, SUG-002, SUG-004, DEC-004, RES-001, RES-002, RES-013, RES-030, RES-031, RES-034 |
 | SUG-006 | 后端缓存系统治理与演进方案 | `../SUG/SUG-006-后端缓存系统治理与演进方案.md` | [IMPLEMENTED / EXPERIMENTAL-PHASE5] | Infra / Backend / Cache / Architecture / Refactor | 后端缓存, UnifiedCache, ObjectStore, FileStore, NumpyCache, 缓存治理 | PRB-001, SUG-001, SUG-003, DEC-002, RES-003, RES-014, RES-016, RES-023, RES-024, RES-026, RES-027, RES-028, RES-029, RES-032, RES-033, RES-034 |
+| SUG-007 | 中文自然键查询接口 POST 化与加密网关路径治理方案 | `../SUG/SUG-007-中文自然键查询接口POST化与加密网关路径治理方案.md` | [PROPOSED] | Infra / Backend / Frontend / API / Security / Refactor | 中文 path, 自然键, POST query, secure gateway, path canonicalize | SUG-004, SUG-005, DEC-002, DEC-004, RES-013, RES-034 |
 
 ---
 
